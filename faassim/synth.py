@@ -13,7 +13,7 @@ def pod_synthesizer() -> PodSynthesizer:
         container = Container('alexrashed/ml-wf-1-pre:0.33', ResourceRequirements())
         spec.containers = [container]
 
-        pod = Pod('pod-{0}'.format(cnt))
+        pod = Pod('pod-{0}'.format(cnt), 'openfaas-fn')
         cnt += 1
         pod.spec = spec
 

@@ -56,7 +56,7 @@ def main():
     env.process(run_scheduler_worker(env, queue, scheduler))
     env.sync()
     try:
-        env.run(until=100)
+        env.run(until=200)
     except KeyboardInterrupt:
         pass
 

@@ -37,7 +37,7 @@ class SimulationClusterContext(ClusterContext):
                  labels={
                      'beta.kubernetes.io/arch': 'arm'
                  })
-             for i in range(1,4)
+             for i in range(1,5)
         ]
 
     def list_nodes(self) -> List[Node]:
