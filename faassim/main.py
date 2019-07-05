@@ -45,6 +45,9 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, scheduler: 
 
 
 def main():
+    # TODO
+    # - Properly synthesize ml-wf-workload
+    # - Make sure to measure the placement quality instead of the placement time
     logging.getLogger().setLevel(logging.DEBUG)
 
     cluster_context = SimulationClusterContext()
