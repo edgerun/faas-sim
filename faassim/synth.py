@@ -11,7 +11,12 @@ def pod_synthesizer() -> PodSynthesizer:
     while True:
         spec = PodSpec()
         container = Container('alexrashed/ml-wf-1-pre:0.33', ResourceRequirements())
+        labels = {
+            'locality.skippy.io/type': 'edge',
+            'capability.skippy.io/nvidia-gpu': ''
+        }
         spec.containers = [container]
+        spec.labels = labels
 
         pod = Pod('pod-{0}'.format(cnt), 'openfaas-fn')
         cnt += 1

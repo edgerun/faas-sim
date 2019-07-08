@@ -40,5 +40,8 @@ class SimulationClusterContext(ClusterContext):
              for i in range(1,5)
         ]
 
+    def get_next_storage_node(self, node: Node) -> str:
+        return 'ara-clustercloud1'
+
     def list_nodes(self) -> List[Node]:
         return self.nodes
