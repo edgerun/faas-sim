@@ -1,51 +1,22 @@
 from typing import List, Dict
 
-from core.clustercontext import ClusterContext
-from core.model import Node, ImageState, Capacity
+from core.clustercontext import ClusterContext, BandwidthGraph
+from core.model import Node, ImageState
 
 
 class SimulationClusterContext(ClusterContext):
 
-    def __init__(self):
+    def __init__(self, nodes: List[Node], bandwidth_graph: BandwidthGraph):
+        self.bandwidth_graph = bandwidth_graph
+        self.nodes = nodes
         super().__init__()
-
-        # TODO synthesize lots of nodes based on our test-environment
-        self.nodes = [
-            Node(name='ara-clustercloud1',
-                 capacity=Capacity(cpu_millis = 4 * 1000,
-                                   memory= 8 * 1024 * 1024 * 1024),
-                 allocatable=Capacity(cpu_millis = 4 * 1000,
-                                   memory= 8 * 1024 * 1024 * 1024),
-                 labels={
-                     'beta.kubernetes.io/arch': 'amd64'
-                 }),
-            Node(name='ara-clustertegra1',
-                 capacity=Capacity(cpu_millis = 4 * 1000,
-                                   memory= 8 * 1024 * 1024 * 1024),
-                 allocatable=Capacity(cpu_millis = 4 * 1000,
-                                   memory= 8 * 1024 * 1024 * 1024),
-                 labels={
-                     'beta.kubernetes.io/arch': 'arm64',
-                     'capability.skippy.io': 'nvidia-cuda-10'
-                 })
-        ] + [
-            Node(name='ara-clusterpi{}'.format(i),
-                 capacity=Capacity(cpu_millis = 4 * 1000,
-                                   memory= 1 * 1024 * 1024 * 1024),
-                 allocatable=Capacity(cpu_millis = 4 * 1000,
-                                   memory= 1 * 1024 * 1024 * 1024),
-                 labels={
-                     'beta.kubernetes.io/arch': 'arm'
-                 })
-             for i in range(1,5)
-        ]
 
     def list_nodes(self) -> List[Node]:
         return self.nodes
 
     def get_next_storage_node(self, node: Node) -> str:
-        # TODO maybe switch the storage node to different ones than the master?
-        return 'ara-clustercloud1'
+        # TODO maybe extend to simulate multiple data nodes and find the one next to the given node
+        return '1_cloud'
 
     def get_init_image_states(self) -> Dict[str, ImageState]:
         # TODO maybe synth other images?
@@ -70,68 +41,5 @@ class SimulationClusterContext(ClusterContext):
             })
         }
 
-    def get_bandwidth_graph(self) -> Dict[str, Dict[str, float]]:
-        # TODO synthesize the graph -> N^2 entries!
-        #  for all nodes in self.list_nodes()
-        # 1.25e+6 Byte/s = 10 MBit/s
-        # 1.25e+7 Byte/s = 100 MBit/s
-        # 1.25e9 Byte/s = 10 GBit/s - assumed for local access
-        # The registry is always connected with 100 MBit/s (replicated in both networks)
-        # The edge nodes are interconnected with 100 MBit/s
-        # The cloud is connected to the edge nodes with 10 MBit/s
-        return {
-            'ara-clustercloud1': {
-                'ara-clustercloud1': 1.25e+9,
-                'ara-clustertegra1': 1.25e+6,
-                'ara-clusterpi1': 1.25e+6,
-                'ara-clusterpi2': 1.25e+6,
-                'ara-clusterpi3': 1.25e+6,
-                'ara-clusterpi4': 1.25e+6,
-                'registry': 1.25e+7
-            },
-            'ara-clustertegra1': {
-                'ara-clustercloud1': 1.25e+6,
-                'ara-clustertegra1': 1.25e+9,
-                'ara-clusterpi1': 1.25e+7,
-                'ara-clusterpi2': 1.25e+7,
-                'ara-clusterpi3': 1.25e+7,
-                'ara-clusterpi4': 1.25e+7,
-                'registry': 1.25e+7
-            },
-            'ara-clusterpi1': {
-                'ara-clustercloud1': 1.25e+6,
-                'ara-clustertegra1': 1.25e+7,
-                'ara-clusterpi1': 1.25e+9,
-                'ara-clusterpi2': 1.25e+7,
-                'ara-clusterpi3': 1.25e+7,
-                'ara-clusterpi4': 1.25e+7,
-                'registry': 1.25e+7
-            },
-            'ara-clusterpi2': {
-                'ara-clustercloud1': 1.25e+6,
-                'ara-clustertegra1': 1.25e+7,
-                'ara-clusterpi1': 1.25e+7,
-                'ara-clusterpi2': 1.25e+9,
-                'ara-clusterpi3': 1.25e+7,
-                'ara-clusterpi4': 1.25e+7,
-                'registry': 1.25e+7
-            },
-            'ara-clusterpi3': {
-                'ara-clustercloud1': 1.25e+6,
-                'ara-clustertegra1': 1.25e+7,
-                'ara-clusterpi1': 1.25e+7,
-                'ara-clusterpi2': 1.25e+7,
-                'ara-clusterpi3': 1.25e+9,
-                'ara-clusterpi4': 1.25e+7,
-                'registry': 1.25e+7
-            },
-            'ara-clusterpi4': {
-                'ara-clustercloud1': 1.25e+6,
-                'ara-clustertegra1': 1.25e+7,
-                'ara-clusterpi1': 1.25e+7,
-                'ara-clusterpi2': 1.25e+7,
-                'ara-clusterpi3': 1.25e+7,
-                'ara-clusterpi4': 1.25e+9,
-                'registry': 1.25e+7
-            }
-        }
+    def get_bandwidth_graph(self) -> BandwidthGraph:
+        return self.bandwidth_graph

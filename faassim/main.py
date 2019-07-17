@@ -1,6 +1,7 @@
 import argparse
+import itertools
 import time
-from typing import NamedTuple, Dict, List, Generator
+from typing import NamedTuple, Dict, List, Generator, Tuple
 import simpy
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,11 +10,14 @@ import logging
 from enum import Enum
 
 from core.clustercontext import ClusterContext
+from core.priorities import Priority, BalancedResourcePriority, ImageLocalityPriority
 from core.scheduler import Scheduler
 from sim.oracle import ExecutionTimeOracle, PlacementTimeOracle, Oracle
 from sim.simclustercontext import SimulationClusterContext
 from sim.stats import exp_sampler
-from sim.synth import pod_synthesizer, PodSynthesizer
+from sim.synth_bandwidth import generate_bandwidth_graph
+from sim.synth_nodes import node_synthesizer
+from sim.synth_pods import pod_synthesizer, PodSynthesizer
 
 
 class EventType(Enum):
@@ -79,10 +83,8 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
         log.append(LoggingRow(env.now, EventType.POD_SCHEDULED, pod.name, metadata))
 
 
-def simulate() -> pd.DataFrame:
+def simulate(cluster_context: ClusterContext, scheduler: Scheduler) -> pd.DataFrame:
     log = []
-    cluster_context = SimulationClusterContext()
-    scheduler = Scheduler(cluster_context)
     oracles = [PlacementTimeOracle(), ExecutionTimeOracle()]
     env = simpy.RealtimeEnvironment(factor=0.01, strict=False)
     queue = simpy.Store(env)
@@ -94,7 +96,7 @@ def simulate() -> pd.DataFrame:
     return data
 
 
-def plot_placement_time_cdf(df_1: pd.DataFrame):
+def plot_placement_time_cdf(df_1: pd.DataFrame, scheduler_name: str):
     # Only take the POD_QUEUED and the pod_scheduled events
     events = df_1['event']
     filtered = events.isin([EventType.POD_RECEIVED, EventType.POD_SCHEDULED])
@@ -114,12 +116,12 @@ def plot_placement_time_cdf(df_1: pd.DataFrame):
 
     # Create the CDF of the series and plot it
     x, y = sorted(ser), np.arange(len(ser)) / len(ser)
-    plt.plot(x, y, label="placement time")
+    plt.plot(x, y, label=f'placement time using the {scheduler_name} scheduler')
 
     plt.legend()
     plt.ylabel('Probability')
     plt.xlabel('Task Placement Latency (ms)')
-    plt.savefig('results/sim_placement_time_cdf.png')
+    plt.savefig(f'results/sim_{scheduler_name}_placement_time_cdf.png')
     plt.show()
 
 
@@ -138,14 +140,33 @@ def main():
 
     try:
         if args.simulate or not args.plot:
-            results = simulate()
-            results.to_csv('results/sim.csv')
+            node_count = 1000
+            nodes = list(itertools.islice(node_synthesizer(), node_count))
+            bandwidth_graph = generate_bandwidth_graph(nodes)
+            cluster_context = SimulationClusterContext(nodes, bandwidth_graph)
+
+            # Run the skippy simulation
+            scheduler = Scheduler(cluster_context)
+            results_skippy = simulate(cluster_context, scheduler)
+            results_skippy.to_csv('results/sim_skippy.csv')
+
+            # Run the default scheduler simulation
+            default_priorities: List[Tuple[float, Priority]] = [(1.0, BalancedResourcePriority()),
+                                                                (1.0, ImageLocalityPriority())]
+            scheduler = Scheduler(cluster_context=cluster_context,
+                                  percentage_of_nodes_to_score=50,
+                                  priorities=default_priorities)
+            results_default = simulate(cluster_context, scheduler)
+            results_default.to_csv('results/sim_default.csv')
         else:
-            results = pd.DataFrame()
-            results.from_csv('results/sim.csv')
+            results_skippy = pd.DataFrame()
+            results_skippy.from_csv('results/sim_skippy.csv')
+            results_default = pd.DataFrame()
+            results_default.from_csv('results/sim_default.csv')
 
         if args.plot or not args.simulate:
-            plot_placement_time_cdf(results)
+            plot_placement_time_cdf(results_skippy, 'skippy')
+            plot_placement_time_cdf(results_default, 'default')
     except KeyboardInterrupt:
         pass
 
