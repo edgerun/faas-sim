@@ -1,16 +1,29 @@
 import argparse
 import time
-from tkinter import EventType
 from typing import NamedTuple, Dict, List, Generator
 import simpy
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import logging
+from enum import Enum
+
+from core.clustercontext import ClusterContext
 from core.scheduler import Scheduler
+from sim.oracle import ExecutionTimeOracle, PlacementTimeOracle, Oracle
 from sim.simclustercontext import SimulationClusterContext
 from sim.stats import exp_sampler
 from sim.synth import pod_synthesizer, PodSynthesizer
+
+
+class EventType(Enum):
+    POD_QUEUED = "pod_queued",
+    POD_RECEIVED = "pod_received",
+    POD_SCHEDULED = "pod_scheduled"
+
+    # The order is actually also alphabetically, so just implement lt as < on the name
+    def __lt__(self, other):
+        return self.name < other.name
 
 
 class LoggingRow(NamedTuple):
@@ -42,7 +55,8 @@ def run_load_generator(env: simpy.Environment, queue: simpy.Store, pod_synth: Po
         log.append(LoggingRow(env.now, EventType.POD_QUEUED, pod.name, {'queue_length': len(queue.items)}))
 
 
-def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, log: List[LoggingRow], scheduler: Scheduler):
+def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: ClusterContext, scheduler: Scheduler,
+                         oracles: List[Oracle], log: List[LoggingRow]):
     while True:
         logging.debug('Scheduler waiting for pod...')
         pod = yield queue.get()
@@ -58,32 +72,55 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, log: List[L
         duration = ((time.time() - then) * 1000)
         yield env.timeout(duration / 1000)
         logging.debug('Pod scheduling took %.2f ms, and yielded %s', duration, result)
-        log.append(LoggingRow(env.now, EventType.POD_SCHEDULED, pod.name))
+
+        # weight the placement
+        metadata = dict([o.estimate(context, pod, result.suggested_host) for o in oracles])
+
+        log.append(LoggingRow(env.now, EventType.POD_SCHEDULED, pod.name, metadata))
 
 
-def simulate():
+def simulate() -> pd.DataFrame:
     log = []
     cluster_context = SimulationClusterContext()
     scheduler = Scheduler(cluster_context)
-
+    oracles = [PlacementTimeOracle(), ExecutionTimeOracle()]
     env = simpy.RealtimeEnvironment(factor=0.01, strict=False)
     queue = simpy.Store(env)
     env.process(run_load_generator(env, queue, pod_synthesizer(), exp_sampler(lambd=1.5), log))
-    env.process(run_scheduler_worker(env, queue, log, scheduler))
+    env.process(run_scheduler_worker(env, queue, cluster_context, scheduler, oracles, log))
     env.sync()
-    try:
-        env.run(until=200)
-        data = pd.DataFrame(data=log)
-        # TODO implement oracle to calculate execution and placement time for a selected node / config
-        #  Add the calucalated execution time and placement time via the oracle and add it to the log rows
-        # TODO save the CSV
-    except KeyboardInterrupt:
-        pass
+    env.run(until=200)
+    data = pd.DataFrame(data=log)
+    return data
 
 
-def plot():
-    # TODO plot the data
-    pass
+def plot_placement_time_cdf(df_1: pd.DataFrame):
+    # Only take the POD_QUEUED and the pod_scheduled events
+    events = df_1['event']
+    filtered = events.isin([EventType.POD_RECEIVED, EventType.POD_SCHEDULED])
+    df_1 = df_1.loc[filtered]
+    # Filter pod events of pods which have not fully been scheduled (not all 3 events are included)
+    df_1 = df_1.groupby(['value']).filter(lambda x: len(x) == 2)
+    # Convert the podname to an int (to allow proper sorting)
+    df_1['value'] = df_1['value'].str[4:].astype(int)
+    # Sort by pods, then by event (POD_QUEUED < POD_SCHEDULED)
+    df_1 = df_1.sort_values(['value', 'event'], ascending=[True, True])
+    # Drop the diff between two pods (every second entry)
+    ser = df_1['timestamp'].diff().iloc[1::2]
+    # Adopt the index
+    ser.index = range(len(ser))
+    # Transform from seconds to milliseconds
+    ser = ser * 1000
+
+    # Create the CDF of the series and plot it
+    x, y = sorted(ser), np.arange(len(ser)) / len(ser)
+    plt.plot(x, y, label="placement time")
+
+    plt.legend()
+    plt.ylabel('Probability')
+    plt.xlabel('Task Placement Latency (ms)')
+    plt.savefig('results/sim_placement_time_cdf.png')
+    plt.show()
 
 
 def main():
@@ -91,19 +128,26 @@ def main():
     parser = argparse.ArgumentParser(description='Skippy Simulator')
     parser.add_argument('-d', '--debug', action='store_true', dest='debug',
                         help='Enable debug logs.', default=False)
-    parser.add_argument('-s', '--simulate', action='store_true', dest='debug',
+    parser.add_argument('-s', '--simulate', action='store_true', dest='simulate',
                         help='Only simulate the scheduling.', default=False)
-    parser.add_argument('-p', '--plot', action='store_true', dest='debug',
+    parser.add_argument('-p', '--plot', action='store_true', dest='plot',
                         help='Only plot the data.', default=False)
     args = parser.parse_args()
     level = logging.DEBUG if args.debug else logging.INFO
     logging.getLogger().setLevel(level)
-    
-    if args.simulate or not args.plot:
-        simulate()
 
-    if args.plot or not args.simulate:
-        plot()
+    try:
+        if args.simulate or not args.plot:
+            results = simulate()
+            results.to_csv('results/sim.csv')
+        else:
+            results = pd.DataFrame()
+            results.from_csv('results/sim.csv')
+
+        if args.plot or not args.simulate:
+            plot_placement_time_cdf(results)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == '__main__':
