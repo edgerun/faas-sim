@@ -1,4 +1,5 @@
 import argparse
+import ast
 import itertools
 import time
 from typing import NamedTuple, Dict, List, Generator, Tuple
@@ -9,7 +10,10 @@ import numpy as np
 import logging
 from enum import Enum
 
+from pandas.core.groupby import GroupBy
+
 from core.clustercontext import ClusterContext
+from core.model import Pod
 from core.priorities import Priority, BalancedResourcePriority, ImageLocalityPriority
 from core.scheduler import Scheduler
 from sim.oracle import ExecutionTimeOracle, PlacementTimeOracle, Oracle
@@ -80,6 +84,9 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
         # weight the placement
         metadata = dict([o.estimate(context, pod, result.suggested_host) for o in oracles])
 
+        # also add the image name to the metadata
+        metadata['image'] = pod.spec.containers[0].image
+
         log.append(LoggingRow(env.now, EventType.POD_SCHEDULED, pod.name, metadata))
 
 
@@ -98,9 +105,7 @@ def simulate(cluster_context: ClusterContext, scheduler: Scheduler) -> pd.DataFr
 
 def plot_placement_time_cdf(df_1: pd.DataFrame, scheduler_name: str):
     # Only take the POD_QUEUED and the pod_scheduled events
-    events = df_1['event']
-    filtered = events.isin([EventType.POD_RECEIVED, EventType.POD_SCHEDULED])
-    df_1 = df_1.loc[filtered]
+    df_1 = df_1.loc[df_1['event'].isin([EventType.POD_RECEIVED, EventType.POD_SCHEDULED])]
     # Filter pod events of pods which have not fully been scheduled (not all 3 events are included)
     df_1 = df_1.groupby(['value']).filter(lambda x: len(x) == 2)
     # Convert the podname to an int (to allow proper sorting)
@@ -123,6 +128,82 @@ def plot_placement_time_cdf(df_1: pd.DataFrame, scheduler_name: str):
     plt.xlabel('Task Placement Latency (ms)')
     plt.savefig(f'results/sim_{scheduler_name}_placement_time_cdf.png')
     plt.show()
+
+
+def plot_execution_times(results_default: pd.DataFrame, results_skippy: pd.DataFrame):
+    results_default['scheduler'] = 'default'
+    results_skippy['scheduler'] = 'skippy'
+    results_combined = pd.concat([results_default, results_skippy])
+
+    # Only take the POD_SCHEDULED events
+    results_combined = results_combined.loc[results_combined['event'].isin([EventType.POD_SCHEDULED])]
+    # Convert the podname to an int (to allow proper sorting)
+    results_combined['id'] = results_combined['value'].str[4:].astype(int)
+    results_combined['image'] = results_combined['additional_attributes'].apply(lambda x: x.get('image'))
+    results_combined['execution_time'] = results_combined['additional_attributes'].apply(
+        lambda x: float(x.get('execution_time')))
+
+    results_combined = results_combined[['image', 'scheduler', 'execution_time']].groupby('image')
+
+    bp = results_combined.boxplot(by='scheduler', column='execution_time', layout=(1,3), figsize=(8,4))
+    [ax_tmp.set_xlabel('') for ax_tmp in np.asarray(bp).reshape(-1)]
+    fig = np.asarray(bp).reshape(-1)[0].get_figure()
+    fig.suptitle('Execution Times', y=1)
+    plt.savefig(f'results/sim_execution_time_boxplot.png')
+    plt.show()
+
+
+def plot_placement_times(results_default: pd.DataFrame, results_skippy: pd.DataFrame):
+    results_default['scheduler'] = 'default'
+    results_skippy['scheduler'] = 'skippy'
+    results_combined = pd.concat([results_default, results_skippy])
+
+    # Only take the POD_SCHEDULED events
+    results_combined = results_combined.loc[results_combined['event'].isin([EventType.POD_SCHEDULED])]
+    # Convert the podname to an int (to allow proper sorting)
+    results_combined['id'] = results_combined['value'].str[4:].astype(int)
+    results_combined['image'] = results_combined['additional_attributes'].apply(lambda x: x.get('image'))
+    results_combined['placement_time'] = results_combined['additional_attributes'].apply(
+        lambda x: float(x.get('execution_time')))
+
+    results_combined = results_combined[['image', 'scheduler', 'placement_time']].groupby('image')
+
+    bp = results_combined.boxplot(by='scheduler', column='placement_time', layout=(1,3), figsize=(8,4))
+    [ax_tmp.set_xlabel('') for ax_tmp in np.asarray(bp).reshape(-1)]
+    fig = np.asarray(bp).reshape(-1)[0].get_figure()
+    fig.suptitle('Placement Times', y=1)
+    plt.savefig(f'results/sim_placement_time_boxplot.png')
+    plt.show()
+
+
+def plot_task_completion_times(results_default: pd.DataFrame, results_skippy: pd.DataFrame):
+    results_default['scheduler'] = 'default'
+    results_skippy['scheduler'] = 'skippy'
+    results_combined = pd.concat([results_default, results_skippy])
+
+    # Only take the POD_SCHEDULED events
+    results_combined = results_combined.loc[results_combined['event'].isin([EventType.POD_SCHEDULED])]
+    # Convert the podname to an int (to allow proper sorting)
+    results_combined['id'] = results_combined['value'].str[4:].astype(int)
+    results_combined['image'] = results_combined['additional_attributes'].apply(lambda x: x.get('image'))
+    results_combined['tct'] = results_combined['additional_attributes'].apply(
+        lambda x: float(x.get('execution_time')) + float(x.get('placement_time')))
+
+    results_combined = results_combined[['image', 'scheduler', 'tct']].groupby('image')
+
+    bp = results_combined.boxplot(by='scheduler', column='tct', layout=(1,3), figsize=(8,4))
+    [ax_tmp.set_xlabel('') for ax_tmp in np.asarray(bp).reshape(-1)]
+    fig = np.asarray(bp).reshape(-1)[0].get_figure()
+    fig.suptitle('Task Completion Times', y=1)
+    plt.savefig(f'results/sim_task_completion_time_boxplot.png')
+    plt.show()
+
+
+def read_csv(filename: str) -> pd.DataFrame:
+    df = pd.read_csv(filename)
+    df['event'] = df['event'].apply(lambda x: EventType[x[10:]])
+    df['additional_attributes'] = df['additional_attributes'].apply(lambda x: ast.literal_eval(x))
+    return df
 
 
 def main():
@@ -159,14 +240,15 @@ def main():
             results_default = simulate(cluster_context, scheduler)
             results_default.to_csv('results/sim_default.csv')
         else:
-            results_skippy = pd.DataFrame()
-            results_skippy.from_csv('results/sim_skippy.csv')
-            results_default = pd.DataFrame()
-            results_default.from_csv('results/sim_default.csv')
+            results_default = read_csv('results/sim_default.csv')
+            results_skippy = read_csv('results/sim_skippy.csv')
 
         if args.plot or not args.simulate:
-            plot_placement_time_cdf(results_skippy, 'skippy')
             plot_placement_time_cdf(results_default, 'default')
+            plot_placement_time_cdf(results_skippy, 'skippy')
+            plot_execution_times(results_default, results_skippy)
+            plot_placement_times(results_default, results_skippy)
+            plot_task_completion_times(results_default, results_skippy)
     except KeyboardInterrupt:
         pass
 
