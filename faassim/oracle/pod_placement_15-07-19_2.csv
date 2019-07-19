@@ -1,0 +1,145 @@
+function,bandwidth,host,image,image_present,status,duration
+test_pod_placement,None,"('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-1-pre:0.33,True,passed,4.102878570556641
+test_pod_placement,None,"('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.5104379653930664
+test_pod_placement,None,"('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-1-pre:0.33,True,passed,5.159077882766724
+test_pod_placement,None,"('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-1-pre:0.33,True,passed,5.464373826980591
+test_pod_placement,None,"('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-1-pre:0.33,True,passed,5.1355063915252686
+test_pod_placement,None,"('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-1-pre:0.33,True,passed,5.1704185009002686
+test_pod_placement,None,"('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-2-train:0.33,True,passed,2.7210662364959717
+test_pod_placement,None,"('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-2-train:0.33,True,passed,2.0525588989257812
+test_pod_placement,None,"('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-2-train:0.33,True,passed,4.738829612731934
+test_pod_placement,None,"('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-2-train:0.33,True,passed,3.2790615558624268
+test_pod_placement,None,"('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-2-train:0.33,True,passed,3.697827100753784
+test_pod_placement,None,"('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-2-train:0.33,True,passed,2.45222544670105
+test_pod_placement,None,"('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-3-serve:0.33,True,passed,4.880476713180542
+test_pod_placement,None,"('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.061718463897705
+test_pod_placement,None,"('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.8222479820251465
+test_pod_placement,None,"('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.5552265644073486
+test_pod_placement,None,"('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.664250612258911
+test_pod_placement,None,"('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.5377328395843506
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.5949604511260986
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.6107704639434814
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.998727798461914
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-1-pre:0.33,True,passed,3.644243001937866
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-1-pre:0.33,True,passed,3.570779800415039
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.7149438858032227
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-2-train:0.33,True,passed,3.2280356884002686
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-2-train:0.33,True,passed,2.1064748764038086
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-2-train:0.33,True,passed,2.77575945854187
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-2-train:0.33,True,passed,2.5332677364349365
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-2-train:0.33,True,passed,4.008435487747192
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-2-train:0.33,True,passed,2.6047959327697754
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.723555326461792
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.2730071544647217
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.7857871055603027
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.5539462566375732
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.9596619606018066
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.632516622543335
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-1-pre:0.33,True,passed,3.174736261367798
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.637615442276001
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-1-pre:0.33,True,passed,3.3141040802001953
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.598895788192749
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.9494564533233643
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.6286206245422363
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-2-train:0.33,True,passed,2.990774631500244
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-2-train:0.33,True,passed,2.41449236869812
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-2-train:0.33,True,passed,2.5654609203338623
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-2-train:0.33,True,passed,3.6680431365966797
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-2-train:0.33,True,passed,2.568922281265259
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-2-train:0.33,True,passed,3.7726027965545654
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.6570117473602295
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.2910337448120117
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.7085793018341064
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.7166311740875244
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.5958869457244873
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.55094838142395
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.8173506259918213
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.9363911151885986
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-1-pre:0.33,True,passed,2.9232282638549805
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-1-pre:0.33,True,passed,5.095123052597046
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-1-pre:0.33,True,passed,3.1304972171783447
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-1-pre:0.33,True,passed,4.0610644817352295
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-2-train:0.33,True,passed,2.728576898574829
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-2-train:0.33,True,passed,1.847836971282959
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-2-train:0.33,True,passed,3.785304307937622
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-2-train:0.33,True,passed,3.8557772636413574
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-2-train:0.33,True,passed,3.919609785079956
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-2-train:0.33,True,passed,4.035776138305664
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-3-serve:0.33,True,passed,4.196398735046387
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-3-serve:0.33,True,passed,2.2344539165496826
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-3-serve:0.33,True,passed,4.034870386123657
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.9867732524871826
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.9367897510528564
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-3-serve:0.33,True,passed,3.7279012203216553
+test_pod_placement,None,"('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-1-pre:0.33,False,passed,139.08448004722595
+test_pod_placement,None,"('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-1-pre:0.33,False,passed,61.13763618469238
+test_pod_placement,None,"('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-1-pre:0.33,False,passed,446.2148208618164
+test_pod_placement,None,"('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-1-pre:0.33,False,passed,342.85912799835205
+test_pod_placement,None,"('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-1-pre:0.33,False,passed,433.6266784667969
+test_pod_placement,None,"('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-1-pre:0.33,False,passed,333.76227021217346
+test_pod_placement,None,"('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-2-train:0.33,False,passed,134.62758994102478
+test_pod_placement,None,"('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-2-train:0.33,False,passed,65.5103051662445
+test_pod_placement,None,"('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-2-train:0.33,False,passed,499.51797556877136
+test_pod_placement,None,"('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-2-train:0.33,False,passed,348.18843507766724
+test_pod_placement,None,"('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-2-train:0.33,False,passed,455.7400848865509
+test_pod_placement,None,"('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-2-train:0.33,False,passed,334.5823018550873
+test_pod_placement,None,"('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-3-serve:0.33,False,passed,112.41818594932556
+test_pod_placement,None,"('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-3-serve:0.33,False,passed,74.9313440322876
+test_pod_placement,None,"('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-3-serve:0.33,False,passed,428.51919412612915
+test_pod_placement,None,"('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-3-serve:0.33,False,passed,377.1140913963318
+test_pod_placement,None,"('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-3-serve:0.33,False,passed,438.8693013191223
+test_pod_placement,None,"('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-3-serve:0.33,False,passed,331.5233232975006
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-1-pre:0.33,False,passed,121.89406275749207
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-1-pre:0.33,False,passed,74.69918298721313
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-1-pre:0.33,False,passed,453.70146107673645
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-1-pre:0.33,False,passed,344.0622205734253
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-1-pre:0.33,False,passed,411.02857756614685
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-1-pre:0.33,False,passed,331.4539246559143
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-2-train:0.33,False,passed,125.85270404815674
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-2-train:0.33,False,passed,80.60487484931946
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-2-train:0.33,False,passed,449.0162534713745
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-2-train:0.33,False,passed,321.9284780025482
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-2-train:0.33,False,passed,508.9362301826477
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-2-train:0.33,False,passed,317.0522904396057
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-3-serve:0.33,False,passed,150.17906785011292
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-3-serve:0.33,False,passed,84.6588065624237
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-3-serve:0.33,False,passed,447.4814352989197
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-3-serve:0.33,False,passed,349.1610462665558
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-3-serve:0.33,False,passed,476.69284319877625
+test_pod_placement,"Bandwidth(mbit=200, delay=12, deviation=1)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-3-serve:0.33,False,passed,333.98569679260254
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-1-pre:0.33,False,passed,129.32565784454346
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-1-pre:0.33,False,passed,106.12604093551636
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-1-pre:0.33,False,passed,506.37149691581726
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-1-pre:0.33,False,passed,303.87800192832947
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-1-pre:0.33,False,passed,454.6353793144226
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-1-pre:0.33,False,passed,327.7135808467865
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-2-train:0.33,False,passed,129.53120231628418
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-2-train:0.33,False,passed,100.38534951210022
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-2-train:0.33,False,passed,474.1604585647583
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-2-train:0.33,False,passed,325.50988936424255
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-2-train:0.33,False,passed,481.3067021369934
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-2-train:0.33,False,passed,336.8161590099335
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-3-serve:0.33,False,passed,134.6777126789093
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-3-serve:0.33,False,passed,101.16282343864441
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-3-serve:0.33,False,passed,500.2778341770172
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-3-serve:0.33,False,passed,359.4996600151062
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-3-serve:0.33,False,passed,503.0544710159302
+test_pod_placement,"Bandwidth(mbit=100, delay=32, deviation=3)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-3-serve:0.33,False,passed,383.21522545814514
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-1-pre:0.33,False,passed,543.7170372009277
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-1-pre:0.33,False,passed,513.9019656181335
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-1-pre:0.33,False,passed,751.3483743667603
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-1-pre:0.33,False,passed,628.0144119262695
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-1-pre:0.33,False,passed,706.4234521389008
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-1-pre:0.33,False,passed,675.2065999507904
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-2-train:0.33,False,passed,549.663402557373
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-2-train:0.33,False,passed,549.5321819782257
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-2-train:0.33,False,passed,742.6210680007935
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-2-train:0.33,False,passed,668.3376846313477
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-2-train:0.33,False,passed,754.7256422042847
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-2-train:0.33,False,passed,689.2729468345642
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('cloud1', 'ara-clustercloud1')",alexrashed/ml-wf-3-serve:0.33,False,passed,593.9893140792847
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('tegra1', 'ara-clustertegra1')",alexrashed/ml-wf-3-serve:0.33,False,passed,555.3589417934418
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi1', 'ara-clusterpi1')",alexrashed/ml-wf-3-serve:0.33,False,passed,778.3193814754486
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi2', 'ara-clusterpi2')",alexrashed/ml-wf-3-serve:0.33,False,passed,690.4606928825378
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi3', 'ara-clusterpi3')",alexrashed/ml-wf-3-serve:0.33,False,passed,782.562488079071
+test_pod_placement,"Bandwidth(mbit=10, delay=100, deviation=10)","('pi4', 'ara-clusterpi4')",alexrashed/ml-wf-3-serve:0.33,False,passed,705.9224412441254
