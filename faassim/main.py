@@ -12,7 +12,8 @@ from core.priorities import Priority, BalancedResourcePriority, ImageLocalityPri
 from core.scheduler import Scheduler
 from sim.model import EventType, LoggingRow
 from sim.oracle.oracle import PlacementTimeOracle, ExecutionTimeOracle, Oracle
-from sim.plotting import plot_placement_time_cdf, plot_execution_times, plot_placement_times, plot_task_completion_times
+from sim.plotting import plot_placement_time_cdf, plot_execution_times_boxplot, plot_placement_times_boxplot, \
+    plot_task_completion_times, plot_combined_placement_time_cdf, plot_execution_times_bar, plot_placement_times_bar
 from sim.simclustercontext import SimulationClusterContext
 from sim.stats import exp_sampler
 from sim.synth.bandwidth import generate_bandwidth_graph
@@ -61,7 +62,7 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
         logging.debug('Pod scheduling took %.2f ms, and yielded %s', duration, result)
 
         # weight the placement
-        metadata = dict([o.estimate(context, pod, result.suggested_host) for o in oracles])
+        metadata = dict([o.estimate(context, pod, result) for o in oracles])
 
         # also add the image name to the metadata
         metadata['image'] = pod.spec.containers[0].image
@@ -121,6 +122,7 @@ def main():
             # TODO make sure these priority list contains all influencing prio functions
             default_priorities: List[Tuple[float, Priority]] = [(1.0, BalancedResourcePriority()),
                                                                 (1.0, ImageLocalityPriority())]
+            cluster_context = SimulationClusterContext(nodes, bandwidth_graph)
             scheduler = Scheduler(cluster_context=cluster_context,
                                   percentage_of_nodes_to_score=50,
                                   priorities=default_priorities)
@@ -137,8 +139,11 @@ def main():
             logging.info('Plotting data...')
             plot_placement_time_cdf(results_default, 'default')
             plot_placement_time_cdf(results_skippy, 'skippy')
-            plot_execution_times(results_default, results_skippy)
-            plot_placement_times(results_default, results_skippy)
+            plot_combined_placement_time_cdf([('default', results_default), ('skippy', results_skippy)])
+            plot_placement_times_bar(results_default, results_skippy)
+            plot_execution_times_bar(results_default, results_skippy)
+            plot_execution_times_boxplot(results_default, results_skippy)
+            plot_placement_times_boxplot(results_default, results_skippy)
             plot_task_completion_times(results_default, results_skippy)
 
         logging.info('Done.')

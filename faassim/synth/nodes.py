@@ -11,11 +11,11 @@ def node_synthesizer() -> NodeSynthesizer:
         0: create_cloud_node,
         1: create_tegra_node,
         2: create_rpi3_node,
-        3: create_rpi4_node
+        # 3: create_rpi4_node
     }
     while True:
         # TODO implement different heterogeneity levels
-        node = switcher[(cnt - 1) % 4](cnt)
+        node = switcher[(cnt - 1) % len(switcher)](cnt)
         cnt += 1
         yield node
 
@@ -43,7 +43,7 @@ def create_tegra_node(cnt: int) -> Node:
 
 
 def create_rpi3_node(cnt: int) -> Node:
-    return create_node(name=f'{cnt}_rpi3',
+    return create_node(name=f'{cnt}_pi',
                        cpus=4,
                        mem='1Gi',
                        labels={

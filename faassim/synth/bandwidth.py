@@ -11,10 +11,10 @@ from core.model import Node
 bandwidth_types = {
     'edge': {
         'edge': 1.25e+6,  # Edge-to-Edge: 10 MBit/s
-        'cloud': 1.25e+6  # Edge-to-Cloud: 10 MBit/s
+        'cloud': 1.25e+7  # Edge-to-Cloud: 100 MBit/s
     },
     'cloud': {
-        'edge': 1.25e+6,  # Cloud-to-Edge: 10 MBit/s
+        'edge': 1.25e+7,  # Cloud-to-Edge: 100 MBit/s
         'cloud': 1.25e+8  # Cloud-to-Cloud: 1 GBit/s
     }
 }
@@ -26,7 +26,7 @@ def generate_bandwidth_graph(nodes: List[Node]) -> BandwidthGraph:
     # Create the complete graph for the nodes with a bandwidth depending on the type
     for node in nodes:
         for inner in nodes:
-            bandwidth_graph[node.name][inner.name] = 1.25e+9 if node == inner else \
+            bandwidth_graph[node.name][inner.name] = 1.25e+8 if node == inner else \
             bandwidth_types[node.labels['locality.skippy.io/type']][inner.labels['locality.skippy.io/type']]
 
     # Also add a connection from each node to the registry
