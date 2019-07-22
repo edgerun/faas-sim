@@ -72,18 +72,21 @@ def plot_execution_times_boxplot(results_default: pd.DataFrame, results_skippy: 
     # Convert the podname to an int (to allow proper sorting)
     results_combined['id'] = results_combined['value'].str[4:].astype(int)
     results_combined['image'] = results_combined['additional_attributes'].apply(lambda x: x.get('image'))
-    results_combined['execution_time'] = results_combined['additional_attributes'].apply(
-        lambda x: float(x.get('execution_time')))
 
     # Remove the serving-images, exec time is negligible for them
     results_combined = results_combined.loc[~results_combined['image'].isin(['alexrashed/ml-wf-3-serve:0.33'])]
 
+    # Extract the execution time from the additional attributes
+    results_combined['execution_time'] = results_combined['additional_attributes'].apply(
+        lambda x: float(x.get('execution_time')))
+
+    # Extract the execution time from the additional attributes
     results_combined = results_combined[['image', 'scheduler', 'execution_time']].groupby('image')
 
     bp = results_combined.boxplot(by='scheduler', column='execution_time', layout=(1,2), figsize=(8,4))
     [ax_tmp.set_xlabel('') for ax_tmp in np.asarray(bp).reshape(-1)]
     fig = np.asarray(bp).reshape(-1)[0].get_figure()
-    fig.suptitle('Execution Times', y=1)
+    fig.suptitle('Execution Times (s)', y=1)
     plt.savefig(f'results/sim_execution_time_boxplot.png')
     plt.show()
 
@@ -98,15 +101,21 @@ def plot_execution_times_bar(results_default: pd.DataFrame, results_skippy: pd.D
     # Convert the podname to an int (to allow proper sorting)
     results_combined['id'] = results_combined['value'].str[4:].astype(int)
     results_combined['image'] = results_combined['additional_attributes'].apply(lambda x: x.get('image'))
-    results_combined['execution_time'] = results_combined['additional_attributes'].apply(
-        lambda x: float(x.get('execution_time')))
 
     # Remove the serving-images, exec time is negligible for them
     results_combined = results_combined.loc[~results_combined['image'].isin(['alexrashed/ml-wf-3-serve:0.33'])]
 
+    # Extract the execution time from the additional attributes
+    results_combined['execution_time'] = results_combined['additional_attributes'].apply(
+        lambda x: float(x.get('execution_time')))
+
     grouped = results_combined[['image', 'scheduler', 'execution_time']].groupby(['scheduler', 'image'])
     mean = grouped.execution_time.mean().unstack(0)
-    mean.plot.bar()
+    ax = mean.plot.bar()
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=10)
+    plt.ylabel('Execution Times (s)')
+    plt.xlabel('Images')
+    plt.savefig(f'results/sim_placement_time_cdf_combined.png')
     plt.savefig(f'results/sim_execution_time_bar.png')
     plt.show()
 
@@ -126,7 +135,10 @@ def plot_placement_times_bar(results_default: pd.DataFrame, results_skippy: pd.D
 
     grouped = results_combined[['image', 'scheduler', 'placement_time']].groupby(['scheduler', 'image'])
     mean = grouped.placement_time.mean().unstack(0)
-    mean.plot.bar()
+    ax = mean.plot.bar()
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=10)
+    plt.ylabel('Placement Times (s)')
+    plt.xlabel('Images')
     plt.savefig(f'results/sim_placement_time_bar.png')
     plt.show()
 
@@ -149,7 +161,7 @@ def plot_placement_times_boxplot(results_default: pd.DataFrame, results_skippy: 
     bp = results_combined.boxplot(by='scheduler', column='placement_time', layout=(1,3), figsize=(8,4))
     [ax_tmp.set_xlabel('') for ax_tmp in np.asarray(bp).reshape(-1)]
     fig = np.asarray(bp).reshape(-1)[0].get_figure()
-    fig.suptitle('Placement Times', y=1)
+    fig.suptitle('Placement Times (s)', y=1)
     plt.savefig(f'results/sim_placement_time_boxplot.png')
     plt.show()
 
@@ -164,17 +176,18 @@ def plot_task_completion_times(results_default: pd.DataFrame, results_skippy: pd
     # Convert the podname to an int (to allow proper sorting)
     results_combined['id'] = results_combined['value'].str[4:].astype(int)
     results_combined['image'] = results_combined['additional_attributes'].apply(lambda x: x.get('image'))
-    results_combined['tct'] = results_combined['additional_attributes'].apply(
-        lambda x: float(x.get('execution_time')) + float(x.get('placement_time')))
 
     # Remove the serving-images, exec time is negligible for them
     results_combined = results_combined.loc[~results_combined['image'].isin(['alexrashed/ml-wf-3-serve:0.33'])]
+
+    results_combined['tct'] = results_combined['additional_attributes'].apply(
+        lambda x: float(x.get('execution_time')) + float(x.get('placement_time')))
 
     results_combined = results_combined[['image', 'scheduler', 'tct']].groupby('image')
 
     bp = results_combined.boxplot(by='scheduler', column='tct', layout=(1,2), figsize=(8,4))
     [ax_tmp.set_xlabel('') for ax_tmp in np.asarray(bp).reshape(-1)]
     fig = np.asarray(bp).reshape(-1)[0].get_figure()
-    fig.suptitle('Task Completion Times', y=1)
+    fig.suptitle('Task Completion Times (s)', y=1)
     plt.savefig(f'results/sim_task_completion_time_boxplot.png')
     plt.show()

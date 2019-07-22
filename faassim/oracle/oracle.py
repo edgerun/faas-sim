@@ -76,6 +76,7 @@ class ExecutionTimeOracle(Oracle):
         for container in pod.spec.containers:
             image = container.image
             if image == 'alexrashed/ml-wf-3-serve:0.33':
+                execution_time = None
                 break
             execution_time += self.durations.query(f'host == "{host_type}" and '
                                                    f'bandwidth == {bandwidth} and '
