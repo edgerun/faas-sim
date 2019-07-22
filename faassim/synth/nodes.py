@@ -23,7 +23,7 @@ def node_synthesizer() -> NodeSynthesizer:
 def create_cloud_node(cnt: int) -> Node:
     return create_node(name=f'{cnt}_cloud',
                        cpus=4,
-                       mem='8Gi',
+                       mem='8167784Ki',
                        labels={
                            'beta.kubernetes.io/arch': 'amd64',
                            'locality.skippy.io/type': 'cloud'
@@ -33,7 +33,7 @@ def create_cloud_node(cnt: int) -> Node:
 def create_tegra_node(cnt: int) -> Node:
     return create_node(name=f'{cnt}_tegra',
                        cpus=4,
-                       mem='8Gi',
+                       mem='8047252Ki',
                        labels={
                            'beta.kubernetes.io/arch': 'arm64',
                            'capability.skippy.io/nvidia-cuda': '10',
@@ -45,7 +45,7 @@ def create_tegra_node(cnt: int) -> Node:
 def create_rpi3_node(cnt: int) -> Node:
     return create_node(name=f'{cnt}_pi',
                        cpus=4,
-                       mem='1Gi',
+                       mem='999036Ki',
                        labels={
                            'beta.kubernetes.io/arch': 'arm',
                            'locality.skippy.io/type': 'edge'
