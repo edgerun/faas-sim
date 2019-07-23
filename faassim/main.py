@@ -78,7 +78,7 @@ def simulate(cluster_context: ClusterContext, scheduler: Scheduler) -> pd.DataFr
     env.process(run_load_generator(env, queue, pod_synthesizer(), exp_sampler(lambd=1.5), log))
     env.process(run_scheduler_worker(env, queue, cluster_context, scheduler, oracles, log))
     env.sync()
-    env.run(until=3000)
+    env.run(until=1000)
     data = pd.DataFrame(data=log)
     return data
 

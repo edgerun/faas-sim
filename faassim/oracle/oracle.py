@@ -53,6 +53,7 @@ class PlacementTimeOracle(Oracle):
             placement_time += self.durations.query(f'host == "{host_type}" and bandwidth == {bandwidth} and '
                                                   f'image == "{image}" and '
                                                   f'image_present == {image_present}')['duration'].values[0]
+        # return 'placement_time', str(normal(placement_time, placement_time * 0.1))
         return 'placement_time', str(placement_time)
 
 
@@ -81,4 +82,5 @@ class ExecutionTimeOracle(Oracle):
             execution_time += self.durations.query(f'host == "{host_type}" and '
                                                    f'bandwidth == {bandwidth} and '
                                                    f'image == "{image}"')['duration'].values[0]
+        # return 'execution_time', 'None' if execution_time is None else str(normal(execution_time, execution_time * 0.1))
         return 'execution_time', str(execution_time)
