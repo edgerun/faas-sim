@@ -11,7 +11,8 @@ from core.clustercontext import ClusterContext
 from core.priorities import Priority, BalancedResourcePriority, ImageLocalityPriority
 from core.scheduler import Scheduler
 from sim.model import EventType, LoggingRow
-from sim.oracle.oracle import PlacementTimeOracle, ExecutionTimeOracle, Oracle
+from sim.oracle.oracle import PlacementTimeOracle, ExecutionTimeOracle, Oracle, BandwidthUsageOracle, CostOracle, \
+    ResourceUtilizationOracle
 from sim.plotting import plot_placement_time_cdf, plot_execution_times_boxplot, plot_placement_times_boxplot, \
     plot_task_completion_times, plot_combined_placement_time_cdf, plot_execution_times_bar, plot_placement_times_bar
 from sim.simclustercontext import SimulationClusterContext
@@ -72,7 +73,11 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
 
 def simulate(cluster_context: ClusterContext, scheduler: Scheduler) -> pd.DataFrame:
     log = []
-    oracles = [PlacementTimeOracle(), ExecutionTimeOracle()]
+    oracles = [PlacementTimeOracle(),
+               ExecutionTimeOracle(),
+               BandwidthUsageOracle(),
+               CostOracle(),
+               ResourceUtilizationOracle()]
     env = simpy.RealtimeEnvironment(factor=0.01, strict=False)
     queue = simpy.Store(env)
     env.process(run_load_generator(env, queue, pod_synthesizer(), exp_sampler(lambd=1.5), log))
