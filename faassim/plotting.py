@@ -7,7 +7,7 @@ import numpy as np
 from sim.model import EventType
 
 
-def plot_combined_placement_time_cdf(dfs: List[Tuple[str, pd.DataFrame]]):
+def plot_combined_startup_time_cdf(dfs: List[Tuple[str, pd.DataFrame]]):
     for scheduler_name, df_1 in dfs:
         # Only take the POD_QUEUED and the pod_scheduled events
         df_1 = df_1.loc[df_1['event'].isin([EventType.POD_RECEIVED, EventType.POD_SCHEDULED])]
@@ -26,16 +26,16 @@ def plot_combined_placement_time_cdf(dfs: List[Tuple[str, pd.DataFrame]]):
 
         # Create the CDF of the series and plot it
         x, y = sorted(ser), np.arange(len(ser)) / len(ser)
-        plt.plot(x, y, label=f'placement time using the {scheduler_name} scheduler')
+        plt.plot(x, y, label=f'startup time using the {scheduler_name} scheduler')
 
     plt.legend()
     plt.ylabel('Probability')
-    plt.xlabel('Task Placement Latency (ms)')
-    plt.savefig(f'results/sim_placement_time_cdf_combined.png')
+    plt.xlabel('Task Startup Latency (ms)')
+    plt.savefig(f'results/sim_startup_time_cdf_combined.png')
     plt.show()
 
 
-def plot_placement_time_cdf(df_1: pd.DataFrame, scheduler_name: str):
+def plot_startup_time_cdf(df_1: pd.DataFrame, scheduler_name: str):
     # Only take the POD_QUEUED and the pod_scheduled events
     df_1 = df_1.loc[df_1['event'].isin([EventType.POD_RECEIVED, EventType.POD_SCHEDULED])]
     # Filter pod events of pods which have not fully been scheduled (not all 3 events are included)
@@ -53,12 +53,12 @@ def plot_placement_time_cdf(df_1: pd.DataFrame, scheduler_name: str):
 
     # Create the CDF of the series and plot it
     x, y = sorted(ser), np.arange(len(ser)) / len(ser)
-    plt.plot(x, y, label=f'placement time using the {scheduler_name} scheduler')
+    plt.plot(x, y, label=f'startup time using the {scheduler_name} scheduler')
 
     plt.legend()
     plt.ylabel('Probability')
-    plt.xlabel('Task Placement Latency (ms)')
-    plt.savefig(f'results/sim_{scheduler_name}_placement_time_cdf.png')
+    plt.xlabel('Task Startup Latency (ms)')
+    plt.savefig(f'results/sim_{scheduler_name}_startup_time_cdf.png')
     plt.show()
 
 
@@ -115,12 +115,12 @@ def plot_execution_times_bar(results_default: pd.DataFrame, results_skippy: pd.D
     ax.set_xticklabels(ax.get_xticklabels(), rotation=10)
     plt.ylabel('Execution Times (s)')
     plt.xlabel('Images')
-    plt.savefig(f'results/sim_placement_time_cdf_combined.png')
+    plt.savefig(f'results/sim_startup_time_cdf_combined.png')
     plt.savefig(f'results/sim_execution_time_bar.png')
     plt.show()
 
 
-def plot_placement_times_bar(results_default: pd.DataFrame, results_skippy: pd.DataFrame):
+def plot_startup_times_bar(results_default: pd.DataFrame, results_skippy: pd.DataFrame):
     results_default['scheduler'] = 'default'
     results_skippy['scheduler'] = 'skippy'
     results_combined = pd.concat([results_default, results_skippy])
@@ -130,20 +130,20 @@ def plot_placement_times_bar(results_default: pd.DataFrame, results_skippy: pd.D
     # Convert the podname to an int (to allow proper sorting)
     results_combined['id'] = results_combined['value'].str[4:].astype(int)
     results_combined['image'] = results_combined['additional_attributes'].apply(lambda x: x.get('image'))
-    results_combined['placement_time'] = results_combined['additional_attributes'].apply(
-        lambda x: float(x.get('placement_time')))
+    results_combined['startup_time'] = results_combined['additional_attributes'].apply(
+        lambda x: float(x.get('startup_time')))
 
-    grouped = results_combined[['image', 'scheduler', 'placement_time']].groupby(['scheduler', 'image'])
-    mean = grouped.placement_time.mean().unstack(0)
+    grouped = results_combined[['image', 'scheduler', 'startup_time']].groupby(['scheduler', 'image'])
+    mean = grouped.startup_time.mean().unstack(0)
     ax = mean.plot.bar()
     ax.set_xticklabels(ax.get_xticklabels(), rotation=10)
-    plt.ylabel('Placement Times (s)')
+    plt.ylabel('Startup Times (s)')
     plt.xlabel('Images')
-    plt.savefig(f'results/sim_placement_time_bar.png')
+    plt.savefig(f'results/sim_startup_time_bar.png')
     plt.show()
 
 
-def plot_placement_times_boxplot(results_default: pd.DataFrame, results_skippy: pd.DataFrame):
+def plot_startup_times_boxplot(results_default: pd.DataFrame, results_skippy: pd.DataFrame):
     results_default['scheduler'] = 'default'
     results_skippy['scheduler'] = 'skippy'
     results_combined = pd.concat([results_default, results_skippy])
@@ -153,16 +153,16 @@ def plot_placement_times_boxplot(results_default: pd.DataFrame, results_skippy: 
     # Convert the podname to an int (to allow proper sorting)
     results_combined['id'] = results_combined['value'].str[4:].astype(int)
     results_combined['image'] = results_combined['additional_attributes'].apply(lambda x: x.get('image'))
-    results_combined['placement_time'] = results_combined['additional_attributes'].apply(
-        lambda x: float(x.get('placement_time')))
+    results_combined['startup_time'] = results_combined['additional_attributes'].apply(
+        lambda x: float(x.get('startup_time')))
 
-    results_combined = results_combined[['image', 'scheduler', 'placement_time']].groupby('image')
+    results_combined = results_combined[['image', 'scheduler', 'startup_time']].groupby('image')
 
-    bp = results_combined.boxplot(by='scheduler', column='placement_time', layout=(1,3), figsize=(8,4))
+    bp = results_combined.boxplot(by='scheduler', column='startup_time', layout=(1,3), figsize=(8,4))
     [ax_tmp.set_xlabel('') for ax_tmp in np.asarray(bp).reshape(-1)]
     fig = np.asarray(bp).reshape(-1)[0].get_figure()
-    fig.suptitle('Placement Times (s)', y=1)
-    plt.savefig(f'results/sim_placement_time_boxplot.png')
+    fig.suptitle('Startup Times (s)', y=1)
+    plt.savefig(f'results/sim_startup_time_boxplot.png')
     plt.show()
 
 
@@ -181,7 +181,7 @@ def plot_task_completion_times(results_default: pd.DataFrame, results_skippy: pd
     results_combined = results_combined.loc[~results_combined['image'].isin(['alexrashed/ml-wf-3-serve:0.33'])]
 
     results_combined['tct'] = results_combined['additional_attributes'].apply(
-        lambda x: float(x.get('execution_time')) + float(x.get('placement_time')))
+        lambda x: float(x.get('execution_time')) + float(x.get('startup_time')))
 
     results_combined = results_combined[['image', 'scheduler', 'tct']].groupby('image')
 

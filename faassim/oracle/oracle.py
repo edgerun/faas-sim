@@ -11,7 +11,7 @@ Bandwidth = NamedTuple('Bandwidth', [('mbit', int), ('delay', int), ('deviation'
 
 
 class Oracle:
-    """Abstract class for placement oracle functions."""
+    """Abstract class for startup oracle functions."""
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
         raise NotImplementedError
 
@@ -32,9 +32,9 @@ class EmpiricalOracle:
         self.dataset = df
 
 
-class PlacementTimeOracle(EmpiricalOracle):
+class StartupTimeOracle(EmpiricalOracle):
     def __init__(self):
-        super(PlacementTimeOracle, self).__init__('sim/oracle/pod_placement_*.csv')
+        super(StartupTimeOracle, self).__init__('sim/oracle/pod_startup_*.csv')
         # Perform the group by to calc the median time for
         # each host x with bandwidth y, image z and image present or not
         self.grouped_dataset = self.dataset[['host', 'bandwidth', 'image', 'image_present', 'duration']]\
@@ -43,20 +43,20 @@ class PlacementTimeOracle(EmpiricalOracle):
 
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
         if scheduling_result is None or scheduling_result.suggested_host is None:
-            return 'placement_time', None
+            return 'startup_time', None
         host = scheduling_result.suggested_host.name
         host_type = host[host.rindex('_')+1:]
-        # For the placement time the bandwidth to the registry is necessary
+        # For the startup time the bandwidth to the registry is necessary
         bandwidth = context.get_bandwidth_graph()[host]['registry']
-        placement_time = 0
+        startup_time = 0
         for container in pod.spec.containers:
             image = container.image
             image_present = normalize_image_name(image) in context.images_on_nodes[host]
-            placement_time += self.durations.query(f'host == "{host_type}" and bandwidth == {bandwidth} and '
+            startup_time += self.durations.query(f'host == "{host_type}" and bandwidth == {bandwidth} and '
                                                   f'image == "{image}" and '
                                                   f'image_present == {image_present}')['duration'].values[0]
-        # return 'placement_time', str(normal(placement_time, placement_time * 0.1))
-        return 'placement_time', str(placement_time)
+        # return 'startup_time', str(normal(startup_time, startup_time * 0.1))
+        return 'startup_time', str(startup_time)
 
 
 class ExecutionTimeOracle(EmpiricalOracle):
