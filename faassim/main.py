@@ -71,7 +71,7 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
         log.append(LoggingRow(env.now, EventType.POD_SCHEDULED, pod.name, metadata))
 
 
-def simulate(cluster_context: ClusterContext, scheduler: Scheduler) -> pd.DataFrame:
+def simulate(cluster_context: ClusterContext, scheduler: Scheduler, until: int) -> pd.DataFrame:
     log = []
     oracles = [StartupTimeOracle(),
                ExecutionTimeOracle(),
@@ -83,7 +83,7 @@ def simulate(cluster_context: ClusterContext, scheduler: Scheduler) -> pd.DataFr
     env.process(run_load_generator(env, queue, pod_synthesizer(), exp_sampler(lambd=1.5), log))
     env.process(run_scheduler_worker(env, queue, cluster_context, scheduler, oracles, log))
     env.sync()
-    env.run(until=1000)
+    env.run(until=until)
     data = pd.DataFrame(data=log)
     return data
 
@@ -95,6 +95,13 @@ def read_csv(filename: str) -> pd.DataFrame:
     return df
 
 
+def check_positive(value):
+    int_value = int(value)
+    if int_value <= 0:
+        raise argparse.ArgumentTypeError("%s is not a valid positive int value" % value)
+    return int_value
+
+
 def main():
     # Parse the arguments
     parser = argparse.ArgumentParser(description='Skippy Simulator')
@@ -104,6 +111,10 @@ def main():
                         help='Only simulate the scheduling.', default=False)
     parser.add_argument('-p', '--plot', action='store_true', dest='plot',
                         help='Only plot the data.', default=False)
+    parser.add_argument('-u', '--until', action='store', dest='until',
+                        help='Define until when the simulation should run.', default=1000, type=check_positive)
+    parser.add_argument('-n', '--nodes', action='store', dest='node_count',
+                        help='Define how many nodes should be synthesized.', default=1000, type=check_positive)
     args = parser.parse_args()
     level = logging.DEBUG if args.debug else logging.INFO
     logging.getLogger().setLevel(level)
@@ -111,15 +122,14 @@ def main():
     try:
         if args.simulate or not args.plot:
             logging.info('Starting the simulation...')
-            node_count = 1000
-            nodes = list(itertools.islice(node_synthesizer(), node_count))
+            nodes = list(itertools.islice(node_synthesizer(), args.node_count))
             bandwidth_graph = generate_bandwidth_graph(nodes)
             cluster_context = SimulationClusterContext(nodes, bandwidth_graph)
 
             # Run the skippy simulation
             scheduler = Scheduler(cluster_context)
             logging.info('Simulating the Skippy scheduler...')
-            results_skippy = simulate(cluster_context, scheduler)
+            results_skippy = simulate(cluster_context, scheduler, args.until)
             results_skippy.to_csv('results/sim_skippy.csv')
 
             # Run the default scheduler simulation
@@ -131,7 +141,7 @@ def main():
             scheduler = Scheduler(cluster_context=cluster_context,
                                   percentage_of_nodes_to_score=50,
                                   priorities=default_priorities)
-            results_default = simulate(cluster_context, scheduler)
+            results_default = simulate(cluster_context, scheduler, args.until)
             results_default.to_csv('results/sim_default.csv')
             logging.info('Simulation finished.')
         else:
