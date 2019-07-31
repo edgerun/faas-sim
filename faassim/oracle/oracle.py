@@ -152,4 +152,4 @@ class ResourceUtilizationOracle(Oracle):
         for container in pod.spec.containers:
             cpu_all += container.resources.requests.get('cpu', container.resources.default_milli_cpu_request)
             mem_all += container.resources.requests.get('memory', container.resources.default_mem_request)
-        return (mem_cap / mem_all) + (cpu_cap / cpu_all)
+        return (mem_all / mem_cap) + (cpu_all / cpu_cap)
