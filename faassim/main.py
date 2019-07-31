@@ -8,7 +8,8 @@ import pandas as pd
 import logging
 
 from core.clustercontext import ClusterContext
-from core.priorities import Priority, BalancedResourcePriority, ImageLocalityPriority
+from core.priorities import Priority, BalancedResourcePriority, ImageLocalityPriority, \
+    LatencyAwareImageLocalityPriority, LocalityTypePriority, DataLocalityPriority, CapabilityPriority
 from core.scheduler import Scheduler
 from sim.model import EventType, LoggingRow
 from sim.oracle.oracle import StartupTimeOracle, ExecutionTimeOracle, Oracle, BandwidthUsageOracle, CostOracle, \
@@ -18,7 +19,7 @@ from sim.plotting import plot_startup_time_cdf, plot_execution_times_boxplot, pl
 from sim.simclustercontext import SimulationClusterContext
 from sim.stats import exp_sampler
 from sim.synth.bandwidth import generate_bandwidth_graph
-from sim.synth.nodes import node_synthesizer
+from sim.synth.nodes import node_synthesizer, node_factory_50_percent_cloud, node_factory_equal, generate_nodes
 from sim.synth.pods import pod_synthesizer, PodSynthesizer
 
 
@@ -71,7 +72,8 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
         log.append(LoggingRow(env.now, EventType.POD_SCHEDULED, pod.name, metadata))
 
 
-def simulate(cluster_context: ClusterContext, scheduler: Scheduler, until: int) -> pd.DataFrame:
+def simulate(cluster_context: ClusterContext, scheduler: Scheduler, pod_synth: PodSynthesizer,
+             until: int) -> pd.DataFrame:
     log = []
     oracles = [StartupTimeOracle(),
                ExecutionTimeOracle(),
@@ -80,7 +82,7 @@ def simulate(cluster_context: ClusterContext, scheduler: Scheduler, until: int) 
                ResourceUtilizationOracle()]
     env = simpy.RealtimeEnvironment(factor=0.01, strict=False)
     queue = simpy.Store(env)
-    env.process(run_load_generator(env, queue, pod_synthesizer(), exp_sampler(lambd=1.5), log))
+    env.process(run_load_generator(env, queue, pod_synth, exp_sampler(lambd=1.5), log))
     env.process(run_scheduler_worker(env, queue, cluster_context, scheduler, oracles, log))
     env.sync()
     env.run(until=until)
@@ -122,26 +124,34 @@ def main():
     try:
         if args.simulate or not args.plot:
             logging.info('Starting the simulation...')
-            nodes = list(itertools.islice(node_synthesizer(), args.node_count))
+            nodes = generate_nodes(node_factory_equal, args.node_count)
             bandwidth_graph = generate_bandwidth_graph(nodes)
             cluster_context = SimulationClusterContext(nodes, bandwidth_graph)
 
             # Run the skippy simulation
+            ''' TODO test optimized priority weights
+            priorities = [(5.676412541685095, BalancedResourcePriority()),
+                          (6.219959787191047, LatencyAwareImageLocalityPriority()),
+                          (2.3113716013828522, LocalityTypePriority()),
+                          (3.216783581341213, DataLocalityPriority()),
+                          (6.029151576622659, CapabilityPriority())]
+            scheduler = Scheduler(cluster_context, priorities=priorities)
+            '''
             scheduler = Scheduler(cluster_context)
             logging.info('Simulating the Skippy scheduler...')
-            results_skippy = simulate(cluster_context, scheduler, args.until)
+            results_skippy = simulate(cluster_context, scheduler, pod_synthesizer(), args.until)
             results_skippy.to_csv('results/sim_skippy.csv')
 
             # Run the default scheduler simulation
             logging.info('Simulating the default scheduler...')
-            # TODO make sure these priority list contains all influencing prio functions
             default_priorities: List[Tuple[float, Priority]] = [(1.0, BalancedResourcePriority()),
                                                                 (1.0, ImageLocalityPriority())]
+            nodes = generate_nodes(node_factory_equal, args.node_count)
             cluster_context = SimulationClusterContext(nodes, bandwidth_graph)
             scheduler = Scheduler(cluster_context=cluster_context,
                                   percentage_of_nodes_to_score=50,
                                   priorities=default_priorities)
-            results_default = simulate(cluster_context, scheduler, args.until)
+            results_default = simulate(cluster_context, scheduler, pod_synthesizer(), args.until)
             results_default.to_csv('results/sim_default.csv')
             logging.info('Simulation finished.')
         else:

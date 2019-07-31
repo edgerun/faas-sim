@@ -10,7 +10,7 @@ def pod_synthesizer() -> PodSynthesizer:
     creators = [create_ml_wf_1_pod, create_ml_wf_2_pod, create_ml_wf_3_serve]
     while True:
         # Rotate over the different workflow functions
-        pod = creators[(cnt - 1) % 3](cnt)
+        pod = creators[(cnt - 1) % len(creators)](cnt)
         cnt += 1
         yield pod
 
@@ -19,7 +19,7 @@ def create_ml_wf_1_pod(cnt: int) -> Pod:
     return create_pod(cnt,
                       image_name='alexrashed/ml-wf-1-pre:0.33',
                       memory='100Mi',
-                      labels = {
+                      labels={
                             'data.skippy.io/receives-from-storage': '12Mi',
                             'data.skippy.io/sends-to-storage': '209Mi'
                         })
