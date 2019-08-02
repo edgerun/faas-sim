@@ -35,11 +35,7 @@ class EmpiricalOracle:
 class StartupTimeOracle(EmpiricalOracle):
     def __init__(self):
         super(StartupTimeOracle, self).__init__('sim/oracle/pod_startup_*.csv')
-        # Perform the group by to calc the median time for
-        # each host x with bandwidth y, image z and image present or not
-        self.grouped_dataset = self.dataset[['host', 'bandwidth', 'image', 'image_present', 'duration']]\
-            .groupby(['host', 'bandwidth', 'image', 'image_present'])
-        self.durations = self.grouped_dataset.median()
+        self.durations = self.dataset[['host', 'bandwidth', 'image', 'image_present', 'duration']]
 
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
         if scheduling_result is None or scheduling_result.suggested_host is None:
@@ -54,19 +50,14 @@ class StartupTimeOracle(EmpiricalOracle):
             image_present = normalize_image_name(image) in context.images_on_nodes[host]
             startup_time += self.durations.query(f'host == "{host_type}" and bandwidth == {bandwidth} and '
                                                   f'image == "{image}" and '
-                                                  f'image_present == {image_present}')['duration'].values[0]
-        # return 'startup_time', str(normal(startup_time, startup_time * 0.1))
+                                                  f'image_present == {image_present}')['duration'].sample().values[0]
         return 'startup_time', str(startup_time)
 
 
 class ExecutionTimeOracle(EmpiricalOracle):
     def __init__(self):
         super(ExecutionTimeOracle, self).__init__('sim/oracle/exec_time*.csv')
-        # Perform the group by to calc the median time for
-        # each host x with bandwidth y and image z
-        self.grouped_dataset = self.dataset[['host', 'bandwidth', 'image', 'duration']]\
-            .groupby(['host', 'bandwidth', 'image'])
-        self.durations = self.grouped_dataset.median()
+        self.durations = self.dataset[['host', 'bandwidth', 'image', 'duration']]
 
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
         if scheduling_result is None or scheduling_result.suggested_host is None:
@@ -85,8 +76,7 @@ class ExecutionTimeOracle(EmpiricalOracle):
                 break
             execution_time += self.durations.query(f'host == "{host_type}" and '
                                                    f'bandwidth == {bandwidth} and '
-                                                   f'image == "{image}"')['duration'].values[0]
-        # return 'execution_time', 'None' if execution_time is None else str(normal(execution_time, execution_time * 0.1))
+                                                   f'image == "{image}"')['duration'].sample().values[0]
         return 'execution_time', str(execution_time)
 
 

@@ -19,7 +19,8 @@ from sim.plotting import plot_startup_time_cdf, plot_execution_times_boxplot, pl
 from sim.simclustercontext import SimulationClusterContext
 from sim.stats import exp_sampler
 from sim.synth.bandwidth import generate_bandwidth_graph
-from sim.synth.nodes import node_synthesizer, node_factory_50_percent_cloud, node_factory_equal, generate_nodes
+from sim.synth.nodes import node_synthesizer, node_factory_50_percent_cloud, node_factory_equal, generate_nodes, \
+    node_factory_edge_majority
 from sim.synth.pods import pod_synthesizer, PodSynthesizer
 
 
@@ -129,15 +130,16 @@ def main():
             cluster_context = SimulationClusterContext(nodes, bandwidth_graph)
 
             # Run the skippy simulation
-            ''' TODO test optimized priority weights
-            priorities = [(5.676412541685095, BalancedResourcePriority()),
-                          (6.219959787191047, LatencyAwareImageLocalityPriority()),
-                          (2.3113716013828522, LocalityTypePriority()),
-                          (3.216783581341213, DataLocalityPriority()),
-                          (6.029151576622659, CapabilityPriority())]
+            # Those are the TET optimized weights for node_factory_equal for 1000 nodes and 1000 runtime
+            priorities = [(8.774535310146646, BalancedResourcePriority()),
+                          (1.5325844419638877, LatencyAwareImageLocalityPriority()),
+                          (5.5137842203679135, LocalityTypePriority()),
+                          (6.438174499510025, DataLocalityPriority()),
+                          (5.856553283934791, CapabilityPriority())]
             scheduler = Scheduler(cluster_context, priorities=priorities)
             '''
             scheduler = Scheduler(cluster_context)
+            '''
             logging.info('Simulating the Skippy scheduler...')
             results_skippy = simulate(cluster_context, scheduler, pod_synthesizer(), args.until)
             results_skippy.to_csv('results/sim_skippy.csv')
