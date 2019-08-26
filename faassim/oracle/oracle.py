@@ -71,11 +71,6 @@ class ExecutionTimeOracle(EmpiricalOracle):
         execution_time = 0
         for container in pod.spec.containers:
             image = container.image
-            # TODO integrate new emprical measurements (including execution times for ml-wf-3) and remove this part
-            if image == 'alexrashed/ml-wf-3-serve:0.33':
-                # execution_time = None
-                execution_time = 2
-                break
             execution_time += self.durations.query(f'host == "{host_type}" and '
                                                    f'bandwidth == {bandwidth} and '
                                                    f'image == "{image}"')['duration'].sample().values[0]
