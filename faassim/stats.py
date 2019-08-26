@@ -1,4 +1,5 @@
 from typing import Generator
+
 import scipy.stats as st
 
 

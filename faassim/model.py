@@ -13,7 +13,7 @@ class EventType(Enum):
 
 
 class LoggingRow(NamedTuple):
-    timestamp: float                 # When did it happen?
-    event: EventType                 # What happened?
-    value: str                       # Which pod was affected?
-    additional_attributes: Dict = {} # What else could be interesting?
+    timestamp: float  # When did it happen?
+    event: EventType  # What happened?
+    value: str  # Which pod was affected?
+    additional_attributes: Dict = {}  # What else could be interesting?

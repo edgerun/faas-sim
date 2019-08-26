@@ -1,27 +1,19 @@
-import argparse
 import ast
-import itertools
-import time
-from typing import List, Generator, Tuple
-import simpy
-import pandas as pd
+import ast
 import logging
+import time
+from typing import List, Generator
+
+import pandas as pd
+import simpy
 
 from core.clustercontext import ClusterContext
-from core.priorities import Priority, BalancedResourcePriority, ImageLocalityPriority, \
-    LatencyAwareImageLocalityPriority, LocalityTypePriority, DataLocalityPriority, CapabilityPriority
 from core.scheduler import Scheduler
 from sim.model import EventType, LoggingRow
 from sim.oracle.oracle import StartupTimeOracle, ExecutionTimeOracle, Oracle, BandwidthUsageOracle, CostOracle, \
     ResourceUtilizationOracle
-from sim.plotting import plot_startup_time_cdf, plot_execution_times_boxplot, plot_startup_times_boxplot, \
-    plot_task_completion_times, plot_combined_startup_time_cdf, plot_execution_times_bar, plot_startup_times_bar
-from sim.simclustercontext import SimulationClusterContext
 from sim.stats import exp_sampler
-from sim.synth.bandwidth import generate_bandwidth_graph
-from sim.synth.nodes import node_synthesizer, node_factory_50_percent_cloud, node_factory_equal, generate_nodes, \
-    node_factory_edge_majority
-from sim.synth.pods import pod_synthesizer, PodSynthesizer
+from sim.synth.pods import PodSynthesizer
 
 
 def run_load_generator(env: simpy.Environment, queue: simpy.Store, pod_synth: PodSynthesizer,
@@ -67,8 +59,9 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
         # weight the startup
         metadata = dict([o.estimate(context, pod, result) for o in oracles])
 
-        # also add the image name to the metadata
+        # also add the image name and the selected node to the metadata
         metadata['image'] = pod.spec.containers[0].image
+        metadata['suggested_host'] = None if result.suggested_host is None else result.suggested_host.name
 
         log.append(LoggingRow(env.now, EventType.POD_SCHEDULED, pod.name, metadata))
 
@@ -96,88 +89,3 @@ def read_csv(filename: str) -> pd.DataFrame:
     df['event'] = df['event'].apply(lambda x: EventType[x[10:]])
     df['additional_attributes'] = df['additional_attributes'].apply(lambda x: ast.literal_eval(x))
     return df
-
-
-def check_positive(value):
-    int_value = int(value)
-    if int_value <= 0:
-        raise argparse.ArgumentTypeError("%s is not a valid positive int value" % value)
-    return int_value
-
-
-def main():
-    # Parse the arguments
-    parser = argparse.ArgumentParser(description='Skippy Simulator')
-    parser.add_argument('-d', '--debug', action='store_true', dest='debug',
-                        help='Enable debug logs.', default=False)
-    parser.add_argument('-s', '--simulate', action='store_true', dest='simulate',
-                        help='Only simulate the scheduling.', default=False)
-    parser.add_argument('-p', '--plot', action='store_true', dest='plot',
-                        help='Only plot the data.', default=False)
-    parser.add_argument('-u', '--until', action='store', dest='until',
-                        help='Define until when the simulation should run.', default=1000, type=check_positive)
-    parser.add_argument('-n', '--nodes', action='store', dest='node_count',
-                        help='Define how many nodes should be synthesized.', default=1000, type=check_positive)
-    args = parser.parse_args()
-    level = logging.DEBUG if args.debug else logging.INFO
-    logging.getLogger().setLevel(level)
-
-    try:
-        if args.simulate or not args.plot:
-            logging.info('Starting the simulation...')
-            nodes = generate_nodes(node_factory_equal, args.node_count)
-            bandwidth_graph = generate_bandwidth_graph(nodes)
-            cluster_context = SimulationClusterContext(nodes, bandwidth_graph)
-
-            # Run the skippy simulation
-            # Those are the TET optimized weights for node_factory_equal for 1000 nodes and 1000 runtime
-            priorities = [(8.774535310146646, BalancedResourcePriority()),
-                          (1.5325844419638877, LatencyAwareImageLocalityPriority()),
-                          (5.5137842203679135, LocalityTypePriority()),
-                          (6.438174499510025, DataLocalityPriority()),
-                          (5.856553283934791, CapabilityPriority())]
-            scheduler = Scheduler(cluster_context, priorities=priorities)
-            '''
-            scheduler = Scheduler(cluster_context)
-            '''
-            logging.info('Simulating the Skippy scheduler...')
-            results_skippy = simulate(cluster_context, scheduler, pod_synthesizer(), args.until)
-            results_skippy.to_csv('results/sim_skippy.csv')
-
-            # Run the default scheduler simulation
-            logging.info('Simulating the default scheduler...')
-            default_priorities: List[Tuple[float, Priority]] = [(1.0, BalancedResourcePriority()),
-                                                                (1.0, ImageLocalityPriority())]
-            nodes = generate_nodes(node_factory_equal, args.node_count)
-            cluster_context = SimulationClusterContext(nodes, bandwidth_graph)
-            scheduler = Scheduler(cluster_context=cluster_context,
-                                  percentage_of_nodes_to_score=50,
-                                  priorities=default_priorities)
-            results_default = simulate(cluster_context, scheduler, pod_synthesizer(), args.until)
-            results_default.to_csv('results/sim_default.csv')
-            logging.info('Simulation finished.')
-        else:
-            logging.info('Loading pre-recorded simulation data...')
-            results_default = read_csv('results/sim_default.csv')
-            results_skippy = read_csv('results/sim_skippy.csv')
-            logging.info('Simulation data loaded.')
-
-        if args.plot or not args.simulate:
-            logging.info('Plotting data...')
-            plot_startup_time_cdf(results_default, 'default')
-            plot_startup_time_cdf(results_skippy, 'skippy')
-            plot_combined_startup_time_cdf([('default', results_default), ('skippy', results_skippy)])
-            plot_startup_times_bar(results_default, results_skippy)
-            plot_execution_times_bar(results_default, results_skippy)
-            plot_execution_times_boxplot(results_default, results_skippy)
-            plot_startup_times_boxplot(results_default, results_skippy)
-            plot_task_completion_times(results_default, results_skippy)
-
-        logging.info('Done.')
-    except KeyboardInterrupt:
-        logging.info('Aborting after KeyboardInterrupt.')
-        pass
-
-
-if __name__ == '__main__':
-    main()

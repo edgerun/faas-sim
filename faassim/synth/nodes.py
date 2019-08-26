@@ -10,7 +10,7 @@ NodeFactory = List[Callable[[], Node]]
 def create_cloud_node(cnt: int) -> Node:
     return create_node(name=f'{cnt}_cloud',
                        cpus=4,
-                       mem='8167784Ki',
+                       mem='8167784Ki',  # kubectl describe node ara-clustercloud1
                        labels={
                            'beta.kubernetes.io/arch': 'amd64',
                            'locality.skippy.io/type': 'cloud'
