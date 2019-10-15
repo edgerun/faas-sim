@@ -36,7 +36,7 @@ class EmpiricalOracle:
 
 class StartupTimeOracle(EmpiricalOracle):
     def __init__(self):
-        super(StartupTimeOracle, self).__init__('sim/oracle/pod_startup_*.csv')
+        super(StartupTimeOracle, self).__init__('sim/oracle/data/pod_startup_*.csv')
         self.durations = self.dataset[['host', 'bandwidth', 'image', 'image_present', 'duration']]
 
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
@@ -58,7 +58,7 @@ class StartupTimeOracle(EmpiricalOracle):
 
 class ExecutionTimeOracle(EmpiricalOracle):
     def __init__(self):
-        super(ExecutionTimeOracle, self).__init__('sim/oracle/exec_time*.csv')
+        super(ExecutionTimeOracle, self).__init__('sim/oracle/data/exec_time*.csv')
         self.durations = self.dataset[['host', 'bandwidth', 'image', 'duration']]
 
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
