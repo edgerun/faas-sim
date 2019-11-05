@@ -55,6 +55,7 @@ def create_node(name: str, cpus: int, mem: str, labels=Dict[str, str]) -> Node:
     return Node(name, capacity=capacity, allocatable=allocatable, labels=labels)
 
 
+node_factory_testbed: NodeFactory = [create_cloud_node, create_tegra_node] + [create_rpi3_node] * 4
 node_factory_equal: NodeFactory = [create_cloud_node, create_tegra_node, create_rpi3_node]
 node_factory_50_percent_cloud: NodeFactory = [create_cloud_node] * 2 + [create_tegra_node, create_rpi3_node]
 node_factory_cloud_majority: NodeFactory = [create_cloud_node] * 4 + [create_tegra_node, create_rpi3_node]
