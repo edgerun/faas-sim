@@ -85,15 +85,12 @@ class BandwidthUsageOracle(Oracle):
         # Calculate the image pull bandwidth
         bandwidth_usage = 0
         node = scheduling_result.suggested_host
-        if pod.spec.containers is not Node:
-            for container in pod.spec.containers:
-                image_name = normalize_image_name(container.image)
-                if image_name not in context.images_on_nodes[node.name]:
-                    try:
-                        image_state: ImageState = context.images_on_nodes[node.name][image_name]
-                        bandwidth_usage += image_state.size[node.labels['beta.kubernetes.io/arch']]
-                    except KeyError:
-                        pass
+        for image_name in scheduling_result.needed_images:
+            try:
+                image_state: ImageState = context.images_on_nodes[node.name][image_name]
+                bandwidth_usage += image_state.size[node.labels['beta.kubernetes.io/arch']]
+            except KeyError:
+                pass
 
         # Add the storage data usage
         bandwidth_usage += parse_size_string(pod.spec.labels.get('data.skippy.io/receives-from-storage', '0'))
