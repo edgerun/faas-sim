@@ -111,6 +111,7 @@ class CostOracle(Oracle):
             _, time_str = self.execution_time_oracle.estimate(context, pod, scheduling_result)
             # TODO implement a more sophisticated model for the pricing based on the list:
             #  - https://aws.amazon.com/lambda/pricing/
+            # 0.000001667 is the cost for a function exec with 1GB RAM per 100ms
             cost = 0.000001667 * 10 * float(time_str)
         return 'cost', str(cost)
 
