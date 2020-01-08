@@ -38,6 +38,36 @@ class SimulationClusterContext(ClusterContext):
                 'arm': 506769993,
                 'arm64': 585625232,
                 'amd64': 585928717
+            }),
+            'alexrashed/ml-wf-1-pre:0.34': ImageState(size={
+                'arm': 465830200,
+                'arm64': 540391110,
+                'amd64': 533323136
+            }),
+            'alexrashed/ml-wf-2-train:0.34': ImageState(size={
+                'arm': 519336111,
+                'arm64': 594174340,
+                'amd64': 550683347
+            }),
+            'alexrashed/ml-wf-3-serve:0.34': ImageState(size={
+                'arm': 511888808,
+                'arm64': 590989596,
+                'amd64': 589680790
+            }),
+            'alexrashed/ml-wf-1-pre:0.35': ImageState(size={
+                'arm': 465830200,
+                'arm64': 540391110,
+                'amd64': 533323136
+            }),
+            'alexrashed/ml-wf-2-train:0.35': ImageState(size={
+                'arm': 519336111,
+                'arm64': 594174340,
+                'amd64': 550683347
+            }),
+            'alexrashed/ml-wf-3-serve:0.35': ImageState(size={
+                'arm': 511888808,
+                'arm64': 590989596,
+                'amd64': 589680790
             })
         }
 
