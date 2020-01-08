@@ -18,7 +18,7 @@ def pod_synthesizer() -> PodSynthesizer:
 
 def create_ml_wf_1_pod(cnt: int) -> Pod:
     return create_pod(cnt,
-                      image_name='alexrashed/ml-wf-1-pre:0.35',
+                      image_name='alexrashed/ml-wf-1-pre:0.36',
                       memory='100Mi',
                       labels={
                             'data.skippy.io/receives-from-storage': '12Mi',
@@ -28,7 +28,7 @@ def create_ml_wf_1_pod(cnt: int) -> Pod:
 
 def create_ml_wf_2_pod(cnt: int) -> Pod:
     return create_pod(cnt,
-                      image_name='alexrashed/ml-wf-2-train:0.35',
+                      image_name='alexrashed/ml-wf-2-train:0.36',
                       memory='1Gi',
                       labels={
                           'capability.skippy.io/nvidia-cuda': '10',
@@ -40,7 +40,7 @@ def create_ml_wf_2_pod(cnt: int) -> Pod:
 
 def create_ml_wf_3_serve(cnt: int) -> Pod:
     return create_pod(cnt,
-                      image_name='alexrashed/ml-wf-3-serve:0.35',
+                      image_name='alexrashed/ml-wf-3-serve:0.36',
                       labels={
                           'data.skippy.io/receives-from-storage': '1500Ki'
                         })
