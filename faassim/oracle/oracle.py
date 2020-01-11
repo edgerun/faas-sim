@@ -1,19 +1,24 @@
 import glob
-import logging
+import os
 from ast import literal_eval as make_tuple
 from typing import Tuple, NamedTuple
 
 import pandas as pd
 
 from core.clustercontext import ClusterContext
-from core.model import Pod, SchedulingResult, Node, ImageState
+from core.model import Pod, SchedulingResult, ImageState
 from core.utils import parse_size_string, normalize_image_name
+from sim.oracle.data.distributions import execution_time_distributions, startup_time_distributions
+from sim.stats import BoundRejectionSampler, BufferedSampler
 
 Bandwidth = NamedTuple('Bandwidth', [('mbit', int), ('delay', int), ('deviation', int)])
+
+data_dir = 'sim/oracle/data'
 
 
 class Oracle:
     """Abstract class for startup oracle functions."""
+
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
         raise NotImplementedError
 
@@ -36,36 +41,47 @@ class EmpiricalOracle:
 
 class StartupTimeOracle(EmpiricalOracle):
     def __init__(self):
-        super(StartupTimeOracle, self).__init__('sim/oracle/data/pod_startup_*.csv')
+        super(StartupTimeOracle, self).__init__(os.path.join(data_dir, 'pod_startup_*.csv'))
         self.durations = self.dataset[['host', 'bandwidth', 'image', 'image_present', 'duration']]
 
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
         if scheduling_result is None or scheduling_result.suggested_host is None:
             return 'startup_time', None
         host = scheduling_result.suggested_host.name
-        host_type = host[host.rindex('_')+1:]
+        host_type = host[host.rindex('_') + 1:]
         # For the startup time the bandwidth to the registry is necessary
         bandwidth = context.get_bandwidth_graph()[host]['registry']
         startup_time = 0
+
         for container in pod.spec.containers:
             image = container.image
             image_present = normalize_image_name(image) in context.images_on_nodes[host]
-            startup_time += self.durations.query(f'host == "{host_type}" and bandwidth == {bandwidth} and '
-                                                  f'image == "{image}" and '
-                                                  f'image_present == {image_present}')['duration'].sample().values[0]
+
+            data = self.durations.query(f'host == "{host_type}" and '
+                                        f'image == "{image}" and '
+                                        f'bandwidth == "{bandwidth}" and '
+                                        f'image_present == {image_present}')
+
+            if data.empty:
+                raise ValueError('no data for %s, %s, %s, %s' % (host_type, image, bandwidth, image_present))
+            else:
+                sample = data['duration'].sample()
+
+            startup_time += sample.values[0]
+
         return 'startup_time', str(startup_time)
 
 
 class ExecutionTimeOracle(EmpiricalOracle):
     def __init__(self):
-        super(ExecutionTimeOracle, self).__init__('sim/oracle/data/exec_time*.csv')
+        super(ExecutionTimeOracle, self).__init__(os.path.join(data_dir, 'exec_time*.csv'))
         self.durations = self.dataset[['host', 'bandwidth', 'image', 'duration']]
 
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
         if scheduling_result is None or scheduling_result.suggested_host is None:
             return 'execution_time', None
         host = scheduling_result.suggested_host.name
-        host_type = host[host.rindex('_')+1:]
+        host_type = host[host.rindex('_') + 1:]
         # For the execution time the bandwidth to the next storage node is necessary
         bandwidth = context.get_bandwidth_graph()[host][context.get_next_storage_node(scheduling_result.suggested_host)]
         execution_time = 0
@@ -138,3 +154,69 @@ class ResourceUtilizationOracle(Oracle):
             cpu_all += container.resources.requests.get('cpu', container.resources.default_milli_cpu_request)
             mem_all += container.resources.requests.get('memory', container.resources.default_mem_request)
         return (mem_all / mem_cap) + (cpu_all / cpu_cap)
+
+
+class FittedStartupTimeOracle(Oracle):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.startup_time_samplers = {
+            k: BoundRejectionSampler(BufferedSampler(dist), xmin, xmax) for k, (xmin, xmax, dist) in
+            startup_time_distributions.items()
+        }
+
+    def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
+        if scheduling_result is None or scheduling_result.suggested_host is None:
+            return 'startup_time', None
+
+        host = scheduling_result.suggested_host.name
+        host_type = host[host.rindex('_') + 1:]
+        # For the startup time the bandwidth to the registry is necessary
+        bandwidth = context.get_bandwidth_graph()[host]['registry']
+        startup_time = 0
+
+        for container in pod.spec.containers:
+            image = container.image
+
+            image_present = normalize_image_name(image) not in scheduling_result.needed_images
+
+            k = (host_type, image, image_present, bandwidth)
+
+            if k not in self.startup_time_samplers:
+                raise ValueError(k)
+
+            startup_time += self.startup_time_samplers[k].sample()
+
+        return 'startup_time', str(startup_time)
+
+
+class FittedExecutionTimeOracle(Oracle):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.execution_time_samplers = {
+            k: BoundRejectionSampler(BufferedSampler(dist), xmin, xmax) for k, (xmin, xmax, dist) in
+            execution_time_distributions.items()
+        }
+
+    def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
+        if scheduling_result is None or scheduling_result.suggested_host is None:
+            return 'execution_time', None
+
+        host = scheduling_result.suggested_host.name
+        host_type = host[host.rindex('_') + 1:]
+        # For the execution time the bandwidth to the next storage node is necessary
+        bandwidth = context.get_bandwidth_graph()[host][context.get_next_storage_node(scheduling_result.suggested_host)]
+
+        execution_time = 0
+        for container in pod.spec.containers:
+            image = container.image
+
+            k = (host_type, image, bandwidth)
+            if k not in self.execution_time_samplers:
+                raise ValueError(k)
+
+            # currently this works because we assume only one container (the function) per pod
+            execution_time += self.execution_time_samplers[k].sample()
+
+        return 'execution_time', str(execution_time)
