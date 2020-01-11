@@ -1,19 +1,23 @@
 import enum
 import logging
+import math
 import time
-from typing import List, NamedTuple
+from typing import List, NamedTuple, Dict
 
 import simpy
 
+import sim.oracle.oracle as oracles
 import sim.synth.pods as pods
 from core.clustercontext import ClusterContext
-from core.model import Pod, Node
+from core.model import Pod, Node, SchedulingResult
 from core.scheduler import Scheduler
+from sim.logging import SimulatedClock, NullLogger, PrintLogger
 from sim.simclustercontext import SimulationClusterContext
+from sim.stats import RandomSampler, ParameterizedDistribution, BufferedSampler
 from sim.synth.bandwidth import generate_bandwidth_graph
-from sim.synth.nodes import create_cloud_node
+from sim.synth.nodes import node_factory_cloud_majority, node_synthesizer
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 empty = {}
 
@@ -25,12 +29,29 @@ class FunctionState(enum.Enum):
     SUSPENDED = 4
 
 
+class FunctionReplica:
+    function: 'Function'
+    node: Node
+    state: FunctionState
+
+    def __init__(self, function) -> None:
+        super().__init__()
+        self.function = function
+        self.node = None
+        self.state = FunctionState.CONCEIVED
+
+
 class Function:
     name: str
     pod: Pod
     state: FunctionState
-    replicas: int
-    triggers: list
+    replicas: List[FunctionReplica]
+    triggers: List[str]
+
+    scale_min: int = 1
+    scale_max: int = 20
+    scale_factor: int = 20
+    scale_zero: bool = False
 
     def __init__(self, name, pod, triggers: List[str] = None) -> None:
         super().__init__()
@@ -39,7 +60,7 @@ class Function:
         self.triggers = triggers
 
         self.state = FunctionState.CONCEIVED
-        self.replicas = 0
+        self.replicas = []
 
     def __str__(self) -> str:
         return "Function%s" % self.__dict__
@@ -60,51 +81,76 @@ class FaasSimEnvironment(simpy.Environment):
         self.cluster: ClusterContext = cluster
         self.scheduler = Scheduler(self.cluster)
         self.faas_gateway = FaasGateway(self)
-        self.oracles = []
+
+        self.clock = SimulatedClock(self)
+        self.metrics = PrintLogger(self.clock)
+        # self.metrics = NullLogger(self.clock)
+
+        self.execution_time_oracle = oracles.FittedExecutionTimeOracle()
+        self.startup_time_oracle = oracles.FittedStartupTimeOracle()
 
         self.functions = {
-            'ml_0_wf_1': Function('ml_0_wf_1', pods.create_ml_wf_1_pod(1), ['ml_0_wf_2']),
-            'ml_0_wf_2': Function('ml_0_wf_2', pods.create_ml_wf_1_pod(2)),
-            'ml_0_wf_3': Function('ml_0_wf_3', pods.create_ml_wf_1_pod(2))
+            'preprocess': Function('preprocess', pods.create_ml_wf_1_pod(1), ['train']),
+            'train': Function('train', pods.create_ml_wf_2_pod(2)),
+            'inference': Function('inference', pods.create_ml_wf_3_serve(3))
         }
 
 
-def request_generator(env: FaasSimEnvironment):
+def request_generator(env: FaasSimEnvironment, arrival_profile: RandomSampler, request_factory):
+    sampler = BufferedSampler(arrival_profile)
+
     while True:
-        env.request_queue.put(FunctionRequest('ml_0_wf_1', empty))
-        yield env.timeout(1)
+        ia = sampler.sample()
+        logger.debug('next request: %.4f', ia)
+        env.request_queue.put(request_factory())
+        yield env.timeout(ia)
 
 
 def dispatch_call(env: FaasSimEnvironment, req: FunctionRequest, nodes: List[Node]):
     # TODO: there would be load balancing here, but we assume max replicas of 1
     node = nodes[0]
-    log.debug('dispatching req to function %s to node %s', req.name, node.name)
+    logger.debug('dispatching req to function %s to node %s', req.name, node.name)
 
-    yield from simulate_execution(env, req, node, cold=False)
+    yield from simulate_execution(env, req, node)
 
 
-def simulate_execution(env: FaasSimEnvironment, req: FunctionRequest, node: Node, cold=False):
-    log.debug('simulating the execution of %s on %s', req.name, node.name)
+def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: SchedulingResult):
+    replica.state = FunctionState.STARTING
+    func = replica.function
+
+    if func.state != FunctionState.RUNNING:
+        # synchronize function state
+        func.state = FunctionState.STARTING
+
+    _, t = env.startup_time_oracle.estimate(env.cluster, func.pod, result)
+    t = float(t)
+
+    logger.debug('function start: (%s, %s, %.4f)', func.name, result.suggested_host.name, t)
+
+    yield env.timeout(t)  # simulate startup (image download (perhaps) + container startup + program startup)
+
+    env.metrics.log('startup', t, function_name=func.name, node=result.suggested_host)
+    env.metrics.log('replicas', len(func.replicas), function_name=func.name)
+    replica.state = FunctionState.RUNNING
+    func.state = FunctionState.RUNNING
+
+
+def simulate_execution(env: FaasSimEnvironment, req: FunctionRequest, node: Node):
     func = env.functions[req.name]
 
-    if cold:
-        log.debug('function %s has a cold start', req.name)
-        # TODO: check if image is available, and simulate pulling of image if not
-        yield env.timeout(1)
-        # TODO: and starting of container
-        yield env.timeout(1)
+    _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
+    t = float(t)
 
-    # TODO: simulate execution
-    log.debug('simulating execution of %s ...', req.name)
-    yield env.timeout(1)
+    logger.debug('function execution: (%s, %s, %.4f)', req.name, node.name, t)
 
-    if func.triggers:
+    yield env.timeout(t)
+
+    env.metrics.log('invocations', t, function_name=func.name, node=node.name)
+
+    if func.triggers:  # simulates function compositions
         for next_func in func.triggers:
             # example: in an ML workflow, a pre-processing step may after its completion trigger a training step
             env.request_queue.put(FunctionRequest(next_func, empty))
-
-    # TODO: when to free resources?
-    pass
 
 
 class FaasGateway:
@@ -112,24 +158,49 @@ class FaasGateway:
     def __init__(self, env: FaasSimEnvironment) -> None:
         super().__init__()
         self.env = env
-        self.functions = dict()
+        self.functions: Dict[str, Function] = dict()
 
     def discover(self, function: Function):
-        # this is basically the service discovery step, which would typically done via a table. could speed this up.
-        return [node for node in self.env.cluster.list_nodes() if function.pod in node.pods]
+        return [replica.node for replica in function.replicas if replica.state == FunctionState.RUNNING]
 
     def deploy(self, function: Function):
-        if function.name in self.functions:
-            return
+        # FIXME: blocks replication, which is fine because we're currently not simulating it
+        # if function.name in self.functions:
+        #     return
 
+        logger.debug('deploying function %s', function.name)
+
+        # deploy means registering the function and creating the number of min replicas
         self.functions[function.name] = function
-        self.env.scheduler_queue.put(function.pod)
+        self._schedule_replicas(function, function.scale_min)
 
-    def scale(self, function: str, replicas: int):
-        if function not in self.functions:
+    def scale_down(self, function_name: str):
+        raise NotImplementedError  # TODO
+
+    def scale_up(self, function_name: str):
+        if function_name not in self.functions:
             raise ValueError
 
-        # TODO
+        function = self.functions[function_name]
+        num_replicas = len(function.replicas)
+
+        if num_replicas >= function.scale_max:
+            # already at max replicas
+            return 0
+
+        if function.scale_factor == 0:
+            return 0
+
+        max_replicas_to_add = function.scale_max - num_replicas
+        factor = min(max(function.scale_factor, 1), 100) / 100
+        replicas_to_add = min(max(math.ceil(function.scale_max * factor), 1), max_replicas_to_add)
+
+        if replicas_to_add <= 0:
+            # shouldn't happen
+            raise ValueError
+
+        self._schedule_replicas(function, replicas_to_add)
+        return replicas_to_add
 
     def suspend(self, function_name: str):
         if function_name not in self.functions:
@@ -150,68 +221,100 @@ class FaasGateway:
         if request.name not in self.functions:
             raise ValueError  # maybe allow 404 requests?
 
+        '''
+        https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
+        
+        If when a request is received a function is not ready, then the HTTP connection is blocked, the function is
+        scaled to min replicas, and as soon as a replica is available the request is proxied through as per normal. You
+        will see this process taking place in the logs of the gateway component.
+        '''
 
-def faas_scheduler_worker(env):
-    gateway = env.faas_gateway
-
-    while True:
-        func: Function
-        func = yield env.scheduler_queue.get()
-
-        # schedule the required pod
-        pod = gateway.functions[func.name].pod
-        then = time.time()
-        result = env.scheduler.schedule(pod)
-        duration = time.time() - then
-        yield env.timeout(duration)
-        logging.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
-
-        if not result.suggested_host:
-            raise RuntimeError('pod %s cannot be scheduled' % pod.name)
-
-        # start a new process to simulate starting of pod
         # TODO
+        pass
 
+    def _schedule_replicas(self, function, num):
+        logger.debug('scheduling %d replicas for %s', num, function)
 
-def faas_request_worker(env: FaasSimEnvironment):
-    """
-    The main FaaS control loop, which dispatches function requests from a queue to running pods, or informs the
-    scheduler if necessary. In OpenFaaS, the API Gateway is the entry point through which every incoming call passes,
-    and which talks to faas-netes in the case of using the Kubernetes runtime.
+        for i in range(num):
+            replica = FunctionReplica(function)
+            function.replicas.append(replica)
+            self.env.scheduler_queue.put(replica)
 
-    TODO: ideally, replicate the high-level API of faas-provider https://github.com/openfaas/faas-provider/
-    """
-    gateway = env.faas_gateway
+    def scheduler_worker(self):
+        env = self.env
+        gateway = env.faas_gateway
 
-    while True:
-        req: FunctionRequest
-        req = yield env.request_queue.get()
+        while True:
+            replica: FunctionReplica
+            replica = yield env.scheduler_queue.get()
 
-        try:
-            func: Function = gateway.functions[req.name]
-        except KeyError:
-            log.debug('requested a function %s but was not deployed', req.name)
-            continue
+            func = replica.function
 
-        if func.state == FunctionState.STARTING:
-            # TODO: needs some form of buffering
-            raise NotImplementedError
+            # schedule the required pod
+            pod = gateway.functions[func.name].pod
+            then = time.time()
+            result = env.scheduler.schedule(pod)
+            duration = time.time() - then
+            yield env.timeout(duration)  # include scheduling latency in simulation time
+            logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
 
-        elif func.state == FunctionState.RUNNING:
-            # if a function pod is running on a node, route the request there
-            nodes = gateway.discover(func)
+            if not result.suggested_host:
+                raise RuntimeError('pod %s cannot be scheduled' % pod.name)
 
-            if not nodes:
-                raise ValueError('state error: func is deployed but no nodes were discovered')
+            replica.node = result.suggested_host
 
-            env.process(dispatch_call(env, req, nodes))
+            # start a new process to simulate starting of pod
+            env.process(simulate_startup(env, replica, result))
+            # TODO
 
-        elif func.state == FunctionState.SUSPENDED:
-            # if not, the function was scaled to zero, and we need to scale up and defer the request
-            raise NotImplementedError
+    def request_worker(self):
+        """
+        The main FaaS control loop, which dispatches function requests from a queue to running pods, or informs the
+        scheduler if necessary. In OpenFaaS, the API Gateway is the entry point through which every incoming call passes,
+        and which talks to faas-netes in the case of using the Kubernetes runtime.
 
-        else:
-            raise ValueError('Unhandled state %s', func.state)
+        TODO: ideally, replicate the high-level API of faas-provider https://github.com/openfaas/faas-provider/
+        """
+        env = self.env
+        gateway = self
+
+        while True:
+            req: FunctionRequest
+            req = yield env.request_queue.get()
+
+            try:
+                func: Function = gateway.functions[req.name]
+            except KeyError:
+                logger.debug('requested a function %s but was not deployed', req.name)
+                continue
+
+            if func.state == FunctionState.STARTING:
+                # TODO: needs some form of buffering
+                logger.warning('discarding function request %s', func)
+                continue
+
+            elif func.state == FunctionState.RUNNING:
+                # if a function pod is running on a node, route the request there
+                nodes = gateway.discover(func)
+
+                if not nodes:
+                    raise ValueError('state error: func is deployed but no nodes were discovered')
+
+                env.process(dispatch_call(env, req, nodes))
+
+            elif func.state == FunctionState.SUSPENDED:
+                # if not, the function was scaled to zero, and we need to scale up and defer the request
+                raise NotImplementedError
+
+            elif func.state == FunctionState.CONCEIVED:
+                logger.warning('discarding function request %s', func)
+                continue
+            else:
+                raise ValueError('Unhandled state %s', func.state)
+
+    def faas_idler(self):
+        # TODO
+        pass
 
 
 class Simulation:
@@ -220,34 +323,48 @@ class Simulation:
         super().__init__()
         self.cluster = cluster
         self.env = FaasSimEnvironment(self.cluster)
-        self.env.process(faas_request_worker(self.env))
-        self.env.process(faas_scheduler_worker(self.env))
+        self.env.process(self.env.faas_gateway.request_worker())
+        self.env.process(self.env.faas_gateway.scheduler_worker())
 
-        self.env.process(request_generator(self.env))
+        for function in self.env.functions.values():
+            self.env.faas_gateway.deploy(function)
 
-    def run(self):
+        training_trigger = request_generator(
+            self.env,
+            ParameterizedDistribution.expon(((300, 300,), None, None)),
+            lambda: FunctionRequest('preprocess', empty)
+        )
+        self.env.process(training_trigger)
+
+        inference_trigger = request_generator(
+            self.env,
+            ParameterizedDistribution.expon(((25, 50), None, None)),
+            lambda: FunctionRequest('inference', empty)
+        )
+        self.env.process(inference_trigger)
+
+    def run(self, until):
         env = self.env
 
-        env.run(until=30)
+        env.run(until=until)
         print('simulation time is now: %.2f' % env.now)
 
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
 
+    oracles.data_dir = '/home/thomas/workspace/serverless-edge-ai/sched-sim/sim/oracle/data'
+
     # TODO: inject topology
-    nodes = [
-        create_cloud_node(1),
-        create_cloud_node(2),
-        create_cloud_node(3)
-    ]
+    gen = node_synthesizer(node_factory_cloud_majority)
+    nodes = [next(gen) for i in range(20)]
     topology = generate_bandwidth_graph(nodes)
     cluster = SimulationClusterContext(nodes, topology)
 
     sim = Simulation(cluster)
 
     then = time.time()
-    sim.run()
+    sim.run(60 * 60 * 24)
     print('simulation took %.2f ms' % ((time.time() - then) * 1000))
 
 
