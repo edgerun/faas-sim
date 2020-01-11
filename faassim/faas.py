@@ -11,11 +11,8 @@ import sim.synth.pods as pods
 from core.clustercontext import ClusterContext
 from core.model import Pod, Node, SchedulingResult
 from core.scheduler import Scheduler
-from sim.logging import SimulatedClock, NullLogger, PrintLogger
-from sim.simclustercontext import SimulationClusterContext
-from sim.stats import RandomSampler, ParameterizedDistribution, BufferedSampler
-from sim.synth.bandwidth import generate_bandwidth_graph
-from sim.synth.nodes import node_factory_cloud_majority, node_synthesizer
+from sim.logging import SimulatedClock, PrintLogger, NullLogger
+from sim.stats import RandomSampler, BufferedSampler
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +71,6 @@ class FaasSimEnvironment(simpy.Environment):
     def __init__(self, cluster: ClusterContext, initial_time=0):
         super().__init__(initial_time)
 
-        self.function_synthesizer = object
         self.request_generator = object
         self.request_queue = simpy.Store(self)
         self.scheduler_queue = simpy.Store(self)
@@ -83,17 +79,11 @@ class FaasSimEnvironment(simpy.Environment):
         self.faas_gateway = FaasGateway(self)
 
         self.clock = SimulatedClock(self)
-        self.metrics = PrintLogger(self.clock)
-        # self.metrics = NullLogger(self.clock)
+        # self.metrics = PrintLogger(self.clock)
+        self.metrics = NullLogger(self.clock)
 
         self.execution_time_oracle = oracles.FittedExecutionTimeOracle()
         self.startup_time_oracle = oracles.FittedStartupTimeOracle()
-
-        self.functions = {
-            'preprocess': Function('preprocess', pods.create_ml_wf_1_pod(1), ['train']),
-            'train': Function('train', pods.create_ml_wf_2_pod(2)),
-            'inference': Function('inference', pods.create_ml_wf_3_serve(3))
-        }
 
 
 def request_generator(env: FaasSimEnvironment, arrival_profile: RandomSampler, request_factory):
@@ -136,7 +126,7 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
 
 
 def simulate_execution(env: FaasSimEnvironment, req: FunctionRequest, node: Node):
-    func = env.functions[req.name]
+    func = env.faas_gateway.functions[req.name]
 
     _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
     t = float(t)
@@ -315,58 +305,3 @@ class FaasGateway:
     def faas_idler(self):
         # TODO
         pass
-
-
-class Simulation:
-
-    def __init__(self, cluster) -> None:
-        super().__init__()
-        self.cluster = cluster
-        self.env = FaasSimEnvironment(self.cluster)
-        self.env.process(self.env.faas_gateway.request_worker())
-        self.env.process(self.env.faas_gateway.scheduler_worker())
-
-        for function in self.env.functions.values():
-            self.env.faas_gateway.deploy(function)
-
-        training_trigger = request_generator(
-            self.env,
-            ParameterizedDistribution.expon(((300, 300,), None, None)),
-            lambda: FunctionRequest('preprocess', empty)
-        )
-        self.env.process(training_trigger)
-
-        inference_trigger = request_generator(
-            self.env,
-            ParameterizedDistribution.expon(((25, 50), None, None)),
-            lambda: FunctionRequest('inference', empty)
-        )
-        self.env.process(inference_trigger)
-
-    def run(self, until):
-        env = self.env
-
-        env.run(until=until)
-        print('simulation time is now: %.2f' % env.now)
-
-
-def main():
-    logging.basicConfig(level=logging.DEBUG)
-
-    oracles.data_dir = '/home/thomas/workspace/serverless-edge-ai/sched-sim/sim/oracle/data'
-
-    # TODO: inject topology
-    gen = node_synthesizer(node_factory_cloud_majority)
-    nodes = [next(gen) for i in range(20)]
-    topology = generate_bandwidth_graph(nodes)
-    cluster = SimulationClusterContext(nodes, topology)
-
-    sim = Simulation(cluster)
-
-    then = time.time()
-    sim.run(60 * 60 * 24)
-    print('simulation took %.2f ms' % ((time.time() - then) * 1000))
-
-
-if __name__ == '__main__':
-    main()
