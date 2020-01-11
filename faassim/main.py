@@ -1,5 +1,4 @@
 import ast
-import ast
 import logging
 import time
 from typing import List, Generator
@@ -10,8 +9,8 @@ import simpy
 from core.clustercontext import ClusterContext
 from core.scheduler import Scheduler
 from sim.model import EventType, LoggingRow
-from sim.oracle.oracle import StartupTimeOracle, ExecutionTimeOracle, Oracle, BandwidthUsageOracle, CostOracle, \
-    ResourceUtilizationOracle
+from sim.oracle.oracle import Oracle, BandwidthUsageOracle, CostOracle, ResourceUtilizationOracle, \
+    FittedExecutionTimeOracle, FittedStartupTimeOracle, ExecutionTimeOracle, StartupTimeOracle
 from sim.stats import exp_sampler
 from sim.synth.pods import PodSynthesizer
 
@@ -47,14 +46,15 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
         # TODO fix time not changing (env.now)
         logging.debug('Pod received by scheduler at %.2f', env.now)
         log.append(LoggingRow(env.now, EventType.POD_RECEIVED, pod.name))
-        then = time.time()
 
         # execute scheduling algorithm
+        then = time.time()
         result = scheduler.schedule(pod)
+        duration = time.time() - then
 
-        duration = ((time.time() - then) * 1000)
-        yield env.timeout(duration / 1000)
-        logging.debug('Pod scheduling took %.2f ms, and yielded %s', duration, result)
+        yield env.timeout(duration)
+
+        logging.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
 
         # weight the startup
         metadata = dict([o.estimate(context, pod, result) for o in oracles])
@@ -69,18 +69,21 @@ def run_scheduler_worker(env: simpy.Environment, queue: simpy.Store, context: Cl
 def simulate(cluster_context: ClusterContext, scheduler: Scheduler, pod_synth: PodSynthesizer,
              until: int) -> pd.DataFrame:
     log = []
-    oracles = [StartupTimeOracle(),
-               ExecutionTimeOracle(),
-               BandwidthUsageOracle(),
-               CostOracle(),
-               ResourceUtilizationOracle()]
-    env = simpy.RealtimeEnvironment(factor=0.01, strict=False)
+    oracles = [
+        FittedStartupTimeOracle(),
+        FittedExecutionTimeOracle(),
+        BandwidthUsageOracle(),
+        CostOracle(FittedExecutionTimeOracle()),
+        ResourceUtilizationOracle()
+    ]
+    env = simpy.Environment()
     queue = simpy.Store(env)
     env.process(run_load_generator(env, queue, pod_synth, exp_sampler(lambd=1.5), log))
     env.process(run_scheduler_worker(env, queue, cluster_context, scheduler, oracles, log))
-    env.sync()
     env.run(until=until)
+
     data = pd.DataFrame(data=log)
+
     return data
 
 

@@ -116,7 +116,11 @@ class BandwidthUsageOracle(Oracle):
 
 
 class CostOracle(Oracle):
-    execution_time_oracle = ExecutionTimeOracle()
+    execution_time_oracle: Oracle
+
+    def __init__(self, execution_time_oracle=None) -> None:
+        super().__init__()
+        self.execution_time_oracle = execution_time_oracle or FittedExecutionTimeOracle()
 
     def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
         if scheduling_result is None or scheduling_result.suggested_host is None:
