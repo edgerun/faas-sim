@@ -392,8 +392,8 @@ class ParameterizedDistribution(RandomSampler):
         return cls.create(st.norm, params)
 
     @classmethod
-    def gamma(cls, params):
-        return cls.create(st.gamma, params)
+    def expon(cls, params):
+        return cls.create(st.expon, params)
 
     @classmethod
     def pareto(cls, params):
