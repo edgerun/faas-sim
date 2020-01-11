@@ -55,7 +55,7 @@ class StartupTimeOracle(EmpiricalOracle):
 
         for container in pod.spec.containers:
             image = container.image
-            image_present = normalize_image_name(image) in context.images_on_nodes[host]
+            image_present = normalize_image_name(image) not in scheduling_result.needed_images
 
             data = self.durations.query(f'host == "{host_type}" and '
                                         f'image == "{image}" and '
