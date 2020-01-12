@@ -2,21 +2,28 @@ import enum
 import logging
 import math
 import time
-from typing import List, NamedTuple, Dict
+from collections import defaultdict
+from typing import List, Dict
 
 import simpy
 
 import sim.oracle.oracle as oracles
-import sim.synth.pods as pods
 from core.clustercontext import ClusterContext
 from core.model import Pod, Node, SchedulingResult
 from core.scheduler import Scheduler
-from sim.logging import SimulatedClock, PrintLogger, NullLogger
+from sim.logging import SimulatedClock, NullLogger
 from sim.stats import RandomSampler, BufferedSampler
 
 logger = logging.getLogger(__name__)
 
 empty = {}
+
+
+def counter(start: int = 1):
+    n = start
+    while True:
+        yield n
+        n += 1
 
 
 class FunctionState(enum.Enum):
@@ -27,6 +34,10 @@ class FunctionState(enum.Enum):
 
 
 class FunctionReplica:
+    """
+    Represents an instance of a pod serving a function on a node.
+    """
+
     function: 'Function'
     node: Node
     state: FunctionState
@@ -36,6 +47,12 @@ class FunctionReplica:
         self.function = function
         self.node = None
         self.state = FunctionState.CONCEIVED
+
+    def __str__(self) -> str:
+        return "FunctionReplica(%s, %s, %s)" % (self.function.name, self.node.name if self.node else 'None', self.state)
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class Function:
@@ -63,7 +80,24 @@ class Function:
         return "Function%s" % self.__dict__
 
 
-FunctionRequest = NamedTuple('FunctionRequest', [('name', str), ('body', dict)])
+class FunctionRequest:
+    request_id: int
+    name: str
+    body: str
+
+    id_generator = counter()
+
+    def __init__(self, name, body=None) -> None:
+        super().__init__()
+        self.name = name
+        self.body = body or empty
+        self.request_id = next(self.id_generator)
+
+    def __str__(self) -> str:
+        return 'FunctionRequest(%d, %s, %s)' % (self.request_id, self.name, self.body)
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class FaasSimEnvironment(simpy.Environment):
@@ -77,6 +111,7 @@ class FaasSimEnvironment(simpy.Environment):
         self.cluster: ClusterContext = cluster
         self.scheduler = Scheduler(self.cluster)
         self.faas_gateway = FaasGateway(self)
+        self.execution_simulator = ExecutionSimulator(self)
 
         self.clock = SimulatedClock(self)
         # self.metrics = PrintLogger(self.clock)
@@ -96,12 +131,12 @@ def request_generator(env: FaasSimEnvironment, arrival_profile: RandomSampler, r
         yield env.timeout(ia)
 
 
-def dispatch_call(env: FaasSimEnvironment, req: FunctionRequest, nodes: List[Node]):
+def dispatch_call(env: FaasSimEnvironment, req: FunctionRequest, replicas: List[FunctionReplica]):
     # TODO: there would be load balancing here, but we assume max replicas of 1
-    node = nodes[0]
-    logger.debug('dispatching req to function %s to node %s', req.name, node.name)
+    replica = replicas[0]
+    logger.debug('dispatching req to function %s to node %s', req.name, replica.node.name)
 
-    yield from simulate_execution(env, req, node)
+    yield from env.execution_simulator.run(req, replica)
 
 
 def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: SchedulingResult):
@@ -125,22 +160,59 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
     func.state = FunctionState.RUNNING
 
 
-def simulate_execution(env: FaasSimEnvironment, req: FunctionRequest, node: Node):
-    func = env.faas_gateway.functions[req.name]
+class ExecutionSimulator:
+    """
+    Each FunctionReplica has a max concurrency level of 1. Every FunctionReplica represents a pod that hosts a function.
 
-    _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
-    t = float(t)
+    """
 
-    logger.debug('function execution: (%s, %s, %.4f)', req.name, node.name, t)
+    def __init__(self, env: FaasSimEnvironment) -> None:
+        super().__init__()
+        self.env = env
+        # keeps track of currently running functions on a node, to enforce concurrency limits
+        self.running: Dict[FunctionReplica, List[FunctionRequest]] = defaultdict(list)
 
-    yield env.timeout(t)
+        def resource_factory():
+            # each function replica can serve one request at a time (concurrency limit = 1)
+            return simpy.Resource(env, capacity=1)
 
-    env.metrics.log('invocations', t, function_name=func.name, node=node.name)
+        self.resources: Dict[FunctionReplica, simpy.Resource] = defaultdict(resource_factory)
 
-    if func.triggers:  # simulates function compositions
-        for next_func in func.triggers:
-            # example: in an ML workflow, a pre-processing step may after its completion trigger a training step
-            env.request_queue.put(FunctionRequest(next_func, empty))
+    def run(self, req: FunctionRequest, replica: FunctionReplica):
+        """
+        Is expected to run in a separate process.
+        """
+        env = self.env
+        node = replica.node
+
+        func = env.faas_gateway.functions[req.name]
+
+        _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
+        t = float(t)
+
+        logger.debug('function execution: (%s, %s, %.4f)', req.name, node.name, t)
+        self.running[replica].append(req)
+        logger.debug('currently running functions: %s', self.running)
+
+        resource = self.resources[replica]
+
+        arrive = env.now
+        logger.debug('%.2f function request %s arrived', arrive, req)
+        with resource.request() as lock:
+            yield lock  # waits for lock acquisition, i.e., for any previous function execution to finish
+
+            wait = env.now - arrive
+            logger.debug('%.2f function request %s waited %.2f', env.now, req, wait)
+
+            yield env.timeout(t)
+
+            self.running[replica].remove(req)
+            env.metrics.log('invocations', t, function_name=func.name, node=node.name)
+
+            if func.triggers:  # simulates function compositions
+                for next_func in func.triggers:
+                    # example: in an ML workflow, a pre-processing step may after its completion trigger a training step
+                    env.request_queue.put(FunctionRequest(next_func, empty))
 
 
 class FaasGateway:
@@ -151,7 +223,7 @@ class FaasGateway:
         self.functions: Dict[str, Function] = dict()
 
     def discover(self, function: Function):
-        return [replica.node for replica in function.replicas if replica.state == FunctionState.RUNNING]
+        return [replica for replica in function.replicas if replica.state == FunctionState.RUNNING]
 
     def deploy(self, function: Function):
         # FIXME: blocks replication, which is fine because we're currently not simulating it
@@ -198,10 +270,10 @@ class FaasGateway:
 
         function = self.functions[function_name]
 
-        nodes = self.discover(function)
+        replicas = self.discover(function)
 
-        for node in nodes:
-            self.env.cluster.remove_pod_from_node(function.pod, node)
+        for replica in replicas:
+            self.env.cluster.remove_pod_from_node(function.pod, replica.node)
 
     def wakeup(self, function: str):
         if function not in self.functions:
@@ -285,12 +357,12 @@ class FaasGateway:
 
             elif func.state == FunctionState.RUNNING:
                 # if a function pod is running on a node, route the request there
-                nodes = gateway.discover(func)
+                replicas = gateway.discover(func)
 
-                if not nodes:
+                if not replicas:
                     raise ValueError('state error: func is deployed but no nodes were discovered')
 
-                env.process(dispatch_call(env, req, nodes))
+                env.process(dispatch_call(env, req, replicas))
 
             elif func.state == FunctionState.SUSPENDED:
                 # if not, the function was scaled to zero, and we need to scale up and defer the request

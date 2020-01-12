@@ -115,8 +115,6 @@ class TestScenario2(Scenario):
         for blueprint in [self.blueprint_prep, self.blueprint_train, self.blueprint_inference]:
             pod = i * 3 + cnt
 
-            print(blueprint)
-
             fn = Function(
                 blueprint.name.format(i=i),
                 blueprint.pod_factory(pod),
