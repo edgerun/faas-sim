@@ -3,7 +3,7 @@ import logging
 import math
 import time
 from collections import defaultdict
-from typing import List, Dict, Tuple
+from typing import List, Dict
 
 import simpy
 
@@ -56,6 +56,9 @@ class FunctionReplica:
 
 
 class Function:
+    """
+    A function is a piece of code that runs in a pod.
+    """
     name: str
     pod: Pod
     state: FunctionState
