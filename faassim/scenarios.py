@@ -52,7 +52,7 @@ class TestScenario(Scenario):
     def scenario_daemon(self, env: FaasSimEnvironment):
         yield env.timeout(0)
 
-        for function in env.functions.values():
+        for function in env.functions.values():  # FIXME
             env.faas_gateway.deploy(function)
 
         yield env.timeout(10)
@@ -75,10 +75,10 @@ class TestScenario(Scenario):
 class TestScenario2(Scenario):
     def __init__(self) -> None:
         super().__init__()
-        logging.basicConfig(level=logging.DEBUG)
+        # logging.basicConfig(level=logging.DEBUG)
 
         self.blueprint_prep = FunctionBlueprint(
-            'wf_0_preprocess_{i}', pods.create_ml_wf_1_pod, ['train_{i}'],
+            'wf_0_preprocess_{i}', pods.create_ml_wf_1_pod, ['wf_1_train_{i}'],
             scale_max=1, scale_zero=True
         )
         self.blueprint_train = FunctionBlueprint(
@@ -89,7 +89,7 @@ class TestScenario2(Scenario):
             'wf_2_inference_{i}', pods.create_ml_wf_3_serve
         )
 
-        self.max_deployments = 10
+        self.max_deployments = 50
 
     def cluster(self) -> ClusterContext:
         gen = node_synthesizer(node_factory_50_percent_cloud)
@@ -118,8 +118,17 @@ class TestScenario2(Scenario):
             fn = Function(
                 blueprint.name.format(i=i),
                 blueprint.pod_factory(pod),
-                [trigger.format(i=i) for trigger in blueprint.triggers]
+                [trigger.format(i=i) for trigger in blueprint.triggers],
             )
+
+            if blueprint.scale_min:
+                fn.scale_min = blueprint.scale_min
+            if blueprint.scale_max:
+                fn.scale_max = blueprint.scale_max
+            if blueprint.scale_factor:
+                fn.scale_factor = blueprint.scale_factor
+            if blueprint.scale_zero:
+                fn.scale_zero = blueprint.scale_zero
 
             cnt += 1
             env.faas_gateway.deploy(fn)
@@ -127,14 +136,14 @@ class TestScenario2(Scenario):
         prep_function_name = self.blueprint_prep.name.format(i=i)
         training_trigger = request_generator(
             env,
-            ParameterizedDistribution.expon(((300, 300,), None, None)),
+            ParameterizedDistribution.expon(((200, 100,), None, None)),
             lambda: FunctionRequest(prep_function_name, empty)
         )
 
         inference_function_name = self.blueprint_inference.name.format(i=i)
         inference_trigger = request_generator(
             env,
-            ParameterizedDistribution.expon(((300, 300,), None, None)),
+            ParameterizedDistribution.expon(((25, 50,), None, None)),
             lambda: FunctionRequest(inference_function_name, empty)
         )
 
