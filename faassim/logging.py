@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import Dict, NamedTuple
 
 
 class Clock:
@@ -10,6 +11,13 @@ class WallClock(Clock):
 
     def now(self) -> datetime:
         return datetime.now()
+
+
+class Record(NamedTuple):
+    measurement: str
+    time: int
+    fields: Dict
+    tags: Dict
 
 
 class SimulatedClock(Clock):
@@ -58,14 +66,9 @@ class RuntimeLogger:
                 'value': value
             }
 
-        self._store_record({
-            'time': time,
-            'measurement': name,
-            'fields': fields,
-            'tags': tags
-        })
+        self._store_record(Record(name, time, fields, tags))
 
-    def _store_record(self, record):
+    def _store_record(self, record: Record):
         self.records.append(record)
 
     def _now(self):
@@ -83,6 +86,6 @@ class NullLogger(RuntimeLogger):
 
 class PrintLogger(RuntimeLogger):
 
-    def _store_record(self, record):
+    def _store_record(self, record: Record):
         super()._store_record(record)
         print('[log]', record)

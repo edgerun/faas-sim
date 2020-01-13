@@ -3,7 +3,7 @@ import logging
 import math
 import time
 from collections import defaultdict
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 import simpy
 
@@ -142,6 +142,12 @@ def dispatch_call(env: FaasSimEnvironment, req: FunctionRequest, replicas: List[
 def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: SchedulingResult):
     replica.state = FunctionState.STARTING
     func = replica.function
+    node = result.suggested_host
+
+    env.metrics.log('allocation', {
+        'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+        'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+    }, node=node)
 
     if func.state != FunctionState.RUNNING:
         # synchronize function state
@@ -150,11 +156,11 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
     _, t = env.startup_time_oracle.estimate(env.cluster, func.pod, result)
     t = float(t)
 
-    logger.debug('function start: (%s, %s, %.4f)', func.name, result.suggested_host.name, t)
+    logger.debug('function start: (%s, %s, %.4f)', func.name, node.name, t)
 
     yield env.timeout(t)  # simulate startup (image download (perhaps) + container startup + program startup)
 
-    env.metrics.log('startup', t, function_name=func.name, node=result.suggested_host)
+    env.metrics.log('startup', t, function_name=func.name, node=node)
     env.metrics.log('replicas', len(func.replicas), function_name=func.name)
     replica.state = FunctionState.RUNNING
     func.state = FunctionState.RUNNING
@@ -163,7 +169,6 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
 class ExecutionSimulator:
     """
     Each FunctionReplica has a max concurrency level of 1. Every FunctionReplica represents a pod that hosts a function.
-
     """
 
     def __init__(self, env: FaasSimEnvironment) -> None:
@@ -177,6 +182,8 @@ class ExecutionSimulator:
             return simpy.Resource(env, capacity=1)
 
         self.resources: Dict[FunctionReplica, simpy.Resource] = defaultdict(resource_factory)
+        self.utilization_cpu: Dict[Node, float] = defaultdict(0)
+        self.utilization_mem: Dict[Node, float] = defaultdict(0)
 
     def run(self, req: FunctionRequest, replica: FunctionReplica):
         """
@@ -187,6 +194,7 @@ class ExecutionSimulator:
 
         func = env.faas_gateway.functions[req.name]
 
+        # estimate execution time
         _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
         t = float(t)
 
@@ -207,7 +215,7 @@ class ExecutionSimulator:
             yield env.timeout(t)
 
             self.running[replica].remove(req)
-            env.metrics.log('invocations', t, function_name=func.name, node=node.name)
+            env.metrics.log('invocations', {'t_wait': wait, 't_exec': t}, function_name=func.name, node=node.name)
 
             if func.triggers:  # simulates function compositions
                 for next_func in func.triggers:
