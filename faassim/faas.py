@@ -42,10 +42,10 @@ class FunctionReplica:
     node: Node
     state: FunctionState
 
-    def __init__(self, function) -> None:
+    def __init__(self, function, node: Node = None) -> None:
         super().__init__()
         self.function = function
-        self.node = None
+        self.node = node
         self.state = FunctionState.CONCEIVED
 
     def __str__(self) -> str:
@@ -185,8 +185,8 @@ class ExecutionSimulator:
             return simpy.Resource(env, capacity=1)
 
         self.resources: Dict[FunctionReplica, simpy.Resource] = defaultdict(resource_factory)
-        self.utilization_cpu: Dict[Node, float] = defaultdict(0)
-        self.utilization_mem: Dict[Node, float] = defaultdict(0)
+        self.utilization_cpu: Dict[Node, float] = defaultdict(lambda: 0)
+        self.utilization_mem: Dict[Node, float] = defaultdict(lambda: 0)
 
     def run(self, req: FunctionRequest, replica: FunctionReplica):
         """
