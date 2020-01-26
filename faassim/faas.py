@@ -3,7 +3,7 @@ import logging
 import math
 import time
 from collections import defaultdict
-from typing import List, Dict
+from typing import List, Dict, NamedTuple
 
 import simpy
 
@@ -103,6 +103,14 @@ class FunctionRequest:
         return self.__str__()
 
 
+class FunctionResponse(NamedTuple):
+    request_id: int
+    code: int
+    t_wait: float = 0
+    t_exec: float = 0
+    node: str = None
+
+
 class FaasSimEnvironment(simpy.Environment):
 
     def __init__(self, cluster: ClusterContext, initial_time=0):
@@ -167,6 +175,7 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
     env.metrics.log('replicas', len(func.replicas), function_name=func.name)
     replica.state = FunctionState.RUNNING
     func.state = FunctionState.RUNNING
+    env.faas_gateway.replicas.free(replica)
 
 
 class ExecutionSimulator:
@@ -218,12 +227,33 @@ class ExecutionSimulator:
             yield env.timeout(t)
 
             self.running[replica].remove(req)
-            env.metrics.log('invocations', {'t_wait': wait, 't_exec': t}, function_name=func.name, node=node.name)
 
             if func.triggers:  # simulates function compositions
                 for next_func in func.triggers:
                     # example: in an ML workflow, a pre-processing step may after its completion trigger a training step
                     env.request_queue.put(FunctionRequest(next_func, empty))
+
+
+class ReplicaPool:
+    """
+    This currently does not accurately simulate round-robin load balancing. It's probably more like a least-requested.
+    After a replica is done serving a request, it is immediately returned to the pool. This is not how OpenFaaS would
+    work with its watchdog and synchronous request execution.
+    """
+    stores: Dict[str, simpy.Store]
+
+    def __init__(self, env: FaasSimEnvironment) -> None:
+        super().__init__()
+        self.env = env
+        self.stores = defaultdict(lambda: simpy.Store(env))
+
+    def free(self, replica: FunctionReplica):
+        store = self.stores[replica.function.name]
+        return store.put(replica)
+
+    def request(self, function: Function) -> FunctionReplica:
+        store = self.stores[function.name]
+        return store.get()
 
 
 class FaasGateway:
@@ -232,6 +262,7 @@ class FaasGateway:
         super().__init__()
         self.env = env
         self.functions: Dict[str, Function] = dict()
+        self.replicas: ReplicaPool = ReplicaPool(env)
 
     def discover(self, function: Function):
         return [replica for replica in function.replicas if replica.state == FunctionState.RUNNING]
@@ -290,20 +321,48 @@ class FaasGateway:
         if function not in self.functions:
             raise ValueError
 
-    def request(self, request: FunctionRequest):
+        func = self.functions[function]
+
+        if func.state != FunctionState.SUSPENDED:
+            return
+
+        func.state = FunctionState.STARTING
+        self._schedule_replicas(func, func.scale_min)
+
+    def request(self, request: FunctionRequest) -> FunctionResponse:
         if request.name not in self.functions:
-            raise ValueError  # maybe allow 404 requests?
+            return FunctionResponse(request.request_id, 404)
 
-        '''
-        https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
-        
-        If when a request is received a function is not ready, then the HTTP connection is blocked, the function is
-        scaled to min replicas, and as soon as a replica is available the request is proxied through as per normal. You
-        will see this process taking place in the logs of the gateway component.
-        '''
+        env = self.env
+        t_received = env.now
+        func = self.functions[request.name]
 
-        # TODO
-        pass
+        if func.state == FunctionState.CONCEIVED:
+            return FunctionResponse(request.request_id, 404)
+        elif func.state == FunctionState.SUSPENDED:
+            '''
+            https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
+
+            If when a request is received a function is not ready, then the HTTP connection is blocked, the function is
+            scaled to min replicas, and as soon as a replica is available the request is proxied through as per normal.
+            You will see this process taking place in the logs of the gateway component.
+            '''
+            self.wakeup(func.name)
+            # TODO: wait *explicitly* for replica to become available (instead of implicitly through the ReplicaPool)
+
+        replica = yield self.replicas.request(func)  # TODO: timeout
+        try:
+            t_started = env.now
+            yield from env.execution_simulator.run(request, replica)
+            t_done = env.now
+            t_wait = t_started - t_received
+            t_exec = t_done - t_started
+            response = FunctionResponse(request.request_id, 200, t_wait, t_exec, replica.node.name)
+            env.metrics.log('invocations', {'t_wait': t_wait, 't_exec': t_exec},
+                            function_name=func.name, node=replica.node.name)
+            return response
+        finally:
+            self.replicas.free(replica)
 
     def _schedule_replicas(self, function, num):
         logger.debug('scheduling %d replicas for %s', num, function)
@@ -338,52 +397,15 @@ class FaasGateway:
 
             # start a new process to simulate starting of pod
             env.process(simulate_startup(env, replica, result))
-            # TODO
 
     def request_worker(self):
-        """
-        The main FaaS control loop, which dispatches function requests from a queue to running pods, or informs the
-        scheduler if necessary. In OpenFaaS, the API Gateway is the entry point through which every incoming call passes,
-        and which talks to faas-netes in the case of using the Kubernetes runtime.
-
-        TODO: ideally, replicate the high-level API of faas-provider https://github.com/openfaas/faas-provider/
-        """
         env = self.env
         gateway = self
 
         while True:
             req: FunctionRequest
             req = yield env.request_queue.get()
-
-            try:
-                func: Function = gateway.functions[req.name]
-            except KeyError:
-                logger.debug('requested a function %s but was not deployed', req.name)
-                continue
-
-            if func.state == FunctionState.STARTING:
-                # TODO: needs some form of buffering
-                logger.warning('discarding function request %s', func)
-                continue
-
-            elif func.state == FunctionState.RUNNING:
-                # if a function pod is running on a node, route the request there
-                replicas = gateway.discover(func)
-
-                if not replicas:
-                    raise ValueError('state error: func is deployed but no nodes were discovered')
-
-                env.process(dispatch_call(env, req, replicas))
-
-            elif func.state == FunctionState.SUSPENDED:
-                # if not, the function was scaled to zero, and we need to scale up and defer the request
-                raise NotImplementedError
-
-            elif func.state == FunctionState.CONCEIVED:
-                logger.warning('discarding function request %s', func)
-                continue
-            else:
-                raise ValueError('Unhandled state %s', func.state)
+            env.process(gateway.request(req))
 
     def faas_idler(self):
         # TODO
