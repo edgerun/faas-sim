@@ -11,7 +11,7 @@ import sim.oracle.oracle as oracles
 from core.clustercontext import ClusterContext
 from core.model import Pod, Node, SchedulingResult
 from core.scheduler import Scheduler
-from sim.logging import SimulatedClock, NullLogger
+from sim.logging import SimulatedClock, NullLogger, RuntimeLogger
 from sim.stats import RandomSampler, BufferedSampler
 
 logger = logging.getLogger(__name__)
@@ -31,6 +31,43 @@ class FunctionState(enum.Enum):
     STARTING = 2
     RUNNING = 3
     SUSPENDED = 4
+
+
+class Metrics:
+    """
+    Instrumentation and trace logger.
+    """
+    invocations: Dict[str, int]
+    last_invocation: Dict[str, float]
+    utilization: Dict[str, Dict[str, float]]
+
+    def __init__(self, env, log: RuntimeLogger = None) -> None:
+        super().__init__()
+        self.env: FaasSimEnvironment = env
+        self.logger: RuntimeLogger = log or NullLogger()
+        self.invocations = defaultdict(lambda: 0)
+        self.last_invocation = defaultdict(lambda: -1)
+
+    def log(self, name, value, **tags):
+        return self.logger.log(name, value, **tags)
+
+    def log_invocation(self, function_name, node_name, t_wait, t_exec):
+        self.invocations[function_name] += 1
+        self.last_invocation[function_name] = self.env.now
+
+        self.env.metrics.log('invocations', {'t_wait': t_wait, 't_exec': t_exec},
+                             function_name=function_name, node=node_name)
+
+    def get(self, name, **tags):
+        return self.logger.get(name, **tags)
+
+    @property
+    def clock(self):
+        return self.clock
+
+    @property
+    def records(self):
+        return self.logger.records
 
 
 class FunctionReplica:
@@ -125,8 +162,7 @@ class FaasSimEnvironment(simpy.Environment):
         self.execution_simulator = ExecutionSimulator(self)
 
         self.clock = SimulatedClock(self)
-        # self.metrics = PrintLogger(self.clock)
-        self.metrics = NullLogger(self.clock)
+        self.metrics = Metrics(self, RuntimeLogger(self.clock))
 
         self.execution_time_oracle = oracles.FittedExecutionTimeOracle()
         self.startup_time_oracle = oracles.FittedStartupTimeOracle()
@@ -251,7 +287,7 @@ class ReplicaPool:
         store = self.stores[replica.function.name]
         return store.put(replica)
 
-    def request(self, function: Function) -> FunctionReplica:
+    def request(self, function: Function):
         store = self.stores[function.name]
         return store.get()
 
@@ -279,7 +315,25 @@ class FaasGateway:
         self._schedule_replicas(function, function.scale_min)
 
     def scale_down(self, function_name: str):
-        raise NotImplementedError  # TODO
+        if function_name not in self.functions:
+            raise ValueError
+
+        function = self.functions[function_name]
+        num_replicas = len(function.replicas)
+
+        if num_replicas <= function.scale_min:
+            # already at min replicas
+            return 0
+
+        replicas_to_remove = num_replicas - function.scale_min
+
+        # TODO: check with OpenFaaS how replicas to scale down are selected
+        replicas = [function.replicas[i] for i in range(replicas_to_remove)]
+
+        for replica in replicas:
+            self._remove_replica(replica)
+
+        return replicas_to_remove
 
     def scale_up(self, function_name: str):
         if function_name not in self.functions:
@@ -311,11 +365,12 @@ class FaasGateway:
             raise ValueError
 
         function = self.functions[function_name]
-
         replicas = self.discover(function)
 
         for replica in replicas:
-            self.env.cluster.remove_pod_from_node(function.pod, replica.node)
+            self._remove_replica(replica)
+
+        function.state = FunctionState.SUSPENDED
 
     def wakeup(self, function: str):
         if function not in self.functions:
@@ -343,6 +398,7 @@ class FaasGateway:
             '''
             https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
 
+            When scale_from_zero is enabled a cache is maintained in memory indicating the readiness of each function.
             If when a request is received a function is not ready, then the HTTP connection is blocked, the function is
             scaled to min replicas, and as soon as a replica is available the request is proxied through as per normal.
             You will see this process taking place in the logs of the gateway component.
@@ -350,7 +406,12 @@ class FaasGateway:
             self.wakeup(func.name)
             # TODO: wait *explicitly* for replica to become available (instead of implicitly through the ReplicaPool)
 
-        replica = yield self.replicas.request(func)  # TODO: timeout
+        while True:
+            replica = yield self.replicas.request(func)  # TODO: timeout
+            if replica.state == FunctionState.RUNNING:
+                # there may still be replicas in the pool which have been suspended, i.e., removed
+                break
+
         try:
             t_started = env.now
             yield from env.execution_simulator.run(request, replica)
@@ -358,19 +419,10 @@ class FaasGateway:
             t_wait = t_started - t_received
             t_exec = t_done - t_started
             response = FunctionResponse(request.request_id, 200, t_wait, t_exec, replica.node.name)
-            env.metrics.log('invocations', {'t_wait': t_wait, 't_exec': t_exec},
-                            function_name=func.name, node=replica.node.name)
+            env.metrics.log_invocation(func.name, replica.node.name, t_wait, t_exec)
             return response
         finally:
             self.replicas.free(replica)
-
-    def _schedule_replicas(self, function, num):
-        logger.debug('scheduling %d replicas for %s', num, function)
-
-        for i in range(num):
-            replica = FunctionReplica(function)
-            function.replicas.append(replica)
-            self.env.scheduler_queue.put(replica)
 
     def scheduler_worker(self):
         env = self.env
@@ -407,6 +459,50 @@ class FaasGateway:
             req = yield env.request_queue.get()
             env.process(gateway.request(req))
 
-    def faas_idler(self):
-        # TODO
-        pass
+    def faas_idler(self, inactivity_duration=300, reconcile_interval=30):
+        """
+        https://github.com/openfaas-incubator/faas-idler
+        https://github.com/openfaas-incubator/faas-idler/blob/master/main.go
+
+        default values:
+        https://github.com/openfaas-incubator/faas-idler/blob/668991c532156275993399ee79a297a4c2d651ec/docker-compose.yml
+
+        :param inactivity_duration: i.e. 15m (Golang duration)
+        :param reconcile_interval: i.e. 1m (default value)
+        :return: an event generator
+        """
+
+        while True:
+            yield self.env.timeout(reconcile_interval)
+
+            for function in self.functions.values():
+                if not function.scale_zero:
+                    continue
+                if function.state != FunctionState.RUNNING:
+                    continue
+
+                idle_time = self.env.now - self.env.metrics.last_invocation[function.name]
+                if idle_time >= inactivity_duration:
+                    self.suspend(function.name)
+                    logger.debug('function %s has been idle for %.2fs', function.name, idle_time)
+
+    def _schedule_replicas(self, function, num):
+        logger.debug('scheduling %d replicas for %s', num, function)
+
+        for i in range(num):
+            replica = FunctionReplica(function)
+            function.replicas.append(replica)
+            self.env.scheduler_queue.put(replica)
+
+    def _remove_replica(self, replica):
+        env = self.env
+        node = replica.node
+
+        self.env.cluster.remove_pod_from_node(replica.function.pod, node)
+        replica.state = FunctionState.SUSPENDED
+        replica.function.replicas.remove(replica)
+
+        env.metrics.log('allocation', {
+            'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+            'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+        }, node=node)
