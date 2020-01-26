@@ -33,43 +33,6 @@ class FunctionState(enum.Enum):
     SUSPENDED = 4
 
 
-class Metrics:
-    """
-    Instrumentation and trace logger.
-    """
-    invocations: Dict[str, int]
-    last_invocation: Dict[str, float]
-    utilization: Dict[str, Dict[str, float]]
-
-    def __init__(self, env, log: RuntimeLogger = None) -> None:
-        super().__init__()
-        self.env: FaasSimEnvironment = env
-        self.logger: RuntimeLogger = log or NullLogger()
-        self.invocations = defaultdict(lambda: 0)
-        self.last_invocation = defaultdict(lambda: -1)
-
-    def log(self, name, value, **tags):
-        return self.logger.log(name, value, **tags)
-
-    def log_invocation(self, function_name, node_name, t_wait, t_exec):
-        self.invocations[function_name] += 1
-        self.last_invocation[function_name] = self.env.now
-
-        self.env.metrics.log('invocations', {'t_wait': t_wait, 't_exec': t_exec},
-                             function_name=function_name, node=node_name)
-
-    def get(self, name, **tags):
-        return self.logger.get(name, **tags)
-
-    @property
-    def clock(self):
-        return self.clock
-
-    @property
-    def records(self):
-        return self.logger.records
-
-
 class FunctionReplica:
     """
     Represents an instance of a pod serving a function on a node.
@@ -110,11 +73,21 @@ class Function:
     def __init__(self, name, pod, triggers: List[str] = None) -> None:
         super().__init__()
         self.name = name
-        self.pod = pod
+        self.pod: Pod = pod
         self.triggers = triggers
 
-        self.state = FunctionState.CONCEIVED
+        self.state: FunctionState = FunctionState.CONCEIVED
         self.replicas = []
+
+    def get_resource_requirements(self):
+        resource_reqs = [container.resources.requests for container in self.pod.spec.containers]
+
+        total = defaultdict(int)
+        for resource_req in resource_reqs:
+            for resource, value in resource_req.items():
+                total[resource] += value
+
+        return total
 
     def __str__(self) -> str:
         return "Function%s" % self.__dict__
@@ -146,6 +119,68 @@ class FunctionResponse(NamedTuple):
     t_wait: float = 0
     t_exec: float = 0
     node: str = None
+
+
+class Metrics:
+    """
+    Instrumentation and trace logger.
+    """
+    invocations: Dict[str, int]
+    last_invocation: Dict[str, float]
+    utilization: Dict[str, Dict[str, float]]
+
+    def __init__(self, env, log: RuntimeLogger = None) -> None:
+        super().__init__()
+        self.env: FaasSimEnvironment = env
+        self.logger: RuntimeLogger = log or NullLogger()
+        self.invocations = defaultdict(int)
+        self.last_invocation = defaultdict(int)
+        self.utilization = defaultdict(lambda: defaultdict(float))
+
+    def log(self, name, value, **tags):
+        return self.logger.log(name, value, **tags)
+
+    def log_invocation(self, function_name, node_name, t_wait, t_exec):
+        self.invocations[function_name] += 1
+        self.last_invocation[function_name] = self.env.now
+
+        self.env.metrics.log('invocations', {'t_wait': t_wait, 't_exec': t_exec},
+                             function_name=function_name, node=node_name)
+
+    def log_start_exec(self, request: FunctionRequest, replica: FunctionReplica):
+        node = replica.node
+        function = replica.function
+
+        for resource, value in function.get_resource_requirements().items():
+            self.utilization[node.name][resource] += value
+
+        self.env.metrics.log('utilization', {
+            'cpu': self.utilization[node.name]['cpu'] / node.capacity.cpu_millis,
+            'mem': self.utilization[node.name]['memory'] / node.capacity.memory
+        }, node=node.name)
+
+    def log_stop_exec(self, request: FunctionRequest, replica: FunctionReplica):
+        node = replica.node
+        function = replica.function
+
+        for resource, value in function.get_resource_requirements().items():
+            self.utilization[node.name][resource] -= value
+
+        self.env.metrics.log('utilization', {
+            'cpu': self.utilization[node.name]['cpu'] / node.capacity.cpu_millis,
+            'mem': self.utilization[node.name]['memory'] / node.capacity.memory
+        }, node=node.name)
+
+    def get(self, name, **tags):
+        return self.logger.get(name, **tags)
+
+    @property
+    def clock(self):
+        return self.clock
+
+    @property
+    def records(self):
+        return self.logger.records
 
 
 class FaasSimEnvironment(simpy.Environment):
@@ -194,7 +229,7 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
     env.metrics.log('allocation', {
         'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
         'mem': 1 - (node.allocatable.memory / node.capacity.memory)
-    }, node=node)
+    }, node=node.name)
 
     if func.state != FunctionState.RUNNING:
         # synchronize function state
@@ -227,11 +262,10 @@ class ExecutionSimulator:
 
         def resource_factory():
             # each function replica can serve one request at a time (concurrency limit = 1)
+            # TODO: reconcile with ReplicaPool
             return simpy.Resource(env, capacity=1)
 
         self.resources: Dict[FunctionReplica, simpy.Resource] = defaultdict(resource_factory)
-        self.utilization_cpu: Dict[Node, float] = defaultdict(lambda: 0)
-        self.utilization_mem: Dict[Node, float] = defaultdict(lambda: 0)
 
     def run(self, req: FunctionRequest, replica: FunctionReplica):
         """
@@ -256,6 +290,7 @@ class ExecutionSimulator:
         logger.debug('%.2f function request %s arrived', arrive, req)
         with resource.request() as lock:
             yield lock  # waits for lock acquisition, i.e., for any previous function execution to finish
+            env.metrics.log_start_exec(req, replica)
 
             wait = env.now - arrive
             logger.debug('%.2f function request %s waited %.2f', env.now, req, wait)
@@ -263,6 +298,7 @@ class ExecutionSimulator:
             yield env.timeout(t)
 
             self.running[replica].remove(req)
+            env.metrics.log_stop_exec(req, replica)
 
             if func.triggers:  # simulates function compositions
                 for next_func in func.triggers:
@@ -505,4 +541,4 @@ class FaasGateway:
         env.metrics.log('allocation', {
             'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
             'mem': 1 - (node.allocatable.memory / node.capacity.memory)
-        }, node=node)
+        }, node=node.name)

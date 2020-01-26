@@ -68,8 +68,7 @@ class Simulation:
         print(groups)
 
         df = extract_dataframe('allocation', self.env.metrics.records)
-        df['node_name'] = df['node'].astype(str)
-        df =df[df['node_name'] == '1_cloud']
+        df = df[df['node'] == '1_cloud']
         y = df['cpu']
         plt.step(y.index, y)
         plt.show()
@@ -78,6 +77,11 @@ class Simulation:
         plt.step(y.index, y)
         plt.show()
 
+        df = extract_dataframe('utilization', self.env.metrics.records)
+        df = df[df['node'] == '1_cloud']
+        y = df['mem'].resample('60s').mean()
+        plt.plot(y)
+        plt.show()
 
 
 def main():

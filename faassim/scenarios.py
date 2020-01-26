@@ -94,7 +94,7 @@ class TestScenario2(Scenario):
     def cluster(self) -> ClusterContext:
         gen = node_synthesizer(node_factory_50_percent_cloud)
 
-        nodes = [next(gen) for i in range(100)]
+        nodes = [next(gen) for i in range(25)]
         topology = generate_bandwidth_graph(nodes)
         cluster = SimulationClusterContext(nodes, topology)
 
