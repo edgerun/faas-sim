@@ -1,9 +1,10 @@
 import logging
-from collections import deque
+from collections import deque, defaultdict
 from typing import List, Dict, NamedTuple
 
 import simpy
 
+from core.clustercontext import BandwidthGraph
 from core.model import Node
 
 logger = logging.getLogger(__name__)
@@ -291,3 +292,27 @@ class Topology(Graph):
         hops = [node for node in path if isinstance(node, Link)]
         return Route(source, destination, hops)
 
+    def create_bandwidth_graph(self) -> BandwidthGraph:
+        """
+        From a topology, create the reduced bandwidth graph required by the ClusterContext.
+        :return: bandwidth[from][to] = bandwidth in bytes per second
+        """
+        nodes = [node for node in self.nodes if isinstance(node, Node)]
+        graph = defaultdict(dict)
+
+        # route each node to each other and find the highest available bandwidth
+        n = len(nodes)
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    continue
+                n1 = nodes[i]
+                n2 = nodes[j]
+
+                route = self.get_route(n1, n2)
+                bandwidth = min([link.bandwidth for link in route.hops])  # get the maximal available bandwidth
+                bandwidth = bandwidth * 125000  # link bandwidth is given in mbit/s: * 125000 = bytes/s
+
+                graph[n1.name][n2.name] = bandwidth
+
+        return graph

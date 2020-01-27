@@ -2,6 +2,7 @@
 Fast creation of various topologies.
 """
 
+import pprint
 from typing import List
 
 from core.model import Node
@@ -63,7 +64,7 @@ def _example():
     edges1, uplink1, downlink1 = create_lan(nodes1, 30, 10, name='lan1')
 
     nodes2 = [Node('d2'), Node('e2'), Node('f2')]
-    edges2, uplink2, downlink2 = create_lan(nodes2, 30, 10, name='lan2')
+    edges2, uplink2, downlink2 = create_lan(nodes2, 50, 50, name='lan2')  # symmetric internet
 
     nodes3 = [Node('xw'), Node('yw'), Node('zw')]
     edges3, uplink3, downlink3 = create_wifi(nodes3, 30, 10, name='wifi3')
@@ -95,6 +96,8 @@ def _example():
 
     r = t.get_route(nodes1[0], nodes3[1])
     print([link.tags for link in r.hops])
+
+    pprint.pprint(t.create_bandwidth_graph())
 
 
 if __name__ == '__main__':
