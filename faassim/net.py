@@ -1,5 +1,6 @@
 import logging
-from typing import List, Dict
+from collections import deque
+from typing import List, Dict, NamedTuple
 
 import simpy
 
@@ -203,3 +204,90 @@ class Link:
             process = f.process
             if process and process.is_alive:
                 process.interrupt('update available bandwidth per flow %d bytes/sec' % self.get_goodput_bps(f))
+
+
+class Edge(NamedTuple):
+    source: object
+    target: object
+    directed: bool = False
+
+
+class Graph:
+    """
+    A graph.
+
+    Example use for an example network topology:
+
+    # a,b,c are three hosts in a LAN, and have up/downlink to the cloud
+    n = ['a', 'b', 'c', 'down', 'up', 'cloud']
+
+    edges = [
+        Edge(n[0], n[1]),  # a,b
+        Edge(n[1], n[2]),  # b,c
+        Edge(n[0], n[2]),  # a,c
+        Edge(n[3], n[0], True),  # down, a
+        Edge(n[3], n[1], True),  # down, b
+        Edge(n[3], n[2], True),  # down, c
+        Edge(n[0], n[4], True),  # up, a
+        Edge(n[1], n[4], True),  # up, b
+        Edge(n[2], n[4], True),  # up, c
+        Edge(n[4], n[5], True),  # up, cloud
+        Edge(n[5], n[3], True),  # cloud, down
+    ]
+
+    t = Graph(n, edges)
+
+    print(t.path(n[0], n[1]))  # ['a', 'b']
+    print(t.path(n[0], n[5]))  # ['a', 'up', 'cloud']
+    print(t.path(n[5], n[0]))  # ['cloud', 'down', 'a']
+    """
+    nodes: List
+    edges: List[Edge]
+
+    def __init__(self, nodes: List, edges: List[Edge]) -> None:
+        super().__init__()
+        self.nodes = nodes
+        self.edges = edges
+
+    def successors(self, node):
+        # TODO: add an index if it's too slow during simulation
+        for edge in self.edges:
+            if edge.source == node:
+                yield edge.target
+            elif not edge.directed and edge.target == node:
+                yield edge.source
+
+    def path(self, source, destination) -> List:
+        queue = deque([source])
+        visited = set()
+        parents = dict()
+
+        while queue:
+            node = queue.popleft()
+
+            if node is destination:
+                # found the destination, collect the path
+                path = []
+                cur = destination
+                while cur:
+                    path.append(cur)
+                    cur = parents.get(cur)
+                return list(reversed(path))
+
+            visited.add(node)
+
+            for successor in self.successors(node):
+                if successor not in visited:
+                    if successor not in parents:
+                        parents[successor] = node
+                    queue.append(successor)
+
+        return []
+
+
+class Topology(Graph):
+    def get_route(self, source: Node, destination: Node):
+        path = self.path(source, destination)
+        hops = [node for node in path if isinstance(node, Link)]
+        return Route(source, destination, hops)
+

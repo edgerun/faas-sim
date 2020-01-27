@@ -11,19 +11,13 @@ import sim.oracle.oracle as oracles
 from core.clustercontext import ClusterContext
 from core.model import Pod, Node, SchedulingResult
 from core.scheduler import Scheduler
+from core.utils import counter
 from sim.logging import SimulatedClock, NullLogger, RuntimeLogger
 from sim.stats import RandomSampler, BufferedSampler
 
 logger = logging.getLogger(__name__)
 
 empty = {}
-
-
-def counter(start: int = 1):
-    n = start
-    while True:
-        yield n
-        n += 1
 
 
 class FunctionState(enum.Enum):
