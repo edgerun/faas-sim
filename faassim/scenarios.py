@@ -1,13 +1,111 @@
 import logging
 from typing import List, Callable, NamedTuple
 
+import sim.synth.network as netsynth
+import sim.synth.nodes as nodesynth
 from core.clustercontext import ClusterContext
 from sim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function
+from sim.net import Topology, Link, Edge, Internet, Registry
 from sim.simclustercontext import SimulationClusterContext
 from sim.stats import ParameterizedDistribution
 from sim.synth import pods
 from sim.synth.bandwidth import generate_bandwidth_graph
 from sim.synth.nodes import node_synthesizer, node_factory_cloud_majority, node_factory_50_percent_cloud
+
+
+class ClusterSynthesizer:
+
+    def create_topology(self) -> Topology:
+        raise NotImplementedError
+
+
+class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
+
+    def __init__(self, cells=76, cloud_vms=30) -> None:
+        super().__init__()
+        self.cells = cells
+        self.cloud_vms = cloud_vms
+
+    def create_topology(self) -> Topology:
+        all_nodes = list()
+        all_edges = list()
+        t = Topology(all_nodes, all_edges)
+
+        # create the internet
+        internet = Internet
+        all_nodes.append(internet)
+
+        # create the registry and attach to the internet with essentially infinite bandwidth
+        registry = Registry
+        all_nodes.append(registry)
+        registry_link = Link(10 ** 10, tags={'registry': 'registry'})
+        all_edges.append(Edge(registry, registry_link))
+        all_edges.append(Edge(registry_link, internet))
+
+        # create cells
+        for i in range(self.cells):
+            nodes, edges, uplink, downlink = self._create_cell(i)
+
+            all_nodes.extend(nodes)
+            all_edges.extend(edges)
+            all_edges.append(Edge(uplink, internet, directed=True))
+            all_edges.append(Edge(internet, downlink, directed=True))
+
+        # create cloud
+        nodes, edges, egress, ingress = self._create_cloud(self.cloud_vms)
+        all_nodes.extend(nodes)
+        all_edges.extend(edges)
+        all_edges.append(Edge(egress, internet, directed=True))
+        all_edges.append(Edge(internet, ingress, directed=True))
+
+        return t
+
+    def _create_cloud(self, n):
+        nodes = list()
+        for i in range(n):
+            nodes.append(nodesynth.create_cloud_node(i))
+
+        # 10 GBit/s lan and a lot of up/down
+        edges, uplink, downlink = netsynth.create_lan(nodes, 1e10, 1e10, internal_bw=10000, name='cloud')
+
+        nodesynth.set_zone(nodes, 'cloud')
+
+        return nodes, edges, uplink, downlink
+
+    def _create_cell(self, i, num_aot_nodes=5):
+        # TODO: parameterize makeup
+        zone = f'edge_{i}'
+
+        # https://arrayofthings.github.io/node.htmls
+        aot_nodes = []  # all pis in a node (connected via lan)
+        aot_comm_pis = []  # pis for communication (connected via wifi to the uplink)
+
+        edges_pis = list()
+        for a in range(num_aot_nodes):
+            pi1 = nodesynth.create_rpi3_node(f'{zone}_{a}_sensors')
+            pi2 = nodesynth.create_rpi3_node(f'{zone}_{a}_comm')
+            aot_nodes.append(pi1)
+            aot_nodes.append(pi2)
+            aot_comm_pis.append(pi2)
+            # connect the pis via a p2p network
+            link = Link(1000)
+            edges_pis.append(Edge(pi1, link))
+            edges_pis.append(Edge(pi2, link))
+
+        cloudlet_nodes = [
+            nodesynth.mark_storage_node(nodesynth.create_nuc_node(f'{zone}_storage')),
+            nodesynth.create_nuc_node(f'{zone}_1'),
+            nodesynth.create_nuc_node(f'{zone}_2'),
+            nodesynth.create_tegra_node(f'{zone}_1'),
+            nodesynth.create_tegra_node(f'{zone}_2')
+        ]
+
+        edges_lan, uplink, downlink = netsynth.create_lan(cloudlet_nodes + aot_comm_pis,
+                                                          downlink_bw=50, uplink_bw=20, internal_bw=100, name=zone)
+
+        nodes = cloudlet_nodes + aot_nodes
+        nodesynth.set_zone(nodes, zone)
+        return nodes, edges_pis + edges_lan, uplink, downlink
 
 
 class Scenario:

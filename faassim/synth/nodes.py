@@ -1,14 +1,20 @@
 import itertools
+from collections import defaultdict
 from typing import Generator, Dict, Callable, List
+
 from core.model import Node, Capacity
-from core.utils import parse_size_string
+from core.utils import parse_size_string, counter
 
 NodeSynthesizer = Generator[Node, None, None]
 NodeFactory = List[Callable[[], Node]]
 
+counters = defaultdict(counter)
 
-def create_cloud_node(cnt: int) -> Node:
-    return create_node(name=f'{cnt}_cloud',
+
+def create_cloud_node(prefix=None) -> Node:
+    prefix = prefix if prefix is not None else next(counters['cloud'])
+
+    return create_node(name=f'{prefix}_cloud',
                        cpus=4,
                        mem='8167784Ki',  # kubectl describe node ara-clustercloud1
                        labels={
@@ -17,8 +23,10 @@ def create_cloud_node(cnt: int) -> Node:
                        })
 
 
-def create_tegra_node(cnt: int) -> Node:
-    return create_node(name=f'{cnt}_tegra',
+def create_tegra_node(prefix=None) -> Node:
+    prefix = prefix if prefix is not None else next(counters['tegra'])
+
+    return create_node(name=f'{prefix}_tegra',
                        cpus=4,
                        mem='8047252Ki',
                        labels={
@@ -29,8 +37,10 @@ def create_tegra_node(cnt: int) -> Node:
                        })
 
 
-def create_rpi3_node(cnt: int) -> Node:
-    return create_node(name=f'{cnt}_pi',
+def create_rpi3_node(prefix=None) -> Node:
+    prefix = prefix if prefix is not None else next(counters['rpi3'])
+
+    return create_node(name=f'{prefix}_pi',
                        cpus=4,
                        mem='999036Ki',
                        labels={
@@ -39,14 +49,38 @@ def create_rpi3_node(cnt: int) -> Node:
                        })
 
 
-def create_rpi4_node(cnt: int) -> Node:
-    return create_node(name=f'{cnt}_rp4',
+def create_rpi4_node(prefix=None) -> Node:
+    prefix = prefix if prefix is not None else next(counters['rpi4'])
+
+    return create_node(name=f'{prefix}_rp4',
                        cpus=4,
                        mem='4Gi',
                        labels={
                            'beta.kubernetes.io/arch': 'arm',
                            'locality.skippy.io/type': 'edge'
                        })
+
+
+def create_nuc_node(prefix=None) -> Node:
+    prefix = prefix if prefix is not None else next(counters['nuc'])
+
+    return create_node(name=f'{prefix}_nuc',
+                       cpus=4,
+                       mem='16Gi',
+                       labels={
+                           'beta.kubernetes.io/arch': 'amd64',
+                           'locality.skippy.io/type': 'edge'
+                       })
+
+
+def mark_storage_node(node: Node):
+    node.labels['data.skippy.io/storage'] = ''
+    return node
+
+
+def set_zone(nodes: List[Node], zone: str):
+    for node in nodes:
+        node.labels['kubernetes.topology.io/zone'] = zone
 
 
 def create_node(name: str, cpus: int, mem: str, labels=Dict[str, str]) -> Node:

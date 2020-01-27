@@ -6,8 +6,12 @@ import simpy
 
 from core.clustercontext import BandwidthGraph
 from core.model import Node
+from sim.simclustercontext import SimulationClusterContext
 
 logger = logging.getLogger(__name__)
+
+Internet = Node('internet')
+Registry = Node('registry')
 
 
 class Route:
@@ -292,6 +296,37 @@ class Topology(Graph):
         hops = [node for node in path if isinstance(node, Link)]
         return Route(source, destination, hops)
 
+    def get_host(self, name):
+        for node in self.nodes:
+            if isinstance(node, Node) and node.name == name:
+                return node
+
+        return None
+
+    def get_hosts(self):
+        result = set()
+
+        for node in self.nodes:
+            if not isinstance(node, Node):
+                continue
+            if node == Internet or node == Registry:
+                continue
+
+            result.add(node)
+
+        return list(result)
+
+    def get_links(self):
+        links = set()
+
+        for edge in self.edges:
+            if isinstance(edge.source, Link):
+                links.add(edge.source)
+            if isinstance(edge.target, Link):
+                links.add(edge.target)
+
+        return list(links)
+
     def create_bandwidth_graph(self) -> BandwidthGraph:
         """
         From a topology, create the reduced bandwidth graph required by the ClusterContext.
@@ -305,7 +340,10 @@ class Topology(Graph):
         for i in range(n):
             for j in range(n):
                 if i == j:
+                    n = nodes[i].name
+                    graph[n][n] = 1.25e+8  # essentially models disk read from itself as 1GBit/s
                     continue
+
                 n1 = nodes[i]
                 n2 = nodes[j]
 
@@ -316,3 +354,8 @@ class Topology(Graph):
                 graph[n1.name][n2.name] = bandwidth
 
         return graph
+
+    def create_cluster_context(self):
+        nodes = self.get_hosts()
+        bw = self.create_bandwidth_graph()
+        return SimulationClusterContext(nodes, bw)

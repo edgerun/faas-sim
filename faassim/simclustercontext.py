@@ -11,12 +11,22 @@ class SimulationClusterContext(ClusterContext):
         self.nodes = nodes
         super().__init__()
 
+        # index all storage nodes
+        self.storage_nodes = [node for node in nodes if 'data.skippy.io/storage' in node.labels]
+
     def list_nodes(self) -> List[Node]:
         return self.nodes
 
     def get_next_storage_node(self, node: Node) -> str:
-        # TODO maybe extend to simulate multiple data nodes and find the one next to the given node
-        return '1_cloud'
+        if 'data.skippy.io/storage' in node.labels:
+            return node.name
+        if not self.storage_nodes:
+            return '1_cloud'
+
+        bw = self.get_bandwidth_graph()[node.name]
+        storage_node = max(self.storage_nodes, key=lambda n: bw[n.name])
+
+        return storage_node.name
 
     def get_init_image_states(self) -> Dict[str, ImageState]:
         # TODO maybe synth other images?
