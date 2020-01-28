@@ -1,4 +1,5 @@
 import logging
+import time
 from collections import deque, defaultdict
 from typing import List, Dict, NamedTuple
 
@@ -10,7 +11,7 @@ from sim.simclustercontext import SimulationClusterContext
 
 logger = logging.getLogger(__name__)
 
-Internet = Node('internet')
+Internet = 'internet'
 Registry = Node('registry')
 
 
@@ -253,9 +254,24 @@ class Graph:
         super().__init__()
         self.nodes = nodes
         self.edges = edges
+        self.index = None
+
+    def create_index(self):
+        index = defaultdict(list)
+
+        for edge in self.edges:
+            n1 = edge.source
+            n2 = edge.target
+            index[n1].append(n2)
+            if not edge.directed:
+                index[n2].append(n1)
+
+        self.index = dict(index)
 
     def successors(self, node):
-        # TODO: add an index if it's too slow during simulation
+        return self.index[node] if self.index else self._successors_gen(node)
+
+    def _successors_gen(self, node):
         for edge in self.edges:
             if edge.source == node:
                 yield edge.target
@@ -291,6 +307,13 @@ class Graph:
 
 
 class Topology(Graph):
+    internet = Internet
+    registry = Registry
+
+    def __init__(self, nodes: List, edges: List[Edge]) -> None:
+        super().__init__(nodes, edges)
+        self._bandwidth_graph = None
+
     def get_route(self, source: Node, destination: Node):
         path = self.path(source, destination)
         hops = [node for node in path if isinstance(node, Link)]
@@ -304,17 +327,15 @@ class Topology(Graph):
         return None
 
     def get_hosts(self):
-        result = set()
+        result = list()
 
         for node in self.nodes:
             if not isinstance(node, Node):
                 continue
-            if node == Internet or node == Registry:
-                continue
 
-            result.add(node)
+            result.append(node)
 
-        return list(result)
+        return result
 
     def get_links(self):
         links = set()
@@ -327,12 +348,20 @@ class Topology(Graph):
 
         return list(links)
 
+    def get_bandwidth_graph(self) -> BandwidthGraph:
+        if self._bandwidth_graph is None:
+            self._bandwidth_graph = self.create_bandwidth_graph()
+
+        return self._bandwidth_graph
+
     def create_bandwidth_graph(self) -> BandwidthGraph:
         """
         From a topology, create the reduced bandwidth graph required by the ClusterContext.
         :return: bandwidth[from][to] = bandwidth in bytes per second
         """
-        nodes = [node for node in self.nodes if isinstance(node, Node)]
+        then = time.time()
+
+        nodes = self.get_hosts()
         graph = defaultdict(dict)
 
         # route each node to each other and find the highest available bandwidth
@@ -340,8 +369,64 @@ class Topology(Graph):
         for i in range(n):
             for j in range(n):
                 if i == j:
-                    n = nodes[i].name
-                    graph[n][n] = 1.25e+8  # essentially models disk read from itself as 1GBit/s
+                    n1 = nodes[i].name
+                    graph[n1][n1] = 1.25e+8  # essentially models disk read from itself as 1GBit/s
+                    continue
+
+                n1 = nodes[i]
+                n2 = nodes[j]
+
+                route = self.get_route(n1, n2)
+
+                if not route.hops:
+                    raise ValueError('no route from', n1, 'to', n2)
+
+                bandwidth = min([link.bandwidth for link in route.hops])  # get the maximal available bandwidth
+                bandwidth = bandwidth * 125000  # link bandwidth is given in mbit/s: * 125000 = bytes/s
+
+                graph[n1.name][n2.name] = bandwidth
+
+        logger.info('creating bandwidth graph took %.4f seconds', (time.time() - then))
+
+        return graph
+
+    def create_bandwidth_graph_parallel(self, p=4) -> BandwidthGraph:
+        import multiprocessing as mp
+        """
+        From a topology, create the reduced bandwidth graph required by the ClusterContext.
+        :return: bandwidth[from][to] = bandwidth in bytes per second
+        """
+        then = time.time()
+
+        nodes = self.get_hosts()
+
+        # route each node to each other and find the highest available bandwidth
+        n = len(nodes)
+
+        parts = partition(list(range(n)), p)
+        partitions = [(p, nodes) for p in parts]
+
+        g = dict()
+
+        with mp.Pool(p) as pool:
+            part_results = pool.map(self._get_graph_part, partitions)
+            for result in part_results:
+                g.update(result)
+
+        logger.info('creating bandwidth graph took %.4f seconds', (time.time() - then))
+
+        return g
+
+    def _get_graph_part(self, part):
+        irange, nodes = part
+        n = len(nodes)
+
+        graph = defaultdict(dict)
+        for i in irange:
+            for j in range(n):
+                if i == j:
+                    n1 = nodes[i].name
+                    graph[n1][n1] = 1.25e+8  # essentially models disk read from itself as 1GBit/s
                     continue
 
                 n1 = nodes[i]
@@ -356,6 +441,12 @@ class Topology(Graph):
         return graph
 
     def create_cluster_context(self):
-        nodes = self.get_hosts()
-        bw = self.create_bandwidth_graph()
-        return SimulationClusterContext(nodes, bw)
+        # remove registry if present
+        nodes = [node for node in self.get_hosts() if node.name != Registry.name]
+
+        return SimulationClusterContext(nodes, self.get_bandwidth_graph())
+
+
+def partition(lst, n):
+    division = len(lst) / n
+    return [lst[round(division * i):round(division * (i + 1))] for i in range(n)]

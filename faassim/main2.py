@@ -6,7 +6,7 @@ import pandas as pd
 
 from sim.faas import FaasSimEnvironment
 from sim.logging import Record
-from sim.scenarios import Scenario, TestScenario2
+from sim.scenarios import Scenario, TestScenario
 
 
 def extract_dataframe(measurement: str, records: List[Record]):
@@ -36,8 +36,7 @@ class Simulation:
         super().__init__()
         self.scenario = scenario
 
-        self.cluster = scenario.cluster()
-        self.env = FaasSimEnvironment(self.cluster)
+        self.env = FaasSimEnvironment(scenario.topology())
         self.env.process(self.env.faas_gateway.request_worker())
         self.env.process(self.env.faas_gateway.scheduler_worker())
         self.env.process(self.env.faas_gateway.faas_idler())
@@ -68,7 +67,7 @@ class Simulation:
         print(groups)
 
         df = extract_dataframe('allocation', self.env.metrics.records)
-        df = df[df['node'] == '1_cloud']
+        df = df[df['node'] == 'edge_9_2_tegra']
         y = df['cpu']
         plt.step(y.index, y)
         plt.show()
@@ -78,16 +77,16 @@ class Simulation:
         plt.show()
 
         df = extract_dataframe('utilization', self.env.metrics.records)
-        df = df[df['node'] == '1_cloud']
+        df = df[df['node'] == 'edge_9_2_tegra']
         y = df['mem'].resample('60s').mean()
         plt.plot(y)
         plt.show()
 
 
 def main():
-    sim = Simulation(TestScenario2())
+    sim = Simulation(TestScenario.lazy())
     then = time.time()
-    sim.run(60 * 60 * 3)
+    sim.run(60 * 60 * 2)
     print('simulation took %.2f ms' % ((time.time() - then) * 1000))
     print('simulation time is now: %.2f' % sim.env.now)
 

@@ -31,12 +31,20 @@ def create_lan(nodes: List[Node], downlink_bw, uplink_bw, internal_bw=1000, name
 
         node_links.append(node_link)
 
-    # connect all nodes together (essentially like a switch)
-    for i in range(n):
-        for j in range(i + 1, n):
-            link_i = node_links[i]
-            link_j = node_links[j]
-            edges.append(Edge(link_i, link_j, directed=False))
+    # # connect all nodes together (essentially like a switch)
+    # for i in range(n):
+    #     for j in range(i + 1, n):
+    #         link_i = node_links[i]
+    #         link_j = node_links[j]
+    #         edges.append(Edge(link_i, link_j, directed=False))
+
+    # connect each node's link to a 'switch' (a node with infinite bandwidth)
+    switch = f'switch_{name or id(nodes)}'
+    for node in node_links:
+        edges.append(Edge(node, switch))
+    # connect switch to up/downlink (like a router)
+    edges.append(Edge(switch, uplink, directed=True))
+    edges.append(Edge(downlink, switch, directed=True))
 
     return edges, uplink, downlink
 

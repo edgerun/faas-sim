@@ -1,16 +1,13 @@
-import logging
+import pickle
+import time
 from typing import List, Callable, NamedTuple
 
 import sim.synth.network as netsynth
 import sim.synth.nodes as nodesynth
-from core.clustercontext import ClusterContext
 from sim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function
 from sim.net import Topology, Link, Edge, Internet, Registry
-from sim.simclustercontext import SimulationClusterContext
 from sim.stats import ParameterizedDistribution
 from sim.synth import pods
-from sim.synth.bandwidth import generate_bandwidth_graph
-from sim.synth.nodes import node_synthesizer, node_factory_cloud_majority, node_factory_50_percent_cloud
 
 
 class ClusterSynthesizer:
@@ -66,7 +63,8 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
             nodes.append(nodesynth.create_cloud_node(i))
 
         # 10 GBit/s lan and a lot of up/down
-        edges, uplink, downlink = netsynth.create_lan(nodes, 1e10, 1e10, internal_bw=10000, name='cloud')
+        # FIXME: upgrade to 10Gbit/s
+        edges, uplink, downlink = netsynth.create_lan(nodes, 1e10, 1e10, internal_bw=1000, name='cloud')
 
         nodesynth.set_zone(nodes, 'cloud')
 
@@ -93,15 +91,16 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
             edges_pis.append(Edge(pi2, link))
 
         cloudlet_nodes = [
-            nodesynth.mark_storage_node(nodesynth.create_nuc_node(f'{zone}_storage')),
-            nodesynth.create_nuc_node(f'{zone}_1'),
-            nodesynth.create_nuc_node(f'{zone}_2'),
+            nodesynth.mark_storage_node(nodesynth.create_rpi3_node(f'{zone}_storage')),  # FIXME: replace with nuc
+            nodesynth.create_rpi3_node(f'{zone}_1'),  # FIXME: replace with nuc
+            nodesynth.create_rpi3_node(f'{zone}_2'),  # FIXME: replace with nuc
             nodesynth.create_tegra_node(f'{zone}_1'),
             nodesynth.create_tegra_node(f'{zone}_2')
         ]
 
+        # FIXME: better up/downlink bandwidths
         edges_lan, uplink, downlink = netsynth.create_lan(cloudlet_nodes + aot_comm_pis,
-                                                          downlink_bw=50, uplink_bw=20, internal_bw=100, name=zone)
+                                                          downlink_bw=100, uplink_bw=100, internal_bw=100, name=zone)
 
         nodes = cloudlet_nodes + aot_nodes
         nodesynth.set_zone(nodes, zone)
@@ -114,7 +113,7 @@ class Scenario:
     def until(self) -> int:
         raise NotImplementedError
 
-    def cluster(self) -> ClusterContext:
+    def topology(self) -> Topology:
         raise NotImplementedError
 
     def scenario_daemon(self, env: FaasSimEnvironment):
@@ -133,48 +132,23 @@ class FunctionBlueprint(NamedTuple):
 
 
 class TestScenario(Scenario):
-
     def __init__(self) -> None:
         super().__init__()
-        logging.basicConfig(level=logging.DEBUG)
+        self.max_deployments = 50
+        self._topology = None
 
-    def cluster(self) -> ClusterContext:
-        gen = node_synthesizer(node_factory_cloud_majority)
+    def topology(self) -> Topology:
+        if self._topology:
+            return self._topology
 
-        nodes = [next(gen) for i in range(100)]
-        topology = generate_bandwidth_graph(nodes)
-        cluster = SimulationClusterContext(nodes, topology)
+        synth = UrbanSensingClusterSynthesizer(cells=10, cloud_vms=5)  # FIXME
+        self._topology = synth.create_topology()
+        self._topology.create_index()
+        self._topology.get_bandwidth_graph()
 
-        return cluster
+        return self._topology
 
     def scenario_daemon(self, env: FaasSimEnvironment):
-        yield env.timeout(0)
-
-        for function in env.functions.values():  # FIXME
-            env.faas_gateway.deploy(function)
-
-        yield env.timeout(10)
-
-        training_trigger = request_generator(
-            env,
-            ParameterizedDistribution.expon(((300, 300,), None, None)),
-            lambda: FunctionRequest('preprocess', empty)
-        )
-        inference_trigger = request_generator(
-            env,
-            ParameterizedDistribution.expon(((25, 50), None, None)),
-            lambda: FunctionRequest('inference', empty)
-        )
-
-        env.process(training_trigger)
-        env.process(inference_trigger)
-
-
-class TestScenario2(Scenario):
-    def __init__(self) -> None:
-        super().__init__()
-        # logging.basicConfig(level=logging.DEBUG)
-
         self.blueprint_prep = FunctionBlueprint(
             'wf_0_preprocess_{i}', pods.create_ml_wf_1_pod, ['wf_1_train_{i}'],
             scale_max=1, scale_zero=True
@@ -187,18 +161,6 @@ class TestScenario2(Scenario):
             'wf_2_inference_{i}', pods.create_ml_wf_3_serve
         )
 
-        self.max_deployments = 50
-
-    def cluster(self) -> ClusterContext:
-        gen = node_synthesizer(node_factory_50_percent_cloud)
-
-        nodes = [next(gen) for i in range(25)]
-        topology = generate_bandwidth_graph(nodes)
-        cluster = SimulationClusterContext(nodes, topology)
-
-        return cluster
-
-    def scenario_daemon(self, env: FaasSimEnvironment):
         yield env.timeout(0)
 
         def deployment_injector():
@@ -247,3 +209,22 @@ class TestScenario2(Scenario):
 
         env.process(training_trigger)
         env.process(inference_trigger)
+
+    @staticmethod
+    def lazy() -> 'TestScenario':
+        file = '/tmp/TestScenario.pkl'
+        try:
+            with open(file, 'rb') as fd:
+                scenario = pickle.load(fd)
+                return scenario
+        except FileNotFoundError:
+            pass
+
+        scenario = TestScenario()
+        scenario.topology()
+
+        with open(file, 'wb') as fd:
+            pickle.dump(scenario, fd)
+
+        return scenario
+

@@ -13,6 +13,7 @@ from core.model import Pod, Node, SchedulingResult
 from core.scheduler import Scheduler
 from core.utils import counter
 from sim.logging import SimulatedClock, NullLogger, RuntimeLogger
+from sim.net import Topology
 from sim.stats import RandomSampler, BufferedSampler
 
 logger = logging.getLogger(__name__)
@@ -179,13 +180,21 @@ class Metrics:
 
 class FaasSimEnvironment(simpy.Environment):
 
-    def __init__(self, cluster: ClusterContext, initial_time=0):
+    def __init__(self, topology: Topology, cluster_context=None, initial_time=0):
         super().__init__(initial_time)
 
         self.request_generator = object
         self.request_queue = simpy.Store(self)
         self.scheduler_queue = simpy.Store(self)
-        self.cluster: ClusterContext = cluster
+        self.topology: Topology = topology
+        topology.create_index()
+
+        # allows us to inject a pre-calculated bandwidth graph that was cached
+        if cluster_context is None:
+            self.cluster: ClusterContext = topology.create_cluster_context()
+        else:
+            self.cluster = cluster_context
+
         self.scheduler = Scheduler(self.cluster)
         self.faas_gateway = FaasGateway(self)
         self.execution_simulator = ExecutionSimulator(self)
