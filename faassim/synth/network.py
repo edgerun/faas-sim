@@ -26,8 +26,8 @@ def create_lan(nodes: List[Node], downlink_bw, uplink_bw, internal_bw=1000, name
         node_link = Link(internal_bw, tags={'type': 'node', 'name': node.name})
         edges.append(Edge(node, node_link, directed=False))
 
-        edges.append(Edge(node_link, uplink, directed=True))
-        edges.append(Edge(downlink, node_link, directed=True))
+        # edges.append(Edge(node_link, uplink, directed=True))
+        # edges.append(Edge(downlink, node_link, directed=True))
 
         node_links.append(node_link)
 
