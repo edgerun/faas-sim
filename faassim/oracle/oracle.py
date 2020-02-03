@@ -194,6 +194,52 @@ class FittedStartupTimeOracle(Oracle):
         return 'startup_time', str(startup_time)
 
 
+class HackedFittedStartupTimeOracle(Oracle):
+    """
+    Always uses 1 Gbit preset, and subtracts the theoretical transmission time, to give an estimate of the actual
+    container startup time.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.startup_time_samplers = {
+            k: BoundRejectionSampler(BufferedSampler(dist), xmin, xmax) for k, (xmin, xmax, dist) in
+            startup_time_distributions.items()
+        }
+
+    def estimate(self, context: ClusterContext, pod: Pod, scheduling_result: SchedulingResult) -> Tuple[str, str]:
+        if scheduling_result is None or scheduling_result.suggested_host is None:
+            return 'startup_time', None
+
+        host = scheduling_result.suggested_host.name
+        host_arch = scheduling_result.suggested_host.labels['beta.kubernetes.io/arch']
+        host_type = host[host.rindex('_') + 1:]
+        bandwidth = int(1.25e7)  # always assume 100mbit (which is probably the downlink we have @ DSG)
+        startup_time = 0
+
+        for container in pod.spec.containers:
+            image = container.image
+            image_name = normalize_image_name(image)
+
+            image_present = image_name not in scheduling_result.needed_images
+
+            k = (host_type, image, image_present, bandwidth)
+
+            if k not in self.startup_time_samplers:
+                raise ValueError(k)
+
+            image_time = self.startup_time_samplers[k].sample()
+
+            if not image_present:
+                image_size = context.get_image_state(image_name).size[host_arch]
+                dl_time = image_size / bandwidth
+                image_time = max(0, image_time - dl_time)
+
+            startup_time += image_time
+
+        return 'startup_time', str(startup_time)
+
+
 class FittedExecutionTimeOracle(Oracle):
 
     def __init__(self) -> None:

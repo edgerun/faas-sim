@@ -45,6 +45,7 @@ class Flow:
 
     def start(self):
         self.process = self.env.process(self.run())
+        return self.process
 
     def run(self):
         env = self.env
@@ -53,6 +54,9 @@ class Flow:
         source = route.source
         hops = route.hops
         sink = route.destination
+
+        if not hops:
+            raise ValueError('no hops in route from %s to %s' % (source, sink))
 
         # find the link that has the lowest available bandwidth
         bottleneck = min([link.get_max_allocatable(self) for link in hops])
@@ -313,11 +317,18 @@ class Topology(Graph):
     def __init__(self, nodes: List, edges: List[Edge]) -> None:
         super().__init__(nodes, edges)
         self._bandwidth_graph = None
+        self._registry = None
 
     def get_route(self, source: Node, destination: Node):
         path = self.path(source, destination)
         hops = [node for node in path if isinstance(node, Link)]
         return Route(source, destination, hops)
+
+    def get_registry(self):
+        if not self._registry:
+            self._registry = self.get_host(Registry.name)
+
+        return self._registry
 
     def get_host(self, name):
         for node in self.nodes:

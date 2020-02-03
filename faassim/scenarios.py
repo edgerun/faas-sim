@@ -1,5 +1,4 @@
 import pickle
-import time
 from typing import List, Callable, NamedTuple
 
 import sim.synth.network as netsynth
@@ -119,6 +118,24 @@ class Scenario:
     def scenario_daemon(self, env: FaasSimEnvironment):
         yield env.timeout(0)
 
+    @classmethod
+    def lazy(cls):
+        file = '/tmp/schedsim-scenario--' + cls.__name__ + '.pkl'
+        try:
+            with open(file, 'rb') as fd:
+                scenario = pickle.load(fd)
+                return scenario
+        except FileNotFoundError:
+            pass
+
+        scenario = cls()
+        scenario.topology()
+
+        with open(file, 'wb') as fd:
+            pickle.dump(scenario, fd)
+
+        return scenario
+
 
 class FunctionBlueprint(NamedTuple):
     name: str
@@ -131,7 +148,7 @@ class FunctionBlueprint(NamedTuple):
     scale_zero: bool = False
 
 
-class TestScenario(Scenario):
+class TestScenario2(Scenario):
     def __init__(self) -> None:
         super().__init__()
         self.max_deployments = 50
@@ -210,21 +227,84 @@ class TestScenario(Scenario):
         env.process(training_trigger)
         env.process(inference_trigger)
 
-    @staticmethod
-    def lazy() -> 'TestScenario':
-        file = '/tmp/TestScenario.pkl'
-        try:
-            with open(file, 'rb') as fd:
-                scenario = pickle.load(fd)
-                return scenario
-        except FileNotFoundError:
-            pass
 
-        scenario = TestScenario()
-        scenario.topology()
+class TestScenario(Scenario):
+    def __init__(self) -> None:
+        super().__init__()
+        self.max_deployments = 50
+        self._topology = None
 
-        with open(file, 'wb') as fd:
-            pickle.dump(scenario, fd)
+    def topology(self) -> Topology:
+        if self._topology:
+            return self._topology
 
-        return scenario
+        synth = UrbanSensingClusterSynthesizer(cells=10, cloud_vms=5)  # FIXME
+        self._topology = synth.create_topology()
+        self._topology.create_index()
+        self._topology.get_bandwidth_graph()
 
+        return self._topology
+
+    def scenario_daemon(self, env: FaasSimEnvironment):
+        self.blueprint_prep = FunctionBlueprint(
+            'wf_0_preprocess_{i}', pods.create_ml_wf_1_pod, ['wf_1_train_{i}'],
+            scale_max=1, scale_zero=False
+        )
+        self.blueprint_train = FunctionBlueprint(
+            'wf_1_train_{i}', pods.create_ml_wf_2_pod,
+            scale_max=1, scale_zero=False
+        )
+        self.blueprint_inference = FunctionBlueprint(
+            'wf_2_inference_{i}', pods.create_ml_wf_3_serve
+        )
+
+        yield env.timeout(0)
+
+        def deployment_injector():
+            for i in range(self.max_deployments):
+                yield from self.inject_deployment(env, i)
+
+                yield env.timeout(0)  # inject all at once
+
+        env.process(deployment_injector())
+
+    def inject_deployment(self, env, i):
+        cnt = 1
+        for blueprint in [self.blueprint_prep, self.blueprint_train, self.blueprint_inference]:
+            pod = i * 3 + cnt
+
+            fn = Function(
+                blueprint.name.format(i=i),
+                blueprint.pod_factory(pod),
+                [trigger.format(i=i) for trigger in blueprint.triggers],
+            )
+
+            if blueprint.scale_min:
+                fn.scale_min = blueprint.scale_min
+            if blueprint.scale_max:
+                fn.scale_max = blueprint.scale_max
+            if blueprint.scale_factor:
+                fn.scale_factor = blueprint.scale_factor
+            if blueprint.scale_zero:
+                fn.scale_zero = blueprint.scale_zero
+
+            cnt += 1
+            env.faas_gateway.deploy(fn)
+
+        prep_function_name = self.blueprint_prep.name.format(i=i)
+        training_trigger = request_generator(
+            env,
+            ParameterizedDistribution.expon(((200, 100,), None, None)),
+            lambda: FunctionRequest(prep_function_name, empty)
+        )
+
+        inference_function_name = self.blueprint_inference.name.format(i=i)
+        inference_trigger = request_generator(
+            env,
+            ParameterizedDistribution.expon(((25, 50,), None, None)),
+            lambda: FunctionRequest(inference_function_name, empty)
+        )
+
+        yield env.timeout(0)
+        env.process(training_trigger)
+        env.process(inference_trigger)

@@ -1,7 +1,9 @@
+import logging
 import time
 from typing import List
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from sim.faas import FaasSimEnvironment
@@ -56,37 +58,44 @@ class Simulation:
         plt.plot(x)
         plt.show()
 
-        x = df['t_wait'].resample('60s').count()
-        plt.plot(x)
-        plt.show()
-
         df['function_type'] = df['function_name'].str.split('_').str[2]
         x = df[['function_type', 't_wait', 't_exec']]
+
+        counts = x.groupby('function_type')
+
+        for key, grp in counts:
+            y = grp['t_exec'].resample('60s').count()
+            plt.plot(y, label=key)
+        plt.title('average requests/minute')
+        plt.legend()
+        plt.show()
 
         groups = x.groupby('function_type').mean()[['t_wait', 't_exec']]
         print(groups)
 
-        df = extract_dataframe('allocation', self.env.metrics.records)
-        df = df[df['node'] == 'edge_9_2_tegra']
-        y = df['cpu']
+        df_alloc = extract_dataframe('allocation', self.env.metrics.records)
+        df_alloc = df_alloc[df_alloc['node'] == 'edge_9_2_tegra']
+        y = df_alloc['cpu']
         plt.step(y.index, y)
         plt.show()
 
-        y = df['mem']
+        y = df_alloc['mem']
         plt.step(y.index, y)
         plt.show()
 
-        df = extract_dataframe('utilization', self.env.metrics.records)
-        df = df[df['node'] == 'edge_9_2_tegra']
-        y = df['mem'].resample('60s').mean()
+        df_util = extract_dataframe('utilization', self.env.metrics.records)
+        df_util = df_util[df_util['node'] == 'edge_9_2_tegra']
+        y = df_util['mem'].resample('10s').mean().replace(np.nan, 0)
+        plt.ylim(0, 1)
         plt.plot(y)
         plt.show()
 
 
 def main():
+    logging.basicConfig(level=logging.INFO)
     sim = Simulation(TestScenario.lazy())
     then = time.time()
-    sim.run(60 * 60 * 2)
+    sim.run(60 * 60)
     print('simulation took %.2f ms' % ((time.time() - then) * 1000))
     print('simulation time is now: %.2f' % sim.env.now)
 

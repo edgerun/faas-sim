@@ -11,9 +11,9 @@ import sim.oracle.oracle as oracles
 from core.clustercontext import ClusterContext
 from core.model import Pod, Node, SchedulingResult
 from core.scheduler import Scheduler
-from core.utils import counter
+from core.utils import counter, normalize_image_name
 from sim.logging import SimulatedClock, NullLogger, RuntimeLogger
-from sim.net import Topology
+from sim.net import Topology, Flow
 from sim.stats import RandomSampler, BufferedSampler
 
 logger = logging.getLogger(__name__)
@@ -135,6 +135,9 @@ class Metrics:
     def log(self, name, value, **tags):
         return self.logger.log(name, value, **tags)
 
+    def log_scaling(self, function_name, replicas):
+        self.env.metrics.log('scale', replicas, function_name=function_name)
+
     def log_invocation(self, function_name, node_name, t_wait, t_exec):
         self.invocations[function_name] += 1
         self.last_invocation[function_name] = self.env.now
@@ -180,7 +183,7 @@ class Metrics:
 
 class FaasSimEnvironment(simpy.Environment):
 
-    def __init__(self, topology: Topology, cluster_context=None, initial_time=0):
+    def __init__(self, topology: Topology, cluster_context: ClusterContext = None, initial_time=0):
         super().__init__(initial_time)
 
         self.request_generator = object
@@ -193,7 +196,7 @@ class FaasSimEnvironment(simpy.Environment):
         if cluster_context is None:
             self.cluster: ClusterContext = topology.create_cluster_context()
         else:
-            self.cluster = cluster_context
+            self.cluster: ClusterContext = cluster_context
 
         self.scheduler = Scheduler(self.cluster)
         self.faas_gateway = FaasGateway(self)
@@ -203,7 +206,7 @@ class FaasSimEnvironment(simpy.Environment):
         self.metrics = Metrics(self, RuntimeLogger(self.clock))
 
         self.execution_time_oracle = oracles.FittedExecutionTimeOracle()
-        self.startup_time_oracle = oracles.FittedStartupTimeOracle()
+        self.startup_time_oracle = oracles.HackedFittedStartupTimeOracle()
 
 
 def request_generator(env: FaasSimEnvironment, arrival_profile: RandomSampler, request_factory):
@@ -238,6 +241,12 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
         # synchronize function state
         func.state = FunctionState.STARTING
 
+    then = env.now
+    # simulate docker pull
+    if result.needed_images:
+        yield from simulate_docker_pull(env, replica, result)
+
+    # simulate container startup (we use the hacked version which estimates only pure startup)
     _, t = env.startup_time_oracle.estimate(env.cluster, func.pod, result)
     t = float(t)
 
@@ -245,11 +254,29 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
 
     yield env.timeout(t)  # simulate startup (image download (perhaps) + container startup + program startup)
 
-    env.metrics.log('startup', t, function_name=func.name, node=node)
+    env.metrics.log('startup', env.now - then, function_name=func.name, node=node, images=len(result.needed_images))
     env.metrics.log('replicas', len(func.replicas), function_name=func.name)
     replica.state = FunctionState.RUNNING
     func.state = FunctionState.RUNNING
     env.faas_gateway.replicas.free(replica)
+
+
+def simulate_docker_pull(env: FaasSimEnvironment, replica: FunctionReplica, result: SchedulingResult):
+    # TODO: there's a lot of potential to improve fidelity here: consider image layers, simulate extraction time, etc.
+    node = result.suggested_host
+
+    sizes = env.cluster.get_image_sizes(replica.function.pod, node.labels['beta.kubernetes.io/arch'])
+    # needed image names are already normalized by the scheduler
+    required = sum([size for image, size in sizes.items() if normalize_image_name(image) in result.needed_images])
+
+    if required <= 0:
+        return
+
+    route = env.topology.get_route(node, env.topology.get_registry())
+    flow = Flow(env, required, route)
+    yield flow.start()
+
+    print('flow sent', flow)
 
 
 class ExecutionSimulator:
@@ -527,11 +554,14 @@ class FaasGateway:
 
     def _schedule_replicas(self, function, num):
         logger.debug('scheduling %d replicas for %s', num, function)
+        env = self.env
 
         for i in range(num):
             replica = FunctionReplica(function)
             function.replicas.append(replica)
-            self.env.scheduler_queue.put(replica)
+            env.scheduler_queue.put(replica)
+
+        env.metrics.log_scaling(function.name, len(function.replicas))
 
     def _remove_replica(self, replica):
         env = self.env
@@ -545,3 +575,4 @@ class FaasGateway:
             'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
             'mem': 1 - (node.allocatable.memory / node.capacity.memory)
         }, node=node.name)
+        env.metrics.log_scaling(replica.function.name, len(replica.function.replicas))
