@@ -9,13 +9,17 @@ class SimulationClusterContext(ClusterContext):
     def __init__(self, nodes: List[Node], bandwidth_graph: BandwidthGraph):
         self.bandwidth_graph = bandwidth_graph
         self.nodes = nodes
+        self.node_index = {node.name: node for node in nodes}
         super().__init__()
 
         # index all storage nodes
-        self.storage_nodes = [node for node in nodes if 'data.skippy.io/storage' in node.labels]
+        self.storage_nodes = {node.name: node for node in nodes if 'data.skippy.io/storage' in node.labels}
 
     def list_nodes(self) -> List[Node]:
         return self.nodes
+
+    def get_node(self, name: str) -> Node:
+        return self.node_index.get(name)
 
     def get_next_storage_node(self, node: Node) -> str:
         if 'data.skippy.io/storage' in node.labels:
@@ -24,7 +28,7 @@ class SimulationClusterContext(ClusterContext):
             return '1_cloud'
 
         bw = self.get_bandwidth_graph()[node.name]
-        storage_node = max(self.storage_nodes, key=lambda n: bw[n.name])
+        storage_node = max(self.storage_nodes.values(), key=lambda n: bw[n.name])
 
         return storage_node.name
 

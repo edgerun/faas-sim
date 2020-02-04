@@ -11,7 +11,7 @@ import sim.oracle.oracle as oracles
 from core.clustercontext import ClusterContext
 from core.model import Pod, Node, SchedulingResult
 from core.scheduler import Scheduler
-from core.utils import counter, normalize_image_name
+from core.utils import counter, normalize_image_name, parse_size_string
 from sim.logging import SimulatedClock, NullLogger, RuntimeLogger
 from sim.net import Topology, Flow
 from sim.stats import RandomSampler, BufferedSampler
@@ -272,11 +272,9 @@ def simulate_docker_pull(env: FaasSimEnvironment, replica: FunctionReplica, resu
     if required <= 0:
         return
 
-    route = env.topology.get_route(node, env.topology.get_registry())
+    route = env.topology.get_route(env.topology.get_registry(), node)
     flow = Flow(env, required, route)
     yield flow.start()
-
-    print('flow sent', flow)
 
 
 class ExecutionSimulator:
@@ -306,6 +304,10 @@ class ExecutionSimulator:
 
         func = env.faas_gateway.functions[req.name]
 
+        then = env.now
+        yield from self.simulate_data_download(replica)
+        print('data download of', func.name ,' took %.2f' % (env.now - then))
+
         # estimate execution time
         _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
         t = float(t)
@@ -327,13 +329,38 @@ class ExecutionSimulator:
 
             yield env.timeout(t)
 
-            self.running[replica].remove(req)
-            env.metrics.log_stop_exec(req, replica)
+        yield from self.simulate_data_upload(replica)
 
-            if func.triggers:  # simulates function compositions
-                for next_func in func.triggers:
-                    # example: in an ML workflow, a pre-processing step may after its completion trigger a training step
-                    env.request_queue.put(FunctionRequest(next_func, empty))
+        self.running[replica].remove(req)
+        env.metrics.log_stop_exec(req, replica)
+
+        if func.triggers:  # simulates function compositions
+            for next_func in func.triggers:
+                # example: in an ML workflow, a pre-processing step may after its completion trigger a training step
+                env.request_queue.put(FunctionRequest(next_func, empty))
+
+    def simulate_data_download(self, replica: FunctionReplica):
+        node = replica.node
+        func = replica.function
+        env = self.env
+
+        if 'data.skippy.io/receives-from-storage' not in func.pod.spec.labels:
+            return
+
+        size = parse_size_string(func.pod.spec.labels['data.skippy.io/receives-from-storage'])
+        print('1 function', replica.function.name, 'receives', size, 'bytes')
+
+        storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
+        storage_node = env.cluster.get_node(storage_node_name)
+
+        route = env.topology.get_route(storage_node, node)
+        print('2 function', replica.function.name, 'routing function data: ', [hop.tags for hop in route.hops])
+        flow = Flow(env, size, route)
+        yield flow.start()
+        print('3 function', replica.function.name, 'done')
+
+    def simulate_data_upload(self, replica: FunctionReplica):
+        yield self.env.timeout(0)
 
 
 class ReplicaPool:

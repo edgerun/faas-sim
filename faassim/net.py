@@ -62,6 +62,8 @@ class Flow:
         bottleneck = min([link.get_max_allocatable(self) for link in hops])
         # allocate that bandwidth in all links
         goodput = min([link.allocate(self, bottleneck) for link in hops])
+        if goodput <= 0:
+            raise ValueError
         # calculate the simulation time
         bytes_remaining = self.size
         transmission_time = bytes_remaining / goodput  # remaining seconds
@@ -96,6 +98,8 @@ class Flow:
 
                 bottleneck = min([link.get_max_allocatable(self) for link in hops])
                 goodput = min([link.allocate(self, bottleneck) for link in hops])
+                if goodput <= 0:
+                    raise ValueError
                 transmission_time = bytes_remaining / goodput  # set new time remaining
 
         logger.debug('%-5.2f sending %s -[%d]-> {%s} completed in %.2fs',
