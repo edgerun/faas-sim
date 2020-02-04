@@ -255,14 +255,12 @@ class FittedExecutionTimeOracle(Oracle):
 
         host = scheduling_result.suggested_host.name
         host_type = host[host.rindex('_') + 1:]
-        # For the execution time the bandwidth to the next storage node is necessary
-        bandwidth = context.get_bandwidth_graph()[host][context.get_next_storage_node(scheduling_result.suggested_host)]
 
         execution_time = 0
         for container in pod.spec.containers:
             image = container.image
 
-            k = (host_type, image, bandwidth)
+            k = (host_type, image)
             if k not in self.execution_time_samplers:
                 raise ValueError(k)
 

@@ -248,11 +248,11 @@ class TestScenario(Scenario):
     def scenario_daemon(self, env: FaasSimEnvironment):
         self.blueprint_prep = FunctionBlueprint(
             'wf_0_preprocess_{i}', pods.create_ml_wf_1_pod, ['wf_1_train_{i}'],
-            scale_max=1, scale_zero=False
+            scale_max=1, scale_zero=True
         )
         self.blueprint_train = FunctionBlueprint(
             'wf_1_train_{i}', pods.create_ml_wf_2_pod,
-            scale_max=1, scale_zero=False
+            scale_max=1, scale_zero=True
         )
         self.blueprint_inference = FunctionBlueprint(
             'wf_2_inference_{i}', pods.create_ml_wf_3_serve
