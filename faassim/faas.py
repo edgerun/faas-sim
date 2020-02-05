@@ -306,7 +306,6 @@ class ExecutionSimulator:
 
         then = env.now
         yield from self.simulate_data_download(replica)
-        print('data download of', func.name ,' took %.2f' % (env.now - then))
 
         # estimate execution time
         _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
@@ -348,16 +347,18 @@ class ExecutionSimulator:
             return
 
         size = parse_size_string(func.pod.spec.labels['data.skippy.io/receives-from-storage'])
-        print('1 function', replica.function.name, 'receives', size, 'bytes')
 
         storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
-        storage_node = env.cluster.get_node(storage_node_name)
 
+        if storage_node_name == node.name:
+            # FIXME this is essentially a disk read and not a network connection
+            yield env.timeout(size / 1.25e+8)  # 1.25e+8 = 1 GBit/s
+            return
+
+        storage_node = env.cluster.get_node(storage_node_name)
         route = env.topology.get_route(storage_node, node)
-        print('2 function', replica.function.name, 'routing function data: ', [hop.tags for hop in route.hops])
         flow = Flow(env, size, route)
         yield flow.start()
-        print('3 function', replica.function.name, 'done')
 
     def simulate_data_upload(self, replica: FunctionReplica):
         yield self.env.timeout(0)

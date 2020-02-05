@@ -28,6 +28,9 @@ class Route:
         self.hops = hops
         self.rtt = rtt
 
+    def __str__(self) -> str:
+        return f'Route[{self.source} ->{self.hops}-> {self.destination}]'
+
 
 class Flow:
     sent: int
@@ -79,34 +82,35 @@ class Flow:
             except simpy.Interrupt as interrupt:
                 connection_time = connection_time - (env.now - started)
 
-        while True:
-            started = env.now
+        try:
+            while True:
+                started = env.now
 
-            try:
-                logger.debug('%-5.2f sending %s -[%d]-> {%s} at %d bytes/sec',
-                             env.now, source.name, size, sink.name, goodput)
-                yield env.timeout(transmission_time)
-                break
-            except simpy.Interrupt as interrupt:
-                self.sent += goodput * (env.now - started)
-                if self.sent >= size:
-                    break  # was interrupted, but actually sent everything already
+                try:
+                    logger.debug('%-5.2f sending %s -[%d]-> {%s} at %d bytes/sec',
+                                 env.now, source.name, size, sink.name, goodput)
+                    yield env.timeout(transmission_time)
+                    break
+                except simpy.Interrupt as interrupt:
+                    self.sent += goodput * (env.now - started)
+                    if self.sent >= size:
+                        break  # was interrupted, but actually sent everything already
 
-                bytes_remaining = size - self.sent
-                logger.debug('%-5.2f sending %s -[%d]-> {%s} interrupted: %s (sent: %d, remaining: %d)',
-                             env.now, source.name, size, sink.name, interrupt.cause, self.sent, bytes_remaining)
+                    bytes_remaining = size - self.sent
+                    logger.debug('%-5.2f sending %s -[%d]-> {%s} interrupted: %s (sent: %d, remaining: %d)',
+                                 env.now, source.name, size, sink.name, interrupt.cause, self.sent, bytes_remaining)
 
-                bottleneck = min([link.get_max_allocatable(self) for link in hops])
-                goodput = min([link.allocate(self, bottleneck) for link in hops])
-                if goodput <= 0:
-                    raise ValueError
-                transmission_time = bytes_remaining / goodput  # set new time remaining
+                    bottleneck = min([link.get_max_allocatable(self) for link in hops])
+                    goodput = min([link.allocate(self, bottleneck) for link in hops])
+                    if goodput <= 0:
+                        raise ValueError
+                    transmission_time = bytes_remaining / goodput  # set new time remaining
 
-        logger.debug('%-5.2f sending %s -[%d]-> {%s} completed in %.2fs',
-                     env.now, source.name, size, sink.name, env.now - timer)
-
-        for link in hops:
-            link.free(self)
+            logger.debug('%-5.2f sending %s -[%d]-> {%s} completed in %.2fs',
+                         env.now, source.name, size, sink.name, env.now - timer)
+        finally:
+            for link in hops:
+                link.free(self)
 
     def establish(self):
         env = self.env
@@ -138,6 +142,9 @@ class Link:
 
     def get_max_allocatable(self, flow: Flow):
         flows = len(self.allocation)
+
+        if flows == 0:
+            return self.bandwidth
 
         if flow not in self.allocation:
             flows += 1  # +1 if the flow is new
@@ -195,7 +202,12 @@ class Link:
         return practical_bw * goodput_magic_number
 
     def allocate(self, flow: Flow, requested_bandwidth):
-        if self.allocation.get(flow, 0) == requested_bandwidth:
+        if self.allocation.get(flow, 0) >= requested_bandwidth:
+            # we assume that `allocate` is only called with values that were obtained from `get_max_allocatable`, in
+            # other words: a flow will never allocate more bandwidth than allowed. meaning also that we can let the
+            # flow keep the bandwidth it has previously been assigned, even if it requests less (e.g., because there is
+            # a bottleneck downstream).
+            self.allocation[flow] = requested_bandwidth
             return self.get_goodput_bps(flow)
 
         self.allocation[flow] = requested_bandwidth
@@ -211,6 +223,9 @@ class Link:
         return self.get_goodput_bps(flow)
 
     def free(self, flow: Flow):
+        if flow not in self.allocation:
+            return
+
         del self.allocation[flow]
         self.reallocate()
 
@@ -218,6 +233,12 @@ class Link:
             process = f.process
             if process and process.is_alive:
                 process.interrupt('update available bandwidth per flow %d bytes/sec' % self.get_goodput_bps(f))
+
+    def __str__(self) -> str:
+        return f'Link({hex(id(self))}){self.tags}'
+
+    def __repr__(self):
+        return self.__str__()
 
 
 class Edge(NamedTuple):
@@ -287,6 +308,9 @@ class Graph:
                 yield edge.source
 
     def path(self, source, destination) -> List:
+        if source == destination:
+            return []
+
         queue = deque([source])
         visited = set()
         parents = dict()
@@ -294,7 +318,7 @@ class Graph:
         while queue:
             node = queue.popleft()
 
-            if node is destination:
+            if node == destination:
                 # found the destination, collect the path
                 path = []
                 cur = destination
@@ -306,10 +330,13 @@ class Graph:
             visited.add(node)
 
             for successor in self.successors(node):
-                if successor not in visited:
-                    if successor not in parents:
-                        parents[successor] = node
-                    queue.append(successor)
+                if successor is node:
+                    continue
+                if successor in visited:
+                    continue
+                if successor not in parents:
+                    parents[successor] = node
+                queue.append(successor)
 
         return []
 

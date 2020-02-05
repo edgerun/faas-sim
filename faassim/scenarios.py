@@ -90,16 +90,16 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
             edges_pis.append(Edge(pi2, link))
 
         cloudlet_nodes = [
-            nodesynth.mark_storage_node(nodesynth.create_rpi3_node(f'{zone}_storage')),  # FIXME: replace with nuc
-            nodesynth.create_rpi3_node(f'{zone}_1'),  # FIXME: replace with nuc
-            nodesynth.create_rpi3_node(f'{zone}_2'),  # FIXME: replace with nuc
+            nodesynth.mark_storage_node(nodesynth.create_nuc_node(f'{zone}_storage')),
+            nodesynth.create_nuc_node(f'{zone}_1'),
+            nodesynth.create_nuc_node(f'{zone}_2'),
             nodesynth.create_tegra_node(f'{zone}_1'),
             nodesynth.create_tegra_node(f'{zone}_2')
         ]
 
         # FIXME: better up/downlink bandwidths
         edges_lan, uplink, downlink = netsynth.create_lan(cloudlet_nodes + aot_comm_pis,
-                                                          downlink_bw=100, uplink_bw=100, internal_bw=100, name=zone)
+                                                          downlink_bw=100, uplink_bw=25, internal_bw=1000, name=zone)
 
         nodes = cloudlet_nodes + aot_nodes
         nodesynth.set_zone(nodes, zone)
