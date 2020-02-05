@@ -223,7 +223,7 @@ class HackedFittedStartupTimeOracle(Oracle):
 
             image_present = image_name not in scheduling_result.needed_images
 
-            k = (host_type, image, image_present, bandwidth)
+            k = (host_type, image, image_present)
 
             if k not in self.startup_time_samplers:
                 raise ValueError(k)
