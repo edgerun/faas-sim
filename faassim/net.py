@@ -1,7 +1,7 @@
 import logging
 import time
 from collections import deque, defaultdict
-from typing import List, Dict, NamedTuple
+from typing import List, Dict, NamedTuple, Tuple
 
 import simpy
 
@@ -349,11 +349,17 @@ class Topology(Graph):
         super().__init__(nodes, edges)
         self._bandwidth_graph = None
         self._registry = None
+        self._route_cache: Dict[Tuple[Node, Node], Route] = dict()
 
     def get_route(self, source: Node, destination: Node):
-        path = self.path(source, destination)
-        hops = [node for node in path if isinstance(node, Link)]
-        return Route(source, destination, hops)
+        k = (source, destination)
+
+        if k not in self._route_cache:
+            path = self.path(source, destination)
+            hops = [node for node in path if isinstance(node, Link)]
+            self._route_cache[k] = Route(source, destination, hops)
+
+        return self._route_cache[k]
 
     def get_registry(self):
         if not self._registry:
