@@ -63,7 +63,7 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
 
         # 10 GBit/s lan and a lot of up/down
         # FIXME: upgrade to 10Gbit/s
-        edges, uplink, downlink = netsynth.create_lan(nodes, 1e10, 1e10, internal_bw=1000, name='cloud')
+        edges, uplink, downlink = netsynth.create_lan(nodes, 1e10, 1e10, internal_bw=10000, name='cloud')
 
         nodesynth.set_zone(nodes, 'cloud')
         uplink.tags['zone'] = downlink.tags['zone'] = 'cloud'
@@ -153,7 +153,7 @@ class FunctionBlueprint(NamedTuple):
 class TestScenario2(Scenario):
     def __init__(self) -> None:
         super().__init__()
-        self.max_deployments = 50
+        self.max_deployments = 100
         self._topology = None
 
     def topology(self) -> Topology:
@@ -233,14 +233,14 @@ class TestScenario2(Scenario):
 class TestScenario(Scenario):
     def __init__(self) -> None:
         super().__init__()
-        self.max_deployments = 50
+        self.max_deployments = 100
         self._topology = None
 
     def topology(self) -> Topology:
         if self._topology:
             return self._topology
 
-        synth = UrbanSensingClusterSynthesizer(cells=10, cloud_vms=5)  # FIXME
+        synth = UrbanSensingClusterSynthesizer(cells=5, cloud_vms=30)  # FIXME
         self._topology = synth.create_topology()
         self._topology.create_index()
         self._topology.get_bandwidth_graph()
