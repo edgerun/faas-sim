@@ -129,8 +129,8 @@ class Flow:
 class Link:
     bandwidth: int  # MBit/s
 
-    allocation: Dict[Flow, int]
-    goodput_per_flow: int
+    allocation: Dict[Flow, float]
+    goodput_per_flow: float
 
     tags: dict
 
@@ -150,7 +150,7 @@ class Link:
             flows += 1  # +1 if the flow is new
 
         # fair_per_flow is the maximum bandwidth a flow can get if there are no other flows that require less
-        fair_per_flow = int(self.bandwidth / flows)
+        fair_per_flow = self.bandwidth / flows
 
         # flows that require less than the fair value may keep it
         reserved = {k: v for k, v in self.allocation.items() if v < fair_per_flow}
@@ -159,7 +159,7 @@ class Link:
         # these are the flows competing for the remaining bandwidth
         competing_flows = flows - len(reserved)
         if competing_flows:
-            allocatable_per_flow = int(allocatable / competing_flows)
+            allocatable_per_flow = allocatable / competing_flows
         else:
             allocatable_per_flow = allocatable
 
@@ -172,7 +172,7 @@ class Link:
         if flows == 0:
             return
 
-        fair_per_flow = int(self.bandwidth / flows)
+        fair_per_flow = self.bandwidth / flows
 
         reserved = {k: v for k, v in self.allocation.items() if v < fair_per_flow}
         allocatable = self.bandwidth - sum(reserved.values())
@@ -180,7 +180,7 @@ class Link:
         competing_flows = [flow for flow in self.allocation.keys() if flow not in reserved]
 
         if competing_flows:
-            allocatable_per_flow = int(allocatable / len(competing_flows))
+            allocatable_per_flow = allocatable / len(competing_flows)
 
             for flow in competing_flows:
                 self.allocation[flow] = allocatable_per_flow
