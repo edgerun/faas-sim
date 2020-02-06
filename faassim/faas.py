@@ -312,7 +312,6 @@ class ExecutionSimulator:
 
         func = env.faas_gateway.functions[req.name]
 
-        then = env.now
         yield from self.simulate_data_download(replica)
 
         # estimate execution time
@@ -371,7 +370,28 @@ class ExecutionSimulator:
             env.metrics.log_network(size, 'data_download', hop)
 
     def simulate_data_upload(self, replica: FunctionReplica):
-        yield self.env.timeout(0)
+        node = replica.node
+        func = replica.function
+        env = self.env
+
+        if 'data.skippy.io/sends-to-storage' not in func.pod.spec.labels:
+            return
+
+        size = parse_size_string(func.pod.spec.labels['data.skippy.io/sends-to-storage'])
+
+        storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
+
+        if storage_node_name == node.name:
+            # FIXME this is essentially a disk read and not a network connection
+            yield env.timeout(size / 1.25e+8)  # 1.25e+8 = 1 GBit/s
+            return
+
+        storage_node = env.cluster.get_node(storage_node_name)
+        route = env.topology.get_route(node, storage_node)
+        flow = Flow(env, size, route)
+        yield flow.start()
+        for hop in route.hops:
+            env.metrics.log_network(size, 'data_upload', hop)
 
 
 class ReplicaPool:
