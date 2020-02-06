@@ -13,8 +13,8 @@ def create_lan(nodes: List[Node], downlink_bw, uplink_bw, internal_bw=1000, name
     edges = list()
     n = len(nodes)
 
-    uplink = Link(uplink_bw, tags={'uplink': name})
-    downlink = Link(downlink_bw, tags={'downlink': name})
+    uplink = Link(uplink_bw, tags={'type': 'uplink', 'name': name})
+    downlink = Link(downlink_bw, tags={'type': 'downlink', 'name': name})
 
     # save node specific links so we can link them together point-to-point later
     node_links = list()
@@ -23,7 +23,7 @@ def create_lan(nodes: List[Node], downlink_bw, uplink_bw, internal_bw=1000, name
     # connect each node's link to up/down
     for i in range(n):
         node = nodes[i]
-        node_link = Link(internal_bw, tags={'node': node.name})
+        node_link = Link(internal_bw, tags={'type': 'node', 'name': node.name})
         edges.append(Edge(node, node_link, directed=False))
 
         edges.append(Edge(node_link, uplink, directed=True))
@@ -52,9 +52,9 @@ def create_lan(nodes: List[Node], downlink_bw, uplink_bw, internal_bw=1000, name
 def create_wifi(nodes: List[Node], downlink_bw, uplink_bw, internal_bw=100, name=None):
     edges = list()
 
-    wifi = Link(bandwidth=internal_bw, tags={'wifi': name})
-    uplink = Link(uplink_bw, tags={'uplink': name})
-    downlink = Link(downlink_bw, tags={'downlink': name})
+    wifi = Link(bandwidth=internal_bw, tags={'type': 'wifi', 'name': name})
+    uplink = Link(uplink_bw, tags={'type': 'uplink', 'name': name})
+    downlink = Link(downlink_bw, tags={'type': 'downlink', 'name': name})
 
     # connect each node to the wifi link
     for node in nodes:

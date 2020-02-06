@@ -132,8 +132,14 @@ class Metrics:
         self.last_invocation = defaultdict(int)
         self.utilization = defaultdict(lambda: defaultdict(float))
 
-    def log(self, name, value, **tags):
-        return self.logger.log(name, value, **tags)
+    def log(self, metric, value, **tags):
+        return self.logger.log(metric, value, **tags)
+
+    def log_network(self, num_bytes, data_type, link):
+        tags = dict(link.tags)
+        tags['data_type'] = data_type
+
+        self.env.metrics.log('network', num_bytes, **tags)
 
     def log_scaling(self, function_name, replicas):
         self.env.metrics.log('scale', replicas, function_name=function_name)
@@ -275,6 +281,8 @@ def simulate_docker_pull(env: FaasSimEnvironment, replica: FunctionReplica, resu
     route = env.topology.get_route(env.topology.get_registry(), node)
     flow = Flow(env, required, route)
     yield flow.start()
+    for hop in route.hops:
+        env.metrics.log_network(required, 'docker_pull', hop)
 
 
 class ExecutionSimulator:
@@ -359,6 +367,8 @@ class ExecutionSimulator:
         route = env.topology.get_route(storage_node, node)
         flow = Flow(env, size, route)
         yield flow.start()
+        for hop in route.hops:
+            env.metrics.log_network(size, 'data_download', hop)
 
     def simulate_data_upload(self, replica: FunctionReplica):
         yield self.env.timeout(0)

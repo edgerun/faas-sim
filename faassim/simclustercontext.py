@@ -1,3 +1,4 @@
+import random
 from typing import List, Dict
 
 from core.clustercontext import ClusterContext, BandwidthGraph
@@ -28,7 +29,9 @@ class SimulationClusterContext(ClusterContext):
             return '1_cloud'
 
         bw = self.get_bandwidth_graph()[node.name]
-        storage_node = max(self.storage_nodes.values(), key=lambda n: bw[n.name])
+        storage_nodes = list(self.storage_nodes.values())
+        random.shuffle(storage_nodes)  # make sure you get a random one if bandwidth is the same
+        storage_node = max(storage_nodes, key=lambda n: bw[n.name])
 
         return storage_node.name
 

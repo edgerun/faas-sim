@@ -46,11 +46,11 @@ class RuntimeLogger:
     def get(self, name, **tags):
         return lambda x: self.log(name, x, None, **tags)
 
-    def log(self, name, value, time=None, **tags):
+    def log(self, metric, value, time=None, **tags):
         """
         Call l.log('cpu_load', .65, host='server0', region='us-west') or
 
-        :param name: the name of the measurement
+        :param metric: the name of the measurement
         :param value: the measurement value
         :param time: the (optional) time, otherwise now will be used
         :param tags: additional tags describing the measurement
@@ -66,7 +66,7 @@ class RuntimeLogger:
                 'value': value
             }
 
-        self._store_record(Record(name, time, fields, tags))
+        self._store_record(Record(metric, time, fields, tags))
 
     def _store_record(self, record: Record):
         self.records.append(record)
