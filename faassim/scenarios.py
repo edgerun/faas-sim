@@ -34,7 +34,7 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         # create the registry and attach to the internet with essentially infinite bandwidth
         registry = Registry
         all_nodes.append(registry)
-        registry_link = Link(10 ** 10, tags={'registry': 'registry'})
+        registry_link = Link(10 ** 12, tags={'name': 'registry', 'type': 'registry'})
         all_edges.append(Edge(registry, registry_link))
         all_edges.append(Edge(registry_link, internet))
 
@@ -66,6 +66,7 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         edges, uplink, downlink = netsynth.create_lan(nodes, 1e10, 1e10, internal_bw=1000, name='cloud')
 
         nodesynth.set_zone(nodes, 'cloud')
+        uplink.tags['zone'] = downlink.tags['zone'] = 'cloud'
 
         return nodes, edges, uplink, downlink
 
@@ -85,7 +86,7 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
             aot_nodes.append(pi2)
             aot_comm_pis.append(pi2)
             # connect the pis via a p2p network
-            link = Link(1000)
+            link = Link(1000, tags={'name': f'{pi1.name}_internal'})
             edges_pis.append(Edge(pi1, link))
             edges_pis.append(Edge(pi2, link))
 
@@ -100,6 +101,7 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         # FIXME: better up/downlink bandwidths
         edges_lan, uplink, downlink = netsynth.create_lan(cloudlet_nodes + aot_comm_pis,
                                                           downlink_bw=100, uplink_bw=25, internal_bw=1000, name=zone)
+        uplink.tags['zone'] = downlink.tags['zone'] = 'edge'
 
         nodes = cloudlet_nodes + aot_nodes
         nodesynth.set_zone(nodes, zone)
