@@ -91,19 +91,27 @@ class Simulation:
         return util_e / (util_e + util_c)
 
     def calc_cloud_cost(self):
-        # TODO https://aws.amazon.com/lambda/pricing/
-        # https://aws.amazon.com/ec2/pricing/on-demand/ (Data Transfer)
+        price_per_gbsec = 0.000016667
+        price_per_m_invocations = 0.2
+        price_per_egress_gb = 0.07  # average
 
-        # seconds = np.ceil(seconds + 0.05)
-        # total_compute_seconds = sum(np.ceil(seconds + 0.05))
-        # compute_gb_seconds = max(128, min(3072, ram)) * np.ceil(seconds + 0.05) # how much ram was allocated during execution
-        # compute_usd = compute_gb_seconds * 0.0000166667
-        # requests = count(invocations)
-        # request_usd = requests * 0.0000002
+        df = self.dataframe('invocations')
+        df['zone'] = np.where(df.node.str.contains('cloud'), 'cloud', 'edge')
+        df = df[df['zone'] == 'cloud']
 
-        # return compute_usd * request_usd
+        sec = np.ceil(df['t_exec'] * 10) / 10  # round up to the nearest 100ms
+        gb = df['memory'] / 10e9
 
-        raise NotImplementedError
+        sum_compute = sum(sec * gb) * price_per_gbsec
+        sum_invocations = np.ceil(len(df) / 10e6) * price_per_m_invocations  # million invocations
+
+        df = self.dataframe('network')
+        df = df[(df['zone'] == 'cloud') & (df['type'] == 'uplink')]
+        egress_gb = df['value'] / 10e6
+
+        sum_network = sum(egress_gb) * price_per_egress_gb
+
+        return sum_compute + sum_invocations + sum_network
 
 
 def main():
@@ -114,7 +122,12 @@ def main():
     print('simulation took %.2f ms' % ((time.time() - then) * 1000))
     print('simulation time is now: %.2f' % sim.env.now)
 
-    sim.dump_data_frames()
+    sim.dump_data_frames('/tmp/schedsim')
+
+    print('calc_total_network', sim.calc_total_network())
+    print('calc_average_fet', sim.calc_average_fet())
+    print('calc_edge_utilization', sim.calc_edge_utilization())
+    print('calc_cloud_cost', sim.calc_cloud_cost())
 
 
 if __name__ == '__main__':

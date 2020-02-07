@@ -74,7 +74,12 @@ class Function:
         self.state: FunctionState = FunctionState.CONCEIVED
         self.replicas = []
 
+        self.resource_requirements = self._calc_resource_requirements()
+
     def get_resource_requirements(self):
+        return self.resource_requirements
+
+    def _calc_resource_requirements(self):
         resource_reqs = [container.resources.requests for container in self.pod.spec.containers]
 
         total = defaultdict(int)
@@ -148,7 +153,10 @@ class Metrics:
         self.invocations[function_name] += 1
         self.last_invocation[function_name] = self.env.now
 
-        self.env.metrics.log('invocations', {'t_wait': t_wait, 't_exec': t_exec},
+        function = self.env.faas_gateway.functions[function_name]
+        mem = function.get_resource_requirements().get('memory')
+
+        self.env.metrics.log('invocations', {'t_wait': t_wait, 't_exec': t_exec, 'memory': mem},
                              function_name=function_name, node=node_name)
 
     def log_start_exec(self, request: FunctionRequest, replica: FunctionReplica):
