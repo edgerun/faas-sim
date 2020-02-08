@@ -59,7 +59,7 @@ class Simulation:
         return self._data_frames[metric]
 
     def dump_data_frames(self, directory='/tmp', prefix=None):
-        prefix = prefix or 'schedsim_%s_' % time.strftime('%y-%m-%d-%H-%M')
+        prefix = prefix or 'schedsim_%s_' % time.strftime('%Y-%m-%d-%H-%M-%S')
 
         metrics = {record.measurement for record in self.env.metrics.records}
 
@@ -67,7 +67,9 @@ class Simulation:
             self.dataframe(metric).to_csv(os.path.join(directory, f'{prefix}{metric}.csv'))
 
     def calc_total_network(self):
-        return self.dataframe('network')['value'].sum() / 10e6
+        df = self.dataframe('network')
+        df = df[(df.type == 'uplink') | (df.type == 'downlink')]
+        return df['value'].sum() / 10e6
 
     def calc_average_fet(self):
         df = self.dataframe('invocations')

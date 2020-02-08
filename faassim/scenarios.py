@@ -66,7 +66,8 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         edges, uplink, downlink = netsynth.create_lan(nodes, 1e10, 1e10, internal_bw=10000, name='cloud')
 
         nodesynth.set_zone(nodes, 'cloud')
-        uplink.tags['zone'] = downlink.tags['zone'] = 'cloud'
+        uplink.tags['zone'] = 'cloud'
+        downlink.tags['zone'] = 'cloud'
 
         return nodes, edges, uplink, downlink
 
@@ -101,7 +102,8 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         # FIXME: better up/downlink bandwidths
         edges_lan, uplink, downlink = netsynth.create_lan(cloudlet_nodes + aot_comm_pis,
                                                           downlink_bw=100, uplink_bw=25, internal_bw=1000, name=zone)
-        uplink.tags['zone'] = downlink.tags['zone'] = 'edge'
+        uplink.tags['zone'] = 'edge'
+        downlink.tags['zone'] = 'edge'
 
         nodes = cloudlet_nodes + aot_nodes
         nodesynth.set_zone(nodes, zone)
