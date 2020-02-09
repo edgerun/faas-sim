@@ -260,6 +260,11 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
     if result.needed_images:
         yield from simulate_docker_pull(env, replica, result)
 
+    if func.name.startswith('wf_2'):
+        # FIXME: implement dedicated function simulation
+        # hacky: inferencing function caches the local model after startup
+        yield from simulate_data_download(env, replica)
+
     # simulate container startup (we use the hacked version which estimates only pure startup)
     _, t = env.startup_time_oracle.estimate(env.cluster, func.pod, result)
     t = float(t)
@@ -293,6 +298,54 @@ def simulate_docker_pull(env: FaasSimEnvironment, replica: FunctionReplica, resu
         env.metrics.log_network(required, 'docker_pull', hop)
 
 
+def simulate_data_download(env: FaasSimEnvironment, replica: FunctionReplica):
+    node = replica.node
+    func = replica.function
+
+    if 'data.skippy.io/receives-from-storage' not in func.pod.spec.labels:
+        return
+
+    size = parse_size_string(func.pod.spec.labels['data.skippy.io/receives-from-storage'])
+
+    storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
+
+    if storage_node_name == node.name:
+        # FIXME this is essentially a disk read and not a network connection
+        yield env.timeout(size / 1.25e+8)  # 1.25e+8 = 1 GBit/s
+        return
+
+    storage_node = env.cluster.get_node(storage_node_name)
+    route = env.topology.get_route(storage_node, node)
+    flow = Flow(env, size, route)
+    yield flow.start()
+    for hop in route.hops:
+        env.metrics.log_network(size, 'data_download', hop)
+
+
+def simulate_data_upload(env: FaasSimEnvironment, replica: FunctionReplica):
+    node = replica.node
+    func = replica.function
+
+    if 'data.skippy.io/sends-to-storage' not in func.pod.spec.labels:
+        return
+
+    size = parse_size_string(func.pod.spec.labels['data.skippy.io/sends-to-storage'])
+
+    storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
+
+    if storage_node_name == node.name:
+        # FIXME this is essentially a disk read and not a network connection
+        yield env.timeout(size / 1.25e+8)  # 1.25e+8 = 1 GBit/s
+        return
+
+    storage_node = env.cluster.get_node(storage_node_name)
+    route = env.topology.get_route(node, storage_node)
+    flow = Flow(env, size, route)
+    yield flow.start()
+    for hop in route.hops:
+        env.metrics.log_network(size, 'data_upload', hop)
+
+
 class ExecutionSimulator:
     """
     Each FunctionReplica has a max concurrency level of 1. Every FunctionReplica represents a pod that hosts a function.
@@ -320,7 +373,11 @@ class ExecutionSimulator:
 
         func = env.faas_gateway.functions[req.name]
 
-        yield from self.simulate_data_download(replica)
+        if func.name.startswith('wf_2'):
+            # FIXME: implement dedicated function simulation
+            pass  # hacky: inferencing function caches the local model after startup
+        else:
+            yield from simulate_data_download(env, replica)
 
         # estimate execution time
         _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
@@ -343,7 +400,7 @@ class ExecutionSimulator:
 
             yield env.timeout(t)
 
-        yield from self.simulate_data_upload(replica)
+        yield from simulate_data_upload(env, replica)
 
         self.running[replica].remove(req)
         env.metrics.log_stop_exec(req, replica)
@@ -352,54 +409,6 @@ class ExecutionSimulator:
             for next_func in func.triggers:
                 # example: in an ML workflow, a pre-processing step may after its completion trigger a training step
                 env.request_queue.put(FunctionRequest(next_func, empty))
-
-    def simulate_data_download(self, replica: FunctionReplica):
-        node = replica.node
-        func = replica.function
-        env = self.env
-
-        if 'data.skippy.io/receives-from-storage' not in func.pod.spec.labels:
-            return
-
-        size = parse_size_string(func.pod.spec.labels['data.skippy.io/receives-from-storage'])
-
-        storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
-
-        if storage_node_name == node.name:
-            # FIXME this is essentially a disk read and not a network connection
-            yield env.timeout(size / 1.25e+8)  # 1.25e+8 = 1 GBit/s
-            return
-
-        storage_node = env.cluster.get_node(storage_node_name)
-        route = env.topology.get_route(storage_node, node)
-        flow = Flow(env, size, route)
-        yield flow.start()
-        for hop in route.hops:
-            env.metrics.log_network(size, 'data_download', hop)
-
-    def simulate_data_upload(self, replica: FunctionReplica):
-        node = replica.node
-        func = replica.function
-        env = self.env
-
-        if 'data.skippy.io/sends-to-storage' not in func.pod.spec.labels:
-            return
-
-        size = parse_size_string(func.pod.spec.labels['data.skippy.io/sends-to-storage'])
-
-        storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
-
-        if storage_node_name == node.name:
-            # FIXME this is essentially a disk read and not a network connection
-            yield env.timeout(size / 1.25e+8)  # 1.25e+8 = 1 GBit/s
-            return
-
-        storage_node = env.cluster.get_node(storage_node_name)
-        route = env.topology.get_route(node, storage_node)
-        flow = Flow(env, size, route)
-        yield flow.start()
-        for hop in route.hops:
-            env.metrics.log_network(size, 'data_upload', hop)
 
 
 class ReplicaPool:
