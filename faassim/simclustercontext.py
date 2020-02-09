@@ -15,6 +15,7 @@ class SimulationClusterContext(ClusterContext):
 
         # index all storage nodes
         self.storage_nodes = {node.name: node for node in nodes if 'data.skippy.io/storage' in node.labels}
+        self.storage_node_index: Dict[Node, Node] = dict()
 
     def list_nodes(self) -> List[Node]:
         return self.nodes
@@ -28,11 +29,15 @@ class SimulationClusterContext(ClusterContext):
         if not self.storage_nodes:
             return '1_cloud'
 
+        if node in self.storage_node_index:
+            return self.storage_node_index[node].name
+
         bw = self.get_bandwidth_graph()[node.name]
         storage_nodes = list(self.storage_nodes.values())
         random.shuffle(storage_nodes)  # make sure you get a random one if bandwidth is the same
         storage_node = max(storage_nodes, key=lambda n: bw[n.name])
 
+        self.storage_node_index[node] = storage_node
         return storage_node.name
 
     def get_init_image_states(self) -> Dict[str, ImageState]:
