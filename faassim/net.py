@@ -50,6 +50,9 @@ class Flow:
         self.process = self.env.process(self.run())
         return self.process
 
+    def get_goodput_bps(self):
+        return min([link.get_goodput_bps(self) for link in self.route.hops])
+
     def run(self):
         env = self.env
         size = self.size
@@ -61,26 +64,19 @@ class Flow:
         if not hops:
             raise ValueError('no hops in route from %s to %s' % (source, sink))
 
-        # find the link that has the lowest available bandwidth
-        bottleneck = min([link.get_max_allocatable(self) for link in hops])
-        # allocate that bandwidth in all links
-        goodput = min([link.allocate(self, bottleneck) for link in hops])
+        timer = env.now
+        connection_time = ((route.rtt * 1.5) / 1000)  # rough estimate of TCP connection establish time
+        while connection_time > 0:
+            yield env.timeout(connection_time)
+
+        add_and_rebalance(self)
+        goodput = self.get_goodput_bps()
+
         if goodput <= 0:
             raise ValueError
         # calculate the simulation time
         bytes_remaining = self.size
         transmission_time = bytes_remaining / goodput  # remaining seconds
-
-        timer = env.now
-
-        connection_time = ((route.rtt * 1.5) / 1000)  # rough estimate of TCP connection establish time
-        while connection_time > 0:
-            started = env.now
-            try:
-                yield env.timeout(connection_time)
-                break
-            except simpy.Interrupt as interrupt:
-                connection_time = connection_time - (env.now - started)
 
         try:
             while True:
@@ -97,11 +93,10 @@ class Flow:
                         break  # was interrupted, but actually sent everything already
 
                     bytes_remaining = size - self.sent
-                    logger.debug('%-5.2f sending %s -[%d]-> {%s} interrupted: %s (sent: %d, remaining: %d)',
+                    logger.debug('%-5.2f sending %s -[%d]-> {%s} interrupted, new bw = %.2f (sent: %d, remaining: %d)',
                                  env.now, source.name, size, sink.name, interrupt.cause, self.sent, bytes_remaining)
 
-                    bottleneck = min([link.get_max_allocatable(self) for link in hops])
-                    goodput = min([link.allocate(self, bottleneck) for link in hops])
+                    goodput = self.get_goodput_bps()
                     if goodput <= 0:
                         raise ValueError
                     transmission_time = bytes_remaining / goodput  # set new time remaining
@@ -109,8 +104,7 @@ class Flow:
             logger.debug('%-5.2f sending %s -[%d]-> {%s} completed in %.2fs',
                          env.now, source.name, size, sink.name, env.now - timer)
         finally:
-            for link in hops:
-                link.free(self)
+            remove_and_rebalance(self)
 
     def establish(self):
         env = self.env
@@ -128,62 +122,45 @@ class Flow:
 
 class Link:
     bandwidth: int  # MBit/s
-
-    allocation: Dict[Flow, float]
-    goodput_per_flow: float
-
     tags: dict
+
+    # calculated by rebalance
+    allocation: Dict[Flow, float]
+    num_flows: int
+    fair_per_flow: float
 
     def __init__(self, bandwidth: int = 100, tags=None) -> None:
         super().__init__()
         self.bandwidth = bandwidth
-        self.allocation = dict()
         self.tags = tags or dict()
 
-    def get_max_allocatable(self, flow: Flow):
-        flows = len(self.allocation)
+        self.allocation = dict()
+        self.num_flows = 0
+        self.max_allocatable = 0
 
-        if flows == 0:
-            return self.bandwidth
+    def recalculate_max_allocatable(self):
+        num_flows = self.num_flows
+        bandwidth = self.bandwidth
 
-        if flow not in self.allocation:
-            flows += 1  # +1 if the flow is new
+        if num_flows == 0:
+            self.max_allocatable = bandwidth
+            return
 
         # fair_per_flow is the maximum bandwidth a flow can get if there are no other flows that require less
-        fair_per_flow = self.bandwidth / flows
+        fair_per_flow = bandwidth / num_flows
 
         # flows that require less than the fair value may keep it
         reserved = {k: v for k, v in self.allocation.items() if v < fair_per_flow}
-        allocatable = self.bandwidth - sum(reserved.values())
+        allocatable = bandwidth - sum(reserved.values())
 
         # these are the flows competing for the remaining bandwidth
-        competing_flows = flows - len(reserved)
+        competing_flows = num_flows - len(reserved)
         if competing_flows:
             allocatable_per_flow = allocatable / competing_flows
         else:
             allocatable_per_flow = allocatable
 
-        return max(fair_per_flow, allocatable_per_flow)
-
-    def reallocate(self):
-        # same principle as get_max_allocatable()
-        flows = len(self.allocation)
-
-        if flows == 0:
-            return
-
-        fair_per_flow = self.bandwidth / flows
-
-        reserved = {k: v for k, v in self.allocation.items() if v < fair_per_flow}
-        allocatable = self.bandwidth - sum(reserved.values())
-
-        competing_flows = [flow for flow in self.allocation.keys() if flow not in reserved]
-
-        if competing_flows:
-            allocatable_per_flow = allocatable / len(competing_flows)
-
-            for flow in competing_flows:
-                self.allocation[flow] = allocatable_per_flow
+        self.max_allocatable = max(fair_per_flow, allocatable_per_flow)
 
     def get_goodput_bps(self, flow: Flow):
         """
@@ -201,44 +178,106 @@ class Link:
 
         return practical_bw * goodput_magic_number
 
-    def allocate(self, flow: Flow, requested_bandwidth):
-        if self.allocation.get(flow, 0) >= requested_bandwidth:
-            # we assume that `allocate` is only called with values that were obtained from `get_max_allocatable`, in
-            # other words: a flow will never allocate more bandwidth than allowed. meaning also that we can let the
-            # flow keep the bandwidth it has previously been assigned, even if it requests less (e.g., because there is
-            # a bottleneck downstream).
-            self.allocation[flow] = requested_bandwidth
-            return self.get_goodput_bps(flow)
-
-        self.allocation[flow] = requested_bandwidth
-        self.reallocate()
-
-        for f in self.allocation.keys():
-            if f is flow:
-                continue
-            process = f.process
-            if process and process.is_alive:
-                process.interrupt('update available bandwidth per flow %d bytes/sec' % self.get_goodput_bps(f))
-
-        return self.get_goodput_bps(flow)
-
-    def free(self, flow: Flow):
-        if flow not in self.allocation:
-            return
-
-        del self.allocation[flow]
-        self.reallocate()
-
-        for f in self.allocation.keys():
-            process = f.process
-            if process and process.is_alive:
-                process.interrupt('update available bandwidth per flow %d bytes/sec' % self.get_goodput_bps(f))
-
     def __str__(self) -> str:
         return f'Link({hex(id(self))}){self.tags}'
 
     def __repr__(self):
         return self.__str__()
+
+
+def remove_and_rebalance(flow: Flow):
+    # first, collect all affected flows and links
+    affected_flows, affected_links = collect_subnet(flow)
+    affected_flows.remove(flow)
+
+    for link in flow.route.hops:
+        link.num_flows -= 1
+        del link.allocation[flow]
+        link.recalculate_max_allocatable()
+
+    rebalance(flow, affected_flows, affected_links)
+
+
+def add_and_rebalance(flow: Flow):
+    # first, collect all affected flows and links
+    affected_flows, affected_links = collect_subnet(flow)
+
+    for link in flow.route.hops:
+        link.num_flows += 1
+        link.recalculate_max_allocatable()
+
+    rebalance(flow, affected_flows, affected_links)
+
+
+def rebalance(triggering_flow, affected_flows, affected_links):
+    # holds all allocations that have changed (some may be unaffected)
+    allocation: Dict[Flow, float] = dict()
+
+    while affected_flows:
+        bottlenecks = {flow: min([link.max_allocatable for link in flow.route.hops]) for flow in affected_flows}
+        flow: Flow = min(bottlenecks, key=lambda k: bottlenecks[k])
+        request = bottlenecks[flow]
+
+        changed = False
+
+        for link in flow.route.hops:
+            if link.allocation.get(flow) == request:
+                continue
+            changed = True
+            link.allocation[flow] = request
+            link.recalculate_max_allocatable()
+
+        if changed:
+            allocation[flow] = request
+
+        del bottlenecks[flow]
+        affected_flows.remove(flow)
+
+    for flow, bw in allocation.items():
+        if flow is triggering_flow:
+            continue
+        if not flow.process.is_alive:
+            continue
+        flow.process.interrupt(bw)
+
+    # logger.info(' >> new allocation:')
+    # for link in affected_links:
+    #     logger.info(' - %s (%.2f)', link, link.bandwidth)
+    #     for flow, bw in link.allocation.items():
+    #         logger.info('   - %8.2f %s', bw, flow.route)
+
+    return allocation
+
+
+def collect_subnet(flow: Flow):
+    # first, collect all affected flows and links
+    affected_links = set()
+    affected_flows = set()
+
+    stack = set()
+    stack.add(flow)
+
+    while stack:
+        elem = stack.pop()
+        if isinstance(elem, Link):
+            if elem in affected_links:
+                continue
+            affected_links.add(elem)
+
+            flows = elem.allocation.keys()
+            stack.update(flows)
+
+        elif isinstance(elem, Flow):
+            if elem in affected_flows:
+                continue
+            affected_flows.add(elem)
+
+            links = elem.route.hops
+            stack.update(links)
+        else:
+            raise ValueError('element of type %s not handled: %s' % (type(elem), elem))
+
+    return affected_flows, affected_links
 
 
 class Edge(NamedTuple):
