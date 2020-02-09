@@ -16,6 +16,7 @@ class ClusterSynthesizer:
 
 
 class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
+    internet = Internet
 
     def __init__(self, cells=76, cloud_vms=30) -> None:
         super().__init__()
@@ -28,15 +29,14 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         t = Topology(all_nodes, all_edges)
 
         # create the internet
-        internet = Internet
+        internet = self.internet
         all_nodes.append(internet)
 
         # create the registry and attach to the internet with essentially infinite bandwidth
         registry = Registry
         all_nodes.append(registry)
-        registry_link = Link(10 ** 12, tags={'name': 'registry', 'type': 'registry'})
-        all_edges.append(Edge(registry, registry_link))
-        all_edges.append(Edge(registry_link, internet))
+        # registry_link = Link(10 ** 12, tags={'name': 'registry', 'type': 'registry'})
+        all_edges.append(Edge(registry, internet))
 
         # create cells
         for i in range(self.cells):
@@ -48,13 +48,35 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
             all_edges.append(Edge(internet, downlink, directed=True))
 
         # create cloud
-        nodes, edges, egress, ingress = self._create_cloud(self.cloud_vms)
+        nodes, edges = self._create_sparse_cloud(self.cloud_vms)
+        # nodes, edges = self._create_cloud(self.cloud_vms)
+
         all_nodes.extend(nodes)
         all_edges.extend(edges)
-        all_edges.append(Edge(egress, internet, directed=True))
-        all_edges.append(Edge(internet, ingress, directed=True))
 
         return t
+
+    def _create_sparse_cloud(self, n):
+        switch = 'switch_cloud'
+
+        nodes = list()
+        edges = list()
+
+        for i in range(n):
+            nodes.append(nodesynth.create_cloud_node(i))
+
+        for node in nodes:
+            ingress = Link(bandwidth=10000, tags={'type': 'uplink', 'zone': 'cloud', 'name': node.name})
+            egress = Link(bandwidth=10000, tags={'type': 'downlink', 'zone': 'cloud', 'name': node.name})
+
+            edges.append(Edge(node, ingress))
+            edges.append(Edge(node, egress))
+            edges.append(Edge(switch, ingress, directed=True))
+            edges.append(Edge(egress, switch, directed=True))
+
+        edges.append(Edge(switch, self.internet))
+
+        return nodes, edges
 
     def _create_cloud(self, n):
         nodes = list()
@@ -69,7 +91,10 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         uplink.tags['zone'] = 'cloud'
         downlink.tags['zone'] = 'cloud'
 
-        return nodes, edges, uplink, downlink
+        edges.append(Edge(uplink, self.internet, directed=True))
+        edges.append(Edge(self.internet, downlink, directed=True))
+
+        return nodes, edges
 
     def _create_cell(self, i, num_aot_nodes=5):
         # TODO: parameterize makeup
