@@ -48,8 +48,8 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
             all_edges.append(Edge(internet, downlink, directed=True))
 
         # create cloud
-        nodes, edges = self._create_sparse_cloud(self.cloud_vms)
-        # nodes, edges = self._create_cloud(self.cloud_vms)
+        # nodes, edges = self._create_sparse_cloud(self.cloud_vms)
+        nodes, edges = self._create_cloud(self.cloud_vms)
 
         all_nodes.extend(nodes)
         all_edges.extend(edges)
@@ -260,14 +260,14 @@ class TestScenario2(Scenario):
 class TestScenario(Scenario):
     def __init__(self) -> None:
         super().__init__()
-        self.max_deployments = 100
+        self.max_deployments = 270
         self._topology = None
 
     def topology(self) -> Topology:
         if self._topology:
             return self._topology
 
-        synth = UrbanSensingClusterSynthesizer(cells=5, cloud_vms=30)  # FIXME
+        synth = UrbanSensingClusterSynthesizer(cells=5, cloud_vms=2)  # FIXME
         self._topology = synth.create_topology()
         self._topology.create_index()
         self._topology.get_bandwidth_graph()
@@ -292,8 +292,8 @@ class TestScenario(Scenario):
         def deployment_injector():
             for i in range(self.max_deployments):
                 yield from self.inject_deployment(env, i)
-
                 yield env.timeout(0)  # inject all at once
+            yield env.timeout(60)
 
         env.process(deployment_injector())
 
