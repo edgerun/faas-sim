@@ -1,36 +1,12 @@
 import logging
 import os
 import time
-from typing import List
 
 import numpy as np
 import pandas as pd
 
 from sim.faas import FaasSimEnvironment
-from sim.logging import Record
 from sim.scenarios import Scenario, TestScenario
-
-
-def extract_dataframe(measurement: str, records: List[Record]):
-    data = list()
-
-    for record in records:
-        if record.measurement != measurement:
-            continue
-
-        r = dict()
-        r['time'] = record.time
-        for k, v in record.fields.items():
-            r[k] = v
-        for k, v in record.tags.items():
-            r[k] = v
-
-        data.append(r)
-
-    df = pd.DataFrame(data)
-    df.index = pd.DatetimeIndex(pd.to_datetime(df['time']))
-    del df['time']
-    return df
 
 
 class Simulation:
@@ -53,7 +29,7 @@ class Simulation:
 
     def dataframe(self, metric):
         if metric not in self._data_frames:
-            df = extract_dataframe(metric, self.env.metrics.records)
+            df = self.env.metrics.extract_dataframe(metric)
             self._data_frames[metric] = df
 
         return self._data_frames[metric]

@@ -5,6 +5,7 @@ import time
 from collections import defaultdict
 from typing import List, Dict, NamedTuple
 
+import pandas as pd
 import simpy
 
 import sim.oracle.oracle as oracles
@@ -193,6 +194,27 @@ class Metrics:
     @property
     def records(self):
         return self.logger.records
+
+    def extract_dataframe(self, measurement: str):
+        data = list()
+
+        for record in self.records:
+            if record.measurement != measurement:
+                continue
+
+            r = dict()
+            r['time'] = record.time
+            for k, v in record.fields.items():
+                r[k] = v
+            for k, v in record.tags.items():
+                r[k] = v
+
+            data.append(r)
+
+        df = pd.DataFrame(data)
+        df.index = pd.DatetimeIndex(pd.to_datetime(df['time']))
+        del df['time']
+        return df
 
 
 class FaasSimEnvironment(simpy.Environment):
