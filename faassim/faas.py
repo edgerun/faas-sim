@@ -410,7 +410,7 @@ class ExecutionSimulator:
         _, t = env.execution_time_oracle.estimate(env.cluster, func.pod, SchedulingResult(node, 1, []))
         t = float(t)
 
-        logger.debug('function execution: (%s, %s, %.4f)', req.name, node.name, t)
+        logger.debug('%.2f function execution: (%s, %s, %.4f)', env.now, req.name, node.name, t)
         self.running[replica].append(req)
         logger.debug('currently running functions: %s', self.running)
 

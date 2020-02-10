@@ -15,11 +15,6 @@ def main():
 
     sim.dump_data_frames('/tmp/schedsim')
 
-    print('calc_total_network', sim.calc_total_network())
-    print('calc_average_fet', sim.calc_average_fet())
-    print('calc_edge_utilization', sim.calc_edge_utilization())
-    print('calc_cloud_cost', sim.calc_cloud_cost())
-
 
 if __name__ == '__main__':
     main()

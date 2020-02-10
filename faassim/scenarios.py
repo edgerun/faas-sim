@@ -263,7 +263,7 @@ class TestScenario2(Scenario):
 class TestScenario(Scenario):
     def __init__(self) -> None:
         super().__init__()
-        self.max_deployments = 270
+        self.max_deployments = 250
         self._topology = None
 
     def topology(self) -> Topology:
