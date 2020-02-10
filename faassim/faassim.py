@@ -10,6 +10,18 @@ from sim.scenarios import Scenario
 logger = logging.getLogger(__name__)
 
 
+class SimulationTimeoutError(BaseException):
+    pass
+
+
+def _timeout_listener(env, started, max_time, interval=1):
+    while True:
+        yield env.timeout(interval)
+
+        if (time.time() - started) > max_time:
+            raise SimulationTimeoutError()
+
+
 class Simulation:
 
     def __init__(self, scenario: Scenario, scheduler_params: dict = None) -> None:
@@ -26,11 +38,17 @@ class Simulation:
 
         self._data_frames = dict()
 
-    def run(self, until=None):
+        self.aborted = False
+
+    def run(self, until=None, timeout=None):
         logger.info('simulation %s starting', self)
 
         env = self.env
         then = time.time()
+
+        if timeout:
+            env.process(_timeout_listener(env, then, timeout))
+
         env.run(until=until)
         logger.info('simulation %s finished in %.2f seconds', self, (time.time() - then))
 
