@@ -260,7 +260,7 @@ class TestScenario2(Scenario):
         env.process(inference_trigger)
 
 
-class TestScenario(Scenario):
+class UrbanSensingScenario(Scenario):
     def __init__(self) -> None:
         super().__init__()
         self.max_deployments = 250
