@@ -66,6 +66,17 @@ class Simulation:
         for metric in metrics:
             self.dataframe(metric).to_csv(os.path.join(directory, f'{prefix}{metric}.csv'))
 
+        # add dataframe containing all nodes
+        df = pd.DataFrame([{
+            'name': node.name,
+            'memory': node.capacity.memory,
+            'cpu': node.capacity.cpu_millis,
+            'labels': node.labels
+        } for node in self.env.cluster.list_nodes()])
+        df.index = df['name']
+        del df['name']
+        df.to_csv(os.path.join(directory, f'{prefix}nodes.csv'))
+
     def calc_total_network(self):
         df = self.dataframe('network')
         df = df[(df.type == 'uplink') | (df.type == 'downlink')]
