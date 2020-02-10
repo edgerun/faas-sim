@@ -15,7 +15,9 @@ class Simulation:
         super().__init__()
         self.scenario = scenario
 
-        self.env = FaasSimEnvironment(scenario.topology())
+        scheduler_params = scenario.scheduler_parameters()
+
+        self.env = FaasSimEnvironment(scenario.topology(), scheduler_params=scheduler_params)
         self.env.process(self.env.faas_gateway.request_worker())
         self.env.process(self.env.faas_gateway.scheduler_worker())
         self.env.process(self.env.faas_gateway.faas_idler())

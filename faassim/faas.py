@@ -219,7 +219,8 @@ class Metrics:
 
 class FaasSimEnvironment(simpy.Environment):
 
-    def __init__(self, topology: Topology, cluster_context: ClusterContext = None, initial_time=0):
+    def __init__(self, topology: Topology, cluster_context: ClusterContext = None, initial_time=0,
+                 scheduler_params=None):
         super().__init__(initial_time)
 
         self.request_generator = object
@@ -234,7 +235,11 @@ class FaasSimEnvironment(simpy.Environment):
         else:
             self.cluster: ClusterContext = cluster_context
 
-        self.scheduler = Scheduler(self.cluster)
+        if scheduler_params:
+            self.scheduler = Scheduler(self.cluster, **scheduler_params)
+        else:
+            self.scheduler = Scheduler(self.cluster)
+
         self.faas_gateway = FaasGateway(self)
         self.execution_simulator = ExecutionSimulator(self)
 
@@ -606,7 +611,8 @@ class FaasGateway:
             logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
 
             if not result.suggested_host:
-                raise RuntimeError('pod %s cannot be scheduled' % pod.name)
+                logger.error('pod %s cannot be scheduled' % pod.name)
+                continue
 
             replica.node = result.suggested_host
 

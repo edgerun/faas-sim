@@ -147,6 +147,9 @@ class Scenario:
     def scenario_daemon(self, env: FaasSimEnvironment):
         yield env.timeout(0)
 
+    def scheduler_parameters(self) -> dict:
+        return {}
+
     @classmethod
     def lazy(cls):
         file = '/tmp/schedsim-scenario--' + cls.__name__ + '.pkl'
