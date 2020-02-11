@@ -35,12 +35,12 @@ class Simulation:
         self.env.process(self.env.faas_gateway.scheduler_worker())
         if faas_idler:
             self.env.process(self.env.faas_gateway.faas_idler())
-        self.env.process(scenario.scenario_daemon(self.env))
+        self.scenario_process = self.env.process(scenario.scenario_daemon(self.env))
 
         self._data_frames = dict()
 
     def run(self, until=None, timeout=None):
-        logger.info('simulation %s starting', self)
+        logger.info('simulation starting %s', self)
 
         env = self.env
         then = time.time()
@@ -48,7 +48,11 @@ class Simulation:
         if timeout:
             env.process(_timeout_listener(env, then, timeout))
 
+        if until is None:
+            until = self.scenario_process
+
         env.run(until=until)
+
         logger.info('simulation %s finished in %.2f seconds', self, (time.time() - then))
 
     def dataframe(self, metric):

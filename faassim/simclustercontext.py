@@ -9,6 +9,7 @@ class SimulationClusterContext(ClusterContext):
 
     def __init__(self, nodes: List[Node], bandwidth_graph: BandwidthGraph):
         self.bandwidth_graph = bandwidth_graph
+        random.shuffle(list(nodes))
         self.nodes = nodes
         self.node_index = {node.name: node for node in nodes}
         super().__init__()

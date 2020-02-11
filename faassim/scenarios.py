@@ -1,12 +1,16 @@
+import logging
 import pickle
+from abc import ABC
 from typing import List, Callable, NamedTuple
 
 import sim.synth.network as netsynth
 import sim.synth.nodes as nodesynth
-from sim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function
+from sim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function, FunctionState
 from sim.net import Topology, Link, Edge, Internet, Registry
 from sim.stats import ParameterizedDistribution
 from sim.synth import pods
+
+logger = logging.getLogger(__name__)
 
 
 class ClusterSynthesizer:
@@ -135,11 +139,7 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         return nodes, edges_pis + edges_lan, uplink, downlink
 
 
-class Scenario:
-
-    @property
-    def until(self) -> int:
-        raise NotImplementedError
+class Scenario(ABC):
 
     def topology(self) -> Topology:
         raise NotImplementedError
@@ -260,22 +260,12 @@ class TestScenario2(Scenario):
         env.process(inference_trigger)
 
 
-class UrbanSensingScenario(Scenario):
-    def __init__(self) -> None:
+class EvaluationScenario(Scenario, ABC):
+    def __init__(self, max_deployments, max_invocations) -> None:
         super().__init__()
-        self.max_deployments = 250
+        self.max_deployments = max_deployments
+        self.max_invocations= max_invocations
         self._topology = None
-
-    def topology(self) -> Topology:
-        if self._topology:
-            return self._topology
-
-        synth = UrbanSensingClusterSynthesizer(cells=5, cloud_vms=2)  # FIXME
-        self._topology = synth.create_topology()
-        self._topology.create_index()
-        self._topology.get_bandwidth_graph()
-
-        return self._topology
 
     def scenario_daemon(self, env: FaasSimEnvironment):
         self.blueprint_prep = FunctionBlueprint(
@@ -292,15 +282,41 @@ class UrbanSensingScenario(Scenario):
 
         yield env.timeout(0)
 
-        def deployment_injector():
-            for i in range(self.max_deployments):
-                yield from self.inject_deployment(env, i)
-                yield env.timeout(0)  # inject all at once
-            yield env.timeout(60)
+        for i in range(self.max_deployments):
+            logger.debug('%.2f creating deployment %d', env.now, i)
+            yield from self.inject_deployment(env, i, blocking=False)
+            yield env.timeout(1)
+            self.inject_workload_generator(env, i)
 
-        env.process(deployment_injector())
+        logger.info('%.2f waiting for %d invocation', env.now, self.max_invocations)
+        while env.metrics.total_invocations < self.max_invocations:
+            logger.debug('%.2f %d invocations left', env.now, self.max_invocations - env.metrics.total_invocations)
+            yield env.timeout(10)
 
-    def inject_deployment(self, env, i):
+        logger.info('%.2f done', env.now)
+
+        # def deployment_injector():
+        #     for i in range(self.max_deployments):
+        #         yield from self.inject_deployment(env, i)
+        #
+        # def workload():
+        #     for i in range(self.max_deployments):
+        #         self.inject_workload_generator(env, i)
+        #         yield env.timeout(10)
+        #
+        #     logger.info('%.2f running workload for %d', env.now, self.until)
+        #     yield env.timeout(self.until)  # create workload
+        #     logger.info('%.2f workload stopped', env.now)
+        #
+        # logger.info('%.2f starting deployment injector', env.now)
+        # yield env.process(deployment_injector())
+        # logger.info('%.2f starting workload injector', env.now)
+        # yield env.process(workload())
+        # logger.info('%.2f finished!', env.now)
+
+    def inject_deployment(self, env, i, blocking=True):
+        logger.debug('%.2f injecting deployment %s', env.now, i)
+
         cnt = 1
         for blueprint in [self.blueprint_prep, self.blueprint_train, self.blueprint_inference]:
             pod = i * 3 + cnt
@@ -323,6 +339,14 @@ class UrbanSensingScenario(Scenario):
             cnt += 1
             env.faas_gateway.deploy(fn)
 
+            if blocking:
+                while fn.state == FunctionState.STARTING or fn.state == FunctionState.CONCEIVED:
+                    yield env.timeout(1)
+            else:
+                yield env.timeout(0)
+
+    def inject_workload_generator(self, env, i):
+        logger.debug("%.2f injecting request generators for %d", env.now, i)
         prep_function_name = self.blueprint_prep.name.format(i=i)
         training_trigger = request_generator(
             env,
@@ -337,6 +361,22 @@ class UrbanSensingScenario(Scenario):
             lambda: FunctionRequest(inference_function_name, empty)
         )
 
-        yield env.timeout(0)
         env.process(training_trigger)
         env.process(inference_trigger)
+
+
+class UrbanSensingScenario(EvaluationScenario):
+
+    def __init__(self) -> None:
+        super().__init__(150, 20000)
+
+    def topology(self) -> Topology:
+        if self._topology:
+            return self._topology
+
+        synth = UrbanSensingClusterSynthesizer(cells=5, cloud_vms=2)  # FIXME
+        self._topology = synth.create_topology()
+        self._topology.create_index()
+        self._topology.get_bandwidth_graph()
+
+        return self._topology

@@ -128,6 +128,7 @@ class Metrics:
     Instrumentation and trace logger.
     """
     invocations: Dict[str, int]
+    total_invocations: int
     last_invocation: Dict[str, float]
     utilization: Dict[str, Dict[str, float]]
 
@@ -135,6 +136,7 @@ class Metrics:
         super().__init__()
         self.env: FaasSimEnvironment = env
         self.logger: RuntimeLogger = log or NullLogger()
+        self.total_invocations = 0
         self.invocations = defaultdict(int)
         self.last_invocation = defaultdict(int)
         self.utilization = defaultdict(lambda: defaultdict(float))
@@ -153,6 +155,7 @@ class Metrics:
 
     def log_invocation(self, function_name, node_name, t_wait, t_exec):
         self.invocations[function_name] += 1
+        self.total_invocations += 1
         self.last_invocation[function_name] = self.env.now
 
         function = self.env.faas_gateway.functions[function_name]
@@ -254,11 +257,15 @@ class FaasSimEnvironment(simpy.Environment):
 def request_generator(env: FaasSimEnvironment, arrival_profile: RandomSampler, request_factory):
     sampler = BufferedSampler(arrival_profile)
 
-    while True:
-        ia = sampler.sample()
-        logger.debug('next request: %.4f', ia)
-        env.request_queue.put(request_factory())
-        yield env.timeout(ia)
+    try:
+        while True:
+            ia = sampler.sample()
+            logger.debug('next request: %.4f', ia)
+            env.request_queue.put(request_factory())
+            yield env.timeout(ia)
+    except simpy.Interrupt:
+        logger.info('request generator interrupted')
+        pass
 
 
 def dispatch_call(env: FaasSimEnvironment, req: FunctionRequest, replicas: List[FunctionReplica]):
@@ -654,7 +661,7 @@ class FaasGateway:
                 idle_time = self.env.now - self.env.metrics.last_invocation[function.name]
                 if idle_time >= inactivity_duration:
                     self.suspend(function.name)
-                    logger.debug('function %s has been idle for %.2fs', function.name, idle_time)
+                    logger.debug('%.2f function %s has been idle for %.2fs', self.env.now, function.name, idle_time)
 
     def _schedule_replicas(self, function, num):
         logger.debug('scheduling %d replicas for %s', num, function)
