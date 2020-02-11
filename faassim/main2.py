@@ -21,12 +21,20 @@ skippy_params = {
     'percentage_of_nodes_to_score': 100
 }
 
-kube_params = {
+kube_params_50 = {
     'priorities': [
         (1, BalancedResourcePriority()),
         (1, ImageLocalityPriority()),
     ],
     'percentage_of_nodes_to_score': 50
+}
+
+kube_params_100 = {
+    'priorities': [
+        (1, BalancedResourcePriority()),
+        (1, ImageLocalityPriority()),
+    ],
+    'percentage_of_nodes_to_score': 100
 }
 
 
@@ -49,7 +57,8 @@ def main():
 
     params = {
         'skippy': skippy_params,
-        'kube': kube_params
+        'kube50': kube_params_50,
+        'kube100': kube_params_100,
     }
     runs = 10
 
