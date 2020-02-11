@@ -3,6 +3,7 @@ import logging
 import math
 import time
 from collections import defaultdict
+from datetime import datetime
 from typing import List, Dict, NamedTuple
 
 import pandas as pd
@@ -243,7 +244,7 @@ class FaasSimEnvironment(simpy.Environment):
         self.faas_gateway = FaasGateway(self)
         self.execution_simulator = ExecutionSimulator(self)
 
-        self.clock = SimulatedClock(self)
+        self.clock = SimulatedClock(self, start=datetime(1970, 1, 1, 0, 0, 0))
         self.metrics = Metrics(self, RuntimeLogger(self.clock))
 
         self.execution_time_oracle = oracles.FittedExecutionTimeOracle()
