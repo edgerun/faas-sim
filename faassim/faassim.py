@@ -24,7 +24,7 @@ def _timeout_listener(env, started, max_time, interval=1):
 
 class Simulation:
 
-    def __init__(self, scenario: Scenario, scheduler_params: dict = None) -> None:
+    def __init__(self, scenario: Scenario, scheduler_params: dict = None, faas_idler=True) -> None:
         super().__init__()
         self.scenario = scenario
 
@@ -33,12 +33,11 @@ class Simulation:
         self.env = FaasSimEnvironment(scenario.topology(), scheduler_params=self.scheduler_params)
         self.env.process(self.env.faas_gateway.request_worker())
         self.env.process(self.env.faas_gateway.scheduler_worker())
-        self.env.process(self.env.faas_gateway.faas_idler())
+        if faas_idler:
+            self.env.process(self.env.faas_gateway.faas_idler())
         self.env.process(scenario.scenario_daemon(self.env))
 
         self._data_frames = dict()
-
-        self.aborted = False
 
     def run(self, until=None, timeout=None):
         logger.info('simulation %s starting', self)

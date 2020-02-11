@@ -32,10 +32,11 @@ kube_params = {
 
 def run_sim(args):
     scheduler_parameters = args[0]
-    data_prefix = args[1]
+    faas_idler = args[1]
+    data_prefix = args[2]
 
     logging.info('starting simulation %s with parameters %s', data_prefix, scheduler_parameters)
-    sim = Simulation(UrbanSensingScenario.lazy(), scheduler_parameters)
+    sim = Simulation(UrbanSensingScenario.lazy(), scheduler_parameters, faas_idler)
     then = time.time()
     sim.run(60 * 60)
     sim.dump_data_frames('/tmp/schedsim', prefix=data_prefix)
@@ -52,9 +53,13 @@ def main():
     }
     runs = 10
 
-    arguments = [(p, f'{k}_{i + 1:03}_') for i in range(runs) for k, p in params.items()]
+    arguments = []
+    # with faas idler
+    arguments.extend([(p, True, f'{k}_idler_{i + 1:03}_') for i in range(runs) for k, p in params.items()])
+    # without
+    arguments.extend([(p, False, f'{k}_noidler_{i + 1:03}_') for i in range(runs) for k, p in params.items()])
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
+    with concurrent.futures.ProcessPoolExecutor() as executor:
         for _ in executor.map(run_sim, arguments):
             pass
 
