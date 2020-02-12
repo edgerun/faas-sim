@@ -277,6 +277,17 @@ class PopulationSampler(RandomSampler):
         return fn(self.population, weights=self.weights, k=size)
 
 
+class IntegerTruncationSampler(RandomSampler):
+    def __init__(self, sampler):
+        self.sampler = sampler
+
+    def sample(self, size=None):
+        if size is None:
+            return int(self.sampler.sample(size))
+        else:
+            return self.sampler.sample(size).astype(int)
+
+
 class ParameterizedDistribution(RandomSampler):
     """
     Wrapper around scipy's statistical distribution functions. The object holds a distribution type (e.g.
@@ -421,3 +432,24 @@ class ParameterizedDistribution(RandomSampler):
 
     def __str__(self) -> str:
         return '[%s %s]' % (self.dist.name, self.params)
+
+
+class ScaledParetoSampler(BoundRejectionSampler):
+    """
+    Creates an 80/20 distribution between a given range.
+    For example, ScaledParetoSampler(0, 100) would create a distribution where 80% of sampled values are smaller than
+    20.
+    """
+
+    def __init__(self, start=0, end=1) -> None:
+        m = 1
+        s = 0.08
+        pareto = ParameterizedDistribution.pareto((1.16, m * -s, m * s))
+        super().__init__(pareto, 0, m)
+
+        self.start = start
+        self.end = end
+
+    def sample(self, size=None):
+        s = super().sample(size)
+        return (s * (self.end - self.start)) + self.start

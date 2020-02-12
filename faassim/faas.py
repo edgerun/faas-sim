@@ -144,6 +144,18 @@ class Metrics:
     def log(self, metric, value, **tags):
         return self.logger.log(metric, value, **tags)
 
+    def log_function(self, fn):
+        """
+        Logs the functions name, related container images and their metadata
+        """
+        for container in fn.pod.spec.containers:
+            record = {'name': fn.name, 'pod': fn.pod.name, 'image': container.image}
+            image_state = self.env.cluster.image_states[container.image]
+            for arch, size in image_state.size.items():
+                record[f'size_{arch}'] = size
+
+            self.log('functions', record)
+
     def log_network(self, num_bytes, data_type, link):
         tags = dict(link.tags)
         tags['data_type'] = data_type
@@ -483,6 +495,9 @@ class FaasGateway:
         # FIXME: blocks replication, which is fine because we're currently not simulating it
         # if function.name in self.functions:
         #     return
+
+        if function.state == FunctionState.CONCEIVED:
+            self.env.metrics.log_function(function)
 
         logger.debug('deploying function %s', function.name)
 

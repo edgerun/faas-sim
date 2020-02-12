@@ -27,7 +27,9 @@ class SimulationClusterContext(ClusterContext):
 
     def __init__(self, nodes: List[Node], bandwidth_graph: BandwidthGraph, image_states: Dict[str, ImageState] = None):
         self.bandwidth_graph = bandwidth_graph
-        self.nodes = nodes
+        self.nodes = list(nodes)
+        random.shuffle(self.nodes)  # avoid bias towards certain nodes in the cluster
+
         self._init_image_states = image_states or example_image_states
         super().__init__()
 

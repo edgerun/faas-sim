@@ -1,14 +1,15 @@
 import logging
 import pickle
 from abc import ABC
-from typing import List, Callable, NamedTuple
+from typing import Tuple
 
 import sim.synth.network as netsynth
 import sim.synth.nodes as nodesynth
+from core.model import Pod
 from sim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function, FunctionState
 from sim.net import Topology, Link, Edge, Internet, Registry
 from sim.stats import ParameterizedDistribution
-from sim.synth import pods
+from sim.synth.pods import MLWorkflowPodSynthesizer
 
 logger = logging.getLogger(__name__)
 
@@ -169,124 +170,28 @@ class Scenario(ABC):
         return scenario
 
 
-class FunctionBlueprint(NamedTuple):
-    name: str
-    pod_factory: Callable
-    triggers: List[str] = list()
-
-    scale_min: int = 1
-    scale_max: int = 20
-    scale_factor: int = 20
-    scale_zero: bool = False
-
-
-class TestScenario2(Scenario):
-    def __init__(self) -> None:
-        super().__init__()
-        self.max_deployments = 100
-        self._topology = None
-
-    def topology(self) -> Topology:
-        if self._topology:
-            return self._topology
-
-        synth = UrbanSensingClusterSynthesizer(cells=10, cloud_vms=5)  # FIXME
-        self._topology = synth.create_topology()
-        self._topology.create_index()
-        self._topology.get_bandwidth_graph()
-
-        return self._topology
-
-    def scenario_daemon(self, env: FaasSimEnvironment):
-        self.blueprint_prep = FunctionBlueprint(
-            'wf_0_preprocess_{i}', pods.create_ml_wf_1_pod, ['wf_1_train_{i}'],
-            scale_max=1, scale_zero=True
-        )
-        self.blueprint_train = FunctionBlueprint(
-            'wf_1_train_{i}', pods.create_ml_wf_2_pod,
-            scale_max=1, scale_zero=True
-        )
-        self.blueprint_inference = FunctionBlueprint(
-            'wf_2_inference_{i}', pods.create_ml_wf_3_serve
-        )
-
-        yield env.timeout(0)
-
-        def deployment_injector():
-            for i in range(self.max_deployments):
-                self.inject_deployment(env, i)
-                yield env.timeout(100)
-
-        env.process(deployment_injector())
-
-    def inject_deployment(self, env, i):
-        cnt = 1
-        for blueprint in [self.blueprint_prep, self.blueprint_train, self.blueprint_inference]:
-            pod = i * 3 + cnt
-
-            fn = Function(
-                blueprint.name.format(i=i),
-                blueprint.pod_factory(pod),
-                [trigger.format(i=i) for trigger in blueprint.triggers],
-            )
-
-            if blueprint.scale_min:
-                fn.scale_min = blueprint.scale_min
-            if blueprint.scale_max:
-                fn.scale_max = blueprint.scale_max
-            if blueprint.scale_factor:
-                fn.scale_factor = blueprint.scale_factor
-            if blueprint.scale_zero:
-                fn.scale_zero = blueprint.scale_zero
-
-            cnt += 1
-            env.faas_gateway.deploy(fn)
-
-        prep_function_name = self.blueprint_prep.name.format(i=i)
-        training_trigger = request_generator(
-            env,
-            ParameterizedDistribution.expon(((200, 100,), None, None)),
-            lambda: FunctionRequest(prep_function_name, empty)
-        )
-
-        inference_function_name = self.blueprint_inference.name.format(i=i)
-        inference_trigger = request_generator(
-            env,
-            ParameterizedDistribution.expon(((25, 50,), None, None)),
-            lambda: FunctionRequest(inference_function_name, empty)
-        )
-
-        env.process(training_trigger)
-        env.process(inference_trigger)
-
-
 class EvaluationScenario(Scenario, ABC):
     def __init__(self, max_deployments, max_invocations) -> None:
         super().__init__()
         self.max_deployments = max_deployments
-        self.max_invocations= max_invocations
+        self.max_invocations = max_invocations
         self._topology = None
+        self._pod_synthesizer = None
 
     def scenario_daemon(self, env: FaasSimEnvironment):
-        self.blueprint_prep = FunctionBlueprint(
-            'wf_0_preprocess_{i}', pods.create_ml_wf_1_pod, ['wf_1_train_{i}'],
-            scale_max=1, scale_zero=True
-        )
-        self.blueprint_train = FunctionBlueprint(
-            'wf_1_train_{i}', pods.create_ml_wf_2_pod,
-            scale_max=1, scale_zero=True
-        )
-        self.blueprint_inference = FunctionBlueprint(
-            'wf_2_inference_{i}', pods.create_ml_wf_3_serve
-        )
+        if self._pod_synthesizer is None:
+            self._pod_synthesizer = MLWorkflowPodSynthesizer(max_image_variety=self.max_deployments, pareto=True)
+
+        # first, create all deployments, which will synthesize images and allow us to get the image states
+        deployments = [self._pod_synthesizer.create_workflow_pods(i) for i in range(self.max_deployments)]
+        env.cluster.image_states = self._pod_synthesizer.get_image_states()
 
         yield env.timeout(0)
 
-        for i in range(self.max_deployments):
-            logger.debug('%.2f creating deployment %d', env.now, i)
-            yield from self.inject_deployment(env, i, blocking=False)
+        for deployment in deployments:
+            yield from self.inject_deployment(env, deployment, blocking=True)
             yield env.timeout(1)
-            self.inject_workload_generator(env, i)
+            self.inject_workload_generator(env, deployment)
 
         logger.info('%.2f waiting for %d invocation', env.now, self.max_invocations)
         while env.metrics.total_invocations < self.max_invocations:
@@ -314,47 +219,50 @@ class EvaluationScenario(Scenario, ABC):
         # yield env.process(workload())
         # logger.info('%.2f finished!', env.now)
 
-    def inject_deployment(self, env, i, blocking=True):
-        logger.debug('%.2f injecting deployment %s', env.now, i)
+    def inject_deployment(self, env, deployment: Tuple[Pod, Pod, Pod], blocking=True):
+        logger.debug('%.2f injecting deployment %s (blocking=%s)', env.now, blocking)
 
-        cnt = 1
-        for blueprint in [self.blueprint_prep, self.blueprint_train, self.blueprint_inference]:
-            pod = i * 3 + cnt
+        pod0, pod1, pod2 = deployment
 
-            fn = Function(
-                blueprint.name.format(i=i),
-                blueprint.pod_factory(pod),
-                [trigger.format(i=i) for trigger in blueprint.triggers],
-            )
+        fn0_name = f'wf_0_preprocess_{pod0.name}'
+        fn1_name = f'wf_1_train_{pod1.name}'
+        fn2_name = f'wf_2_inference_{pod2.name}'
 
-            if blueprint.scale_min:
-                fn.scale_min = blueprint.scale_min
-            if blueprint.scale_max:
-                fn.scale_max = blueprint.scale_max
-            if blueprint.scale_factor:
-                fn.scale_factor = blueprint.scale_factor
-            if blueprint.scale_zero:
-                fn.scale_zero = blueprint.scale_zero
+        fn0 = Function(name=fn0_name, pod=pod0, triggers=[fn1_name])
+        fn0.scale_max = 1
+        fn0.scale_zero = True
 
-            cnt += 1
+        fn1 = Function(name=fn1_name, pod=pod1)
+        fn1.scale_max = 1
+        fn1.scale_zero = True
+
+        fn2 = Function(name=fn2_name, pod=pod2)
+
+        # deploy functions
+        for fn in (fn0, fn1, fn2):
             env.faas_gateway.deploy(fn)
 
-            if blocking:
+        # optionally wait
+        if blocking:
+            for fn in (fn0, fn1, fn2):
                 while fn.state == FunctionState.STARTING or fn.state == FunctionState.CONCEIVED:
                     yield env.timeout(1)
-            else:
-                yield env.timeout(0)
+        else:
+            yield env.timeout(0)
 
-    def inject_workload_generator(self, env, i):
-        logger.debug("%.2f injecting request generators for %d", env.now, i)
-        prep_function_name = self.blueprint_prep.name.format(i=i)
+    def inject_workload_generator(self, env, deployment: Tuple[Pod, Pod, Pod]):
+        logger.debug('%.2f injecting request generators', env.now)
+
+        pod0, pod1, pod2 = deployment
+
+        prep_function_name = f'wf_0_preprocess_{pod0.name}'
         training_trigger = request_generator(
             env,
             ParameterizedDistribution.expon(((200, 100,), None, None)),
             lambda: FunctionRequest(prep_function_name, empty)
         )
 
-        inference_function_name = self.blueprint_inference.name.format(i=i)
+        inference_function_name = f'wf_2_inference_{pod2.name}'
         inference_trigger = request_generator(
             env,
             ParameterizedDistribution.expon(((25, 50,), None, None)),
