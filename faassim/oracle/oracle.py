@@ -223,12 +223,7 @@ class HackedFittedStartupTimeOracle(Oracle):
 
             image_present = image_name not in scheduling_result.needed_images
 
-            k = (host_type, image, image_present)
-
-            if k not in self.startup_time_samplers:
-                raise ValueError(k)
-
-            image_time = self.startup_time_samplers[k].sample()
+            image_time = self.get_sampler(host_type, image, image_present).sample()
 
             if not image_present:
                 image_size = context.get_image_state(image_name).size[host_arch]
@@ -238,6 +233,15 @@ class HackedFittedStartupTimeOracle(Oracle):
             startup_time += image_time
 
         return 'startup_time', str(startup_time)
+
+    def get_sampler(self, host_type, image, image_present):
+        image_key = image.split(':')[0]  # strip version number
+
+        k = (host_type, image_key, image_present)
+        if k not in self.startup_time_samplers:
+            raise ValueError(k)
+
+        return self.startup_time_samplers[k]
 
 
 class FittedExecutionTimeOracle(Oracle):
@@ -260,11 +264,16 @@ class FittedExecutionTimeOracle(Oracle):
         for container in pod.spec.containers:
             image = container.image
 
-            k = (host_type, image)
-            if k not in self.execution_time_samplers:
-                raise ValueError(k)
-
             # currently this works because we assume only one container (the function) per pod
-            execution_time += self.execution_time_samplers[k].sample()
+            execution_time += self.get_sampler(host_type, image).sample()
 
         return 'execution_time', str(execution_time)
+
+    def get_sampler(self, host_type, image):
+        image_key = image.split(':')[0]  # strip version number
+
+        k = (host_type, image_key)
+        if k not in self.execution_time_samplers:
+            raise ValueError(k)
+
+        return self.execution_time_samplers[k]
