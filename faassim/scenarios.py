@@ -183,7 +183,7 @@ class EvaluationScenario(Scenario, ABC):
             self._pod_synthesizer = MLWorkflowPodSynthesizer(max_image_variety=self.max_deployments, pareto=True)
 
         # first, create all deployments, which will synthesize images and allow us to get the image states
-        deployments = [self._pod_synthesizer.create_workflow_pods(i) for i in range(self.max_deployments)]
+        deployments = [(i,) + self._pod_synthesizer.create_workflow_pods(i) for i in range(self.max_deployments)]
         env.cluster.image_states = self._pod_synthesizer.get_image_states()
 
         yield env.timeout(0)
@@ -219,14 +219,14 @@ class EvaluationScenario(Scenario, ABC):
         # yield env.process(workload())
         # logger.info('%.2f finished!', env.now)
 
-    def inject_deployment(self, env, deployment: Tuple[Pod, Pod, Pod], blocking=True):
-        logger.debug('%.2f injecting deployment %s (blocking=%s)', env.now, blocking)
+    def inject_deployment(self, env, deployment: Tuple[int, Pod, Pod, Pod], blocking=True):
+        i, pod0, pod1, pod2 = deployment
 
-        pod0, pod1, pod2 = deployment
+        logger.debug('%.2f injecting deployment %d (blocking=%s)', env.now, i, blocking)
 
-        fn0_name = f'wf_0_preprocess_{pod0.name}'
-        fn1_name = f'wf_1_train_{pod1.name}'
-        fn2_name = f'wf_2_inference_{pod2.name}'
+        fn0_name = f'wf_0_preprocess_{i}'
+        fn1_name = f'wf_1_train_{i}'
+        fn2_name = f'wf_2_inference_{i}'
 
         fn0 = Function(name=fn0_name, pod=pod0, triggers=[fn1_name])
         fn0.scale_max = 1
@@ -250,19 +250,19 @@ class EvaluationScenario(Scenario, ABC):
         else:
             yield env.timeout(0)
 
-    def inject_workload_generator(self, env, deployment: Tuple[Pod, Pod, Pod]):
-        logger.debug('%.2f injecting request generators', env.now)
+    def inject_workload_generator(self, env, deployment: Tuple[int, Pod, Pod, Pod]):
+        i, pod0, pod1, pod2 = deployment
 
-        pod0, pod1, pod2 = deployment
+        logger.debug('%.2f injecting request generators for deployment %d', env.now, i)
 
-        prep_function_name = f'wf_0_preprocess_{pod0.name}'
+        prep_function_name = f'wf_0_preprocess_{i}'
         training_trigger = request_generator(
             env,
             ParameterizedDistribution.expon(((200, 100,), None, None)),
             lambda: FunctionRequest(prep_function_name, empty)
         )
 
-        inference_function_name = f'wf_2_inference_{pod2.name}'
+        inference_function_name = f'wf_2_inference_{i}'
         inference_trigger = request_generator(
             env,
             ParameterizedDistribution.expon(((25, 50,), None, None)),
