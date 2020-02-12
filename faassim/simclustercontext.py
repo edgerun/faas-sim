@@ -3,6 +3,7 @@ from typing import List, Dict
 
 from core.clustercontext import ClusterContext, BandwidthGraph
 from core.model import Node, ImageState
+from core.storage import StorageIndex
 
 example_image_states = {
     'alexrashed/ml-wf-1-pre:0.37': ImageState(size={
@@ -25,7 +26,8 @@ example_image_states = {
 
 class SimulationClusterContext(ClusterContext):
 
-    def __init__(self, nodes: List[Node], bandwidth_graph: BandwidthGraph, image_states: Dict[str, ImageState] = None):
+    def __init__(self, nodes: List[Node], bandwidth_graph: BandwidthGraph, image_states: Dict[str, ImageState] = None,
+                 storage_index: StorageIndex = None):
         self.bandwidth_graph = bandwidth_graph
         self.nodes = list(nodes)
         random.shuffle(self.nodes)  # avoid bias towards certain nodes in the cluster
@@ -37,6 +39,7 @@ class SimulationClusterContext(ClusterContext):
         # index all storage nodes
         self.storage_nodes = {node.name: node for node in nodes if 'data.skippy.io/storage' in node.labels}
         self.storage_node_index: Dict[Node, Node] = dict()
+        self.storage_index = storage_index or StorageIndex()
 
     def list_nodes(self) -> List[Node]:
         return self.nodes
@@ -60,6 +63,10 @@ class SimulationClusterContext(ClusterContext):
 
         self.storage_node_index[node] = storage_node
         return storage_node.name
+
+    def get_storage_nodes(self, urn: str) -> List[Node]:
+        bucket, name = urn.split('/')  # TODO: proper addressing scheme
+        return [self.get_node(name) for name in self.storage_index.get_data_nodes(bucket, name)]
 
     def get_init_image_states(self) -> Dict[str, ImageState]:
         return self._init_image_states
