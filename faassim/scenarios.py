@@ -194,8 +194,8 @@ class EvaluationScenario(Scenario, ABC):
         yield env.timeout(0)
 
         for deployment in deployments:
-            yield from self.inject_deployment(env, deployment, blocking=True)
-            yield env.timeout(1)
+            yield from self.inject_deployment(env, deployment, blocking=False, interval=250)
+            yield env.timeout(5)
             self.inject_workload_generator(env, deployment)
 
         logger.info('%.2f waiting for %d invocation', env.now, self.max_invocations)
@@ -224,7 +224,7 @@ class EvaluationScenario(Scenario, ABC):
         # yield env.process(workload())
         # logger.info('%.2f finished!', env.now)
 
-    def inject_deployment(self, env, deployment: Tuple[int, Pod, Pod, Pod], blocking=True):
+    def inject_deployment(self, env, deployment: Tuple[int, Pod, Pod, Pod], blocking=True, interval=0):
         i, pod0, pod1, pod2 = deployment
 
         logger.debug('%.2f injecting deployment %d (blocking=%s)', env.now, i, blocking)
@@ -252,8 +252,8 @@ class EvaluationScenario(Scenario, ABC):
             for fn in (fn0, fn1, fn2):
                 while fn.state == FunctionState.STARTING or fn.state == FunctionState.CONCEIVED:
                     yield env.timeout(1)
-        else:
-            yield env.timeout(0)
+
+        yield env.timeout(interval)
 
     def inject_workload_generator(self, env, deployment: Tuple[int, Pod, Pod, Pod]):
         i, pod0, pod1, pod2 = deployment
@@ -306,13 +306,13 @@ class EvaluationScenario(Scenario, ABC):
 class UrbanSensingScenario(EvaluationScenario):
 
     def __init__(self) -> None:
-        super().__init__(20, 10000)
+        super().__init__(30, 6000)
 
     def topology(self) -> Topology:
         if self._topology:
             return self._topology
 
-        synth = UrbanSensingClusterSynthesizer(cells=5, cloud_vms=2)  # FIXME
+        synth = UrbanSensingClusterSynthesizer(cells=15, cloud_vms=4)  # FIXME
         self._topology = synth.create_topology()
         self._topology.create_index()
         self._topology.get_bandwidth_graph()
