@@ -5,6 +5,7 @@ import time
 from core.priorities import BalancedResourcePriority, \
     LatencyAwareImageLocalityPriority, CapabilityPriority, DataLocalityPriority, LocalityTypePriority, \
     ImageLocalityPriority
+from sim import stats
 from sim.faassim import Simulation
 from sim.scenarios import UrbanSensingScenario
 
@@ -39,6 +40,8 @@ kube_params_100 = {
 
 
 def run_sim(args):
+    stats.seed(123)
+
     scheduler_parameters = args[0]
     faas_idler = args[1]
     data_prefix = args[2].rstrip('_')
