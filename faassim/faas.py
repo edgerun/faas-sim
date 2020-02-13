@@ -698,7 +698,7 @@ class FaasGateway:
             function.replicas.append(replica)
             env.scheduler_queue.put(replica)
 
-        env.metrics.log_scaling(function.name, len(function.replicas))
+        env.metrics.log_scaling(function.name, num)
 
     def _remove_replica(self, replica):
         env = self.env
@@ -712,4 +712,4 @@ class FaasGateway:
             'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
             'mem': 1 - (node.allocatable.memory / node.capacity.memory)
         }, node=node.name)
-        env.metrics.log_scaling(replica.function.name, len(replica.function.replicas))
+        env.metrics.log_scaling(replica.function.name, -1)
