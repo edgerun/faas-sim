@@ -11,6 +11,11 @@ import numpy as np
 import scipy.stats as st
 
 
+def seed(s):
+    random.seed(s)
+    np.random.seed(s)
+
+
 def buffered_sampler(dist: st.rv_continuous, buffer_size=1000):
     while True:
         sample = dist.rvs(buffer_size)
