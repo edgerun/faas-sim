@@ -6,6 +6,8 @@ from typing import Tuple
 import sim.synth.network as netsynth
 import sim.synth.nodes as nodesynth
 from core.model import Pod
+from core.storage import DataItem
+from core.utils import parse_size_string
 from sim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function, FunctionState
 from sim.net import Topology, Link, Edge, Internet, Registry
 from sim.stats import ParameterizedDistribution, PopulationSampler
@@ -187,6 +189,7 @@ class EvaluationScenario(Scenario, ABC):
         env.cluster.image_states = self._pod_synthesizer.get_image_states()
 
         self.distribute_buckets(env, deployments)
+        self.initialize_data(env, deployments)
 
         yield env.timeout(0)
 
@@ -273,6 +276,18 @@ class EvaluationScenario(Scenario, ABC):
 
         env.process(training_trigger)
         env.process(inference_trigger)
+
+    def initialize_data(self, env: FaasSimEnvironment, deployments):
+        for i, _, _, _ in deployments:
+            bucket = f'bucket_{i}'
+
+            raw_data = DataItem(bucket, 'raw_data', parse_size_string('12Mi'))
+            train_data = DataItem(bucket, 'raw_data', parse_size_string('209Mi'))
+            model = DataItem(bucket, 'model', parse_size_string('1500Ki'))
+
+            env.cluster.storage_index.put(raw_data)
+            env.cluster.storage_index.put(train_data)
+            env.cluster.storage_index.put(model)
 
     def distribute_buckets(self, env: FaasSimEnvironment, deployments):
         sampler = PopulationSampler(list(env.cluster.storage_nodes.keys()))
