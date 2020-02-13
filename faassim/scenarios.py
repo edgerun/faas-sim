@@ -282,7 +282,7 @@ class EvaluationScenario(Scenario, ABC):
             bucket = f'bucket_{i}'
 
             raw_data = DataItem(bucket, 'raw_data', parse_size_string('12Mi'))
-            train_data = DataItem(bucket, 'raw_data', parse_size_string('209Mi'))
+            train_data = DataItem(bucket, 'train_data', parse_size_string('209Mi'))
             model = DataItem(bucket, 'model', parse_size_string('1500Ki'))
 
             env.cluster.storage_index.put(raw_data)
@@ -306,7 +306,7 @@ class EvaluationScenario(Scenario, ABC):
 class UrbanSensingScenario(EvaluationScenario):
 
     def __init__(self) -> None:
-        super().__init__(15, 2000)
+        super().__init__(20, 10000)
 
     def topology(self) -> Topology:
         if self._topology:
