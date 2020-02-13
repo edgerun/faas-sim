@@ -437,7 +437,7 @@ class Topology(Graph):
 
     def get_bandwidth_graph(self) -> BandwidthGraph:
         if self._bandwidth_graph is None:
-            self._bandwidth_graph = self.create_bandwidth_graph()
+            self._bandwidth_graph = self.create_bandwidth_graph_parallel()
 
         return self._bandwidth_graph
 
