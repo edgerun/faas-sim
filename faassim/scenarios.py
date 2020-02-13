@@ -8,7 +8,7 @@ import sim.synth.nodes as nodesynth
 from core.model import Pod
 from sim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function, FunctionState
 from sim.net import Topology, Link, Edge, Internet, Registry
-from sim.stats import ParameterizedDistribution
+from sim.stats import ParameterizedDistribution, PopulationSampler
 from sim.synth.pods import MLWorkflowPodSynthesizer
 
 logger = logging.getLogger(__name__)
@@ -186,6 +186,8 @@ class EvaluationScenario(Scenario, ABC):
         deployments = [(i,) + self._pod_synthesizer.create_workflow_pods(i) for i in range(self.max_deployments)]
         env.cluster.image_states = self._pod_synthesizer.get_image_states()
 
+        self.distribute_buckets(env, deployments)
+
         yield env.timeout(0)
 
         for deployment in deployments:
@@ -272,11 +274,24 @@ class EvaluationScenario(Scenario, ABC):
         env.process(training_trigger)
         env.process(inference_trigger)
 
+    def distribute_buckets(self, env: FaasSimEnvironment, deployments):
+        sampler = PopulationSampler(list(env.cluster.storage_nodes.keys()))
+
+        # each deployment gets randomly (uniformly) assigned a storage node
+        storage_nodes = sampler.sample(len(deployments))
+        assignment = zip(storage_nodes, deployments)
+
+        for node, deployment in assignment:
+            i = deployment[0]
+            bucket_name = f'bucket_{i}'
+            # create a bucket belonging to the workflow on the randomly assigned storage node
+            env.cluster.storage_index.mb(bucket_name, node)
+
 
 class UrbanSensingScenario(EvaluationScenario):
 
     def __init__(self) -> None:
-        super().__init__(150, 20000)
+        super().__init__(15, 2000)
 
     def topology(self) -> Topology:
         if self._topology:

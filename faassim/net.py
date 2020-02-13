@@ -127,7 +127,7 @@ class Link:
     # calculated by rebalance
     allocation: Dict[Flow, float]
     num_flows: int
-    fair_per_flow: float
+    max_allocatable: float
 
     def __init__(self, bandwidth: int = 100, tags=None) -> None:
         super().__init__()

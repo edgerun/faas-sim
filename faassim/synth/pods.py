@@ -84,9 +84,9 @@ class MLWorkflowPodSynthesizer:
         image_id = self.get_image_id(instance_id)
 
         return (
-            self.create_ml_wf_1_pod(image_id, pod_id=instance_id * 3 + 0),
-            self.create_ml_wf_2_pod(image_id, pod_id=instance_id * 3 + 1),
-            self.create_ml_wf_3_pod(image_id, pod_id=instance_id * 3 + 2)
+            self.create_ml_wf_1_pod(instance_id, image_id, pod_id=instance_id * 3 + 0),
+            self.create_ml_wf_2_pod(instance_id, image_id, pod_id=instance_id * 3 + 1),
+            self.create_ml_wf_3_pod(instance_id, image_id, pod_id=instance_id * 3 + 2)
         )
 
     def get_image_id(self, instance_id):
@@ -96,19 +96,27 @@ class MLWorkflowPodSynthesizer:
             image_id = instance_id % self.max_image_variety if self.max_image_variety else instance_id
         return image_id
 
-    def create_ml_wf_1_pod(self, image_id: int, pod_id: int) -> Pod:
+    def create_ml_wf_1_pod(self, instance_id: int, image_id: int, pod_id: int) -> Pod:
         image, _ = self.image_synthesizer.create_ml_wf_1_image(image_id)
+
+        raw_data = f'bucket_{instance_id}/raw_data'
+        train_data = f'bucket_{instance_id}/train_data'
 
         return create_pod(pod_id,
                           image_name=image,
                           memory='100Mi',
                           labels={
                               'data.skippy.io/receives-from-storage': '12Mi',
-                              'data.skippy.io/sends-to-storage': '209Mi'
+                              'data.skippy.io/sends-to-storage': '209Mi',
+                              'data.skippy.io/receives-from-storage/path': raw_data,
+                              'data.skippy.io/sends-to-storage/path': train_data
                           })
 
-    def create_ml_wf_2_pod(self, image_id: int, pod_id: int) -> Pod:
+    def create_ml_wf_2_pod(self, instance_id: int, image_id: int, pod_id: int) -> Pod:
         image, _ = self.image_synthesizer.create_ml_wf_2_image(image_id)
+
+        train_data = f'bucket_{instance_id}/train_data'
+        serialized_model = f'bucket_{instance_id}/model'
 
         return create_pod(pod_id,
                           image_name=image,
@@ -117,14 +125,18 @@ class MLWorkflowPodSynthesizer:
                               'capability.skippy.io/nvidia-cuda': '10',
                               'capability.skippy.io/nvidia-gpu': '',
                               'data.skippy.io/receives-from-storage': '209Mi',
-                              'data.skippy.io/sends-to-storage': '1500Ki'
+                              'data.skippy.io/sends-to-storage': '1500Ki',
+                              'data.skippy.io/receives-from-storage/path': train_data,
+                              'data.skippy.io/sends-to-storage/path': serialized_model
                           })
 
-    def create_ml_wf_3_pod(self, image_id: int, pod_id: int) -> Pod:
+    def create_ml_wf_3_pod(self, instance_id: int, image_id: int, pod_id: int) -> Pod:
         image, _ = self.image_synthesizer.create_ml_wf_3_image(image_id)
+        serialized_model = f'bucket_{instance_id}/model'
 
         return create_pod(pod_id,
                           image_name=image,
                           labels={
-                              'data.skippy.io/receives-from-storage': '1500Ki'
+                              'data.skippy.io/receives-from-storage': '1500Ki',
+                              'data.skippy.io/receives-from-storage/path': serialized_model
                           })

@@ -338,6 +338,11 @@ def simulate_docker_pull(env: FaasSimEnvironment, replica: FunctionReplica, resu
     if required <= 0:
         return
 
+    # FIXME: crude simulation of layer sharing (90% across images is shared)
+    num_images = len(env.cluster.images_on_nodes[replica.node.name]) - 1
+    if num_images > 0:
+        required = required * 0.1
+
     route = env.topology.get_route(env.topology.get_registry(), node)
     flow = Flow(env, required, route)
     yield flow.start()
@@ -352,9 +357,12 @@ def simulate_data_download(env: FaasSimEnvironment, replica: FunctionReplica):
     if 'data.skippy.io/receives-from-storage' not in func.pod.spec.labels:
         return
 
+    # FIXME: storage
     size = parse_size_string(func.pod.spec.labels['data.skippy.io/receives-from-storage'])
+    path = func.pod.spec.labels['data.skippy.io/receives-from-storage/path']
 
-    storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
+    storage_node_name = env.cluster.get_storage_nodes(path)[0]
+    logger.debug('%.2f replica %s fetching data %s from %s', env.now, node, path, storage_node_name)
 
     if storage_node_name == node.name:
         # FIXME this is essentially a disk read and not a network connection
@@ -376,9 +384,12 @@ def simulate_data_upload(env: FaasSimEnvironment, replica: FunctionReplica):
     if 'data.skippy.io/sends-to-storage' not in func.pod.spec.labels:
         return
 
+    # FIXME: storage
     size = parse_size_string(func.pod.spec.labels['data.skippy.io/sends-to-storage'])
+    path = func.pod.spec.labels['data.skippy.io/sends-to-storage/path']
 
-    storage_node_name = env.cluster.get_next_storage_node(node)  # FIXME
+    storage_node_name = env.cluster.get_storage_nodes(path)[0]
+    logger.debug('%.2f replica %s uploading data %s to %s', env.now, node, path, storage_node_name)
 
     if storage_node_name == node.name:
         # FIXME this is essentially a disk read and not a network connection

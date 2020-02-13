@@ -64,10 +64,6 @@ class SimulationClusterContext(ClusterContext):
         self.storage_node_index[node] = storage_node
         return storage_node.name
 
-    def get_storage_nodes(self, urn: str) -> List[Node]:
-        bucket, name = urn.split('/')  # TODO: proper addressing scheme
-        return [self.get_node(name) for name in self.storage_index.get_data_nodes(bucket, name)]
-
     def get_init_image_states(self) -> Dict[str, ImageState]:
         return self._init_image_states
 
