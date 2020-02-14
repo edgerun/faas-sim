@@ -6,6 +6,7 @@ from core.priorities import BalancedResourcePriority, \
     LatencyAwareImageLocalityPriority, CapabilityPriority, DataLocalityPriority, LocalityTypePriority, \
     ImageLocalityPriority
 from sim import stats
+from sim.faas import BadPlacementException
 from sim.faassim import Simulation
 from sim.scenarios import UrbanSensingScenario
 
@@ -61,7 +62,12 @@ def run_sim(args):
     logging.info('starting simulation %s with parameters %s', data_prefix, scheduler_parameters)
     sim = Simulation(UrbanSensingScenario.lazy(), scheduler_parameters, faas_idler)
     then = time.time()
-    sim.run()
+    try:
+        sim.run()
+    except BadPlacementException as e:
+        logger.error('Could not finish simulation %s', data_prefix)
+        return data_prefix
+
     sim.dump_data_frames('/tmp/schedsim', prefix=data_prefix + '_')
     logging.info('simulation %s took %.2f ms', data_prefix, ((time.time() - then) * 1000))
     return data_prefix
@@ -71,12 +77,12 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     logger.info('initializing scenario')
-    UrbanSensingScenario.lazy()
+    UrbanSensingScenario.lazy(cells=5)
 
     params = {
         'skippy': skippy_params,
         'skippyopt': skippy_params_opt,
-        'kube50': kube_params_50,
+        # 'kube50': kube_params_50,
         'kube100': kube_params_100,
     }
     runs = 1
@@ -90,6 +96,8 @@ def main():
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for _ in executor.map(run_sim, arguments):
             pass
+
+    UrbanSensingScenario.purge()
 
 
 if __name__ == '__main__':
