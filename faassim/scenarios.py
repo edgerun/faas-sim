@@ -1,4 +1,6 @@
 import logging
+import math
+import os
 import pickle
 from abc import ABC
 from typing import Tuple
@@ -25,10 +27,14 @@ class ClusterSynthesizer:
 class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
     internet = Internet
 
-    def __init__(self, cells=76, cloud_vms=30) -> None:
+    def __init__(self, cells=76, cloud_vms=None) -> None:
         super().__init__()
         self.cells = cells
-        self.cloud_vms = cloud_vms
+
+        if cloud_vms is None:
+            self.cloud_vms = math.ceil(self.cells * 21 * 0.03)  # 21 nodes per cell, 3% of nodes are VM nodes
+        else:
+            self.cloud_vms = cloud_vms
 
     def create_topology(self) -> Topology:
         all_nodes = list()
@@ -126,9 +132,16 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         cloudlet_nodes = [
             nodesynth.mark_storage_node(nodesynth.create_nuc_node(f'{zone}_storage')),
             nodesynth.create_nuc_node(f'{zone}_1'),
-            nodesynth.create_nuc_node(f'{zone}_2'),
             nodesynth.create_tegra_node(f'{zone}_1'),
-            nodesynth.create_tegra_node(f'{zone}_2')
+            nodesynth.create_tegra_node(f'{zone}_2'),
+            nodesynth.create_tegra_node(f'{zone}_3'),
+            nodesynth.create_tegra_node(f'{zone}_4'),
+            nodesynth.create_tegra_node(f'{zone}_5'),
+            nodesynth.create_tegra_node(f'{zone}_6'),
+            nodesynth.create_tegra_node(f'{zone}_7'),
+            nodesynth.create_tegra_node(f'{zone}_8'),
+            nodesynth.create_tegra_node(f'{zone}_9'),
+            nodesynth.create_tegra_node(f'{zone}_10'),
         ]
 
         # FIXME: better up/downlink bandwidths
@@ -154,7 +167,7 @@ class Scenario(ABC):
         return {}
 
     @classmethod
-    def lazy(cls):
+    def lazy(cls, *args, **kwargs):
         file = '/tmp/schedsim-scenario--' + cls.__name__ + '.pkl'
         try:
             with open(file, 'rb') as fd:
@@ -163,13 +176,18 @@ class Scenario(ABC):
         except FileNotFoundError:
             pass
 
-        scenario = cls()
+        scenario = cls(*args, **kwargs)
         scenario.topology()
 
         with open(file, 'wb') as fd:
             pickle.dump(scenario, fd)
 
         return scenario
+
+    @classmethod
+    def purge(cls):
+        file = '/tmp/schedsim-scenario--' + cls.__name__ + '.pkl'
+        os.remove(file)
 
 
 class EvaluationScenario(Scenario, ABC):
@@ -305,14 +323,17 @@ class EvaluationScenario(Scenario, ABC):
 
 class UrbanSensingScenario(EvaluationScenario):
 
-    def __init__(self) -> None:
-        super().__init__(30, 6000)
+    def __init__(self, cells=1, deployments=None, max_invocations=None) -> None:
+        self.cells = cells
+        deployments = deployments or cells * 10
+        max_invocations = max_invocations or (deployments ** 1.1) * 400
+        super().__init__(deployments, max_invocations)
 
     def topology(self) -> Topology:
         if self._topology:
             return self._topology
 
-        synth = UrbanSensingClusterSynthesizer(cells=15, cloud_vms=4)  # FIXME
+        synth = UrbanSensingClusterSynthesizer(cells=self.cells)
         self._topology = synth.create_topology()
         self._topology.create_index()
         self._topology.get_bandwidth_graph()
