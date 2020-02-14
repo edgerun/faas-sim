@@ -23,11 +23,27 @@ logger = logging.getLogger(__name__)
 empty = {}
 
 
+class BadPlacementException(BaseException):
+    pass
+
+
 class FunctionState(enum.Enum):
     CONCEIVED = 1
     STARTING = 2
     RUNNING = 3
     SUSPENDED = 4
+
+
+def SafeFlow(*args, bw_threshold=0.1, **kwargs):
+    flow = Flow(*args, **kwargs)
+
+    bottleneck = min(flow.route.hops, key=lambda l: l.max_allocatable)
+
+    if bottleneck.max_allocatable <= bw_threshold:
+        logger.error('potential for flow %s: %.4f', flow.route, bottleneck.max_allocatable)
+        raise BadPlacementException()
+
+    return flow
 
 
 class FunctionReplica:
@@ -344,7 +360,8 @@ def simulate_docker_pull(env: FaasSimEnvironment, replica: FunctionReplica, resu
         required = required * 0.1
 
     route = env.topology.get_route(env.topology.get_registry(), node)
-    flow = Flow(env, required, route)
+    flow = SafeFlow(env, required, route)
+
     yield flow.start()
     for hop in route.hops:
         env.metrics.log_network(required, 'docker_pull', hop)
@@ -371,7 +388,7 @@ def simulate_data_download(env: FaasSimEnvironment, replica: FunctionReplica):
 
     storage_node = env.cluster.get_node(storage_node_name)
     route = env.topology.get_route(storage_node, node)
-    flow = Flow(env, size, route)
+    flow = SafeFlow(env, size, route)
     yield flow.start()
     for hop in route.hops:
         env.metrics.log_network(size, 'data_download', hop)
@@ -398,7 +415,7 @@ def simulate_data_upload(env: FaasSimEnvironment, replica: FunctionReplica):
 
     storage_node = env.cluster.get_node(storage_node_name)
     route = env.topology.get_route(node, storage_node)
-    flow = Flow(env, size, route)
+    flow = SafeFlow(env, size, route)
     yield flow.start()
     for hop in route.hops:
         env.metrics.log_network(size, 'data_upload', hop)
