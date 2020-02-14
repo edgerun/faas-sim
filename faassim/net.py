@@ -136,7 +136,7 @@ class Link:
 
         self.allocation = dict()
         self.num_flows = 0
-        self.max_allocatable = 0
+        self.max_allocatable = bandwidth
 
     def recalculate_max_allocatable(self):
         num_flows = self.num_flows
