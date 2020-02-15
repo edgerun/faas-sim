@@ -134,6 +134,117 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         return nodes, edges_pis + edges_lan, uplink, downlink
 
 
+class IndustrialIoTSynthesizer(ClusterSynthesizer):
+
+    def __init__(self, premises=10) -> None:
+        super().__init__()
+        self.premises = premises
+
+    def create_topology(self) -> Topology:
+        all_nodes = list()
+        all_edges = list()
+        t = Topology(all_nodes, all_edges)
+
+        # create the internet
+        all_nodes.append(self.internet)
+
+        all_nodes.append(self.registry)
+        all_edges.append(Edge(self.registry, self.internet, directed=True))
+
+        for i in range(self.premises):
+            nodes, edges = self.create_premises(i)
+            all_nodes.extend(nodes)
+            all_edges.extend(edges)
+
+        return t
+
+    def create_premises(self, i):
+        nodes = list()
+        edges = list()
+
+        name = f'edge_{i}'
+
+        uplink = Link(250, tags={'type': 'uplink', 'name': name})
+        downlink = Link(500, tags={'type': 'downlink', 'name': name})
+
+        edges.append(Edge(uplink, self.internet, directed=True))
+        edges.append(Edge(self.internet, downlink, directed=True))
+
+        switch = f'switch_{name}'
+        edges.append(Edge(downlink, switch, directed=True))
+        edges.append(Edge(switch, uplink, directed=True))
+
+        # sbc edge cell
+        nodes_1, edges_1 = self._create_sbc_wifi(i, switch)
+        nodes.extend(nodes_1)
+        edges.extend(edges_1)
+
+        nodes_2, edges_2 = self._create_cell(i, switch)
+        nodes.extend(nodes_2)
+        edges.extend(edges_2)
+
+        nodes_3, edges_3 = self._create_cloud(i, switch, 4)
+        nodes.extend(nodes_3)
+        edges.extend(edges_3)
+
+        return nodes, edges
+
+    def _create_cloud(self, i, switch, n=4):
+        nodes = list()
+
+        for j in range(n):
+            nodes.append(nodesynth.create_cloud_node(prefix=f'edge_{i}_{j}'))
+
+        nodes.append(nodesynth.mark_storage_node(nodesynth.create_cloud_node(prefix=f'edge_{i}_storage')))
+
+        edges, egress, ingress = netsynth.create_lan(nodes, 1000, 1000, internal_bw=10000, name=f'cloud_{i}')
+
+        nodesynth.set_zone(nodes, 'cloud')
+        egress.tags['zone'] = 'cloud'
+        ingress.tags['zone'] = 'cloud'
+
+        edges.append(Edge(egress, switch, directed=True))
+        edges.append(Edge(switch, ingress, directed=True))
+
+        return nodes, edges
+
+    def _create_cell(self, i, switch):
+        name = f'edge_{i}'
+        nodes = list()
+        edges = list()
+
+        nodes.append(nodesynth.mark_storage_node(nodesynth.create_nuc_node(name + '_storage')))
+        nodes.append(nodesynth.create_nuc_node(name))
+        nodes.append(nodesynth.create_tegra_node(name))
+
+        for node in nodes:
+            nodelink = Link(10000, tags={'name': f'{node}', 'type': 'node'})
+            edges.append(Edge(node, nodelink))
+            edges.append(Edge(nodelink, switch))
+
+        return nodes, edges
+
+    def _create_sbc_wifi(self, i, switch):
+        name = f'wifi_edge_{i}'
+        nodes = list()
+        edges = list()
+
+        # create wifi link, and a link from the AP to the switch
+        wifi = Link(bandwidth=300, tags={'type': 'wifi', 'name': f'{name}'})
+        ap_link = Link(bandwidth=1000, tags={'type': 'lan', 'name': f'{name}_ap'})
+
+        edges.append(Edge(wifi, ap_link))
+        edges.append(Edge(ap_link, switch))
+
+        for j in range(4):
+            node = nodesynth.create_rpi3_node(prefix=f'edge_{i}_{j}')
+            nodes.append(node)
+            # connect each node to the wifi
+            edges.append(Edge(node, wifi))
+
+        return nodes, edges
+
+
 class CloudRegionsSynthesizer(ClusterSynthesizer):
     def __init__(self, regions=3, vms_per_region=150):
         self.regions = regions

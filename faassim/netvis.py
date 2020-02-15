@@ -3,9 +3,9 @@ import networkx as nx
 
 from core.model import Node
 from sim.net import Topology, Link
-from sim.scenarios import UrbanSensingClusterSynthesizer
+from sim.scenarios import UrbanSensingClusterSynthesizer, IndustrialIoTSynthesizer
 
-synth = UrbanSensingClusterSynthesizer(cells=2, cloud_vms=1)
+synth = IndustrialIoTSynthesizer(10)
 
 t: Topology = synth.create_topology()
 
@@ -67,6 +67,7 @@ nx.draw_networkx_nodes(G, pos,
 
 nx.draw_networkx_edges(G, pos, width=1.0, alpha=0.5)
 nx.draw_networkx_labels(G, pos, dict(zip(netnodes, netnodes)), font_size=8)
+#nx.draw_networkx_labels(G, pos, dict(zip(links, links)), font_size=8)
 plt.axis('off')
 fig = plt.gcf()
 fig.set_size_inches(18.5, 10.5)
