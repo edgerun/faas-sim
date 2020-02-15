@@ -172,7 +172,6 @@ class CloudRegionsSynthesizer(ClusterSynthesizer):
             perc_storage = 0.05
 
         num_storage = math.ceil(n * perc_storage)
-        print(f'creating {num_storage} storage nodes in {name}')
 
         for i in range(num_storage):
             nodesynth.mark_storage_node(nodes[i])
@@ -397,6 +396,5 @@ class CloudRegionScenario(EvaluationScenario):
         self._topology = synth.create_topology()
         self._topology.create_index()
         self._topology.get_bandwidth_graph()
-        print(self._topology.get_bandwidth_graph())
 
         return self._topology
