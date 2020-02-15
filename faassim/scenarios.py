@@ -152,11 +152,11 @@ class CloudRegionsSynthesizer(ClusterSynthesizer):
         all_nodes.append(self.registry)
 
         for r in range(self.regions):
-            if r == 1:
+            if r == 0:
                 perc = 0.5
-            elif r == 2:
+            elif r == 1:
                 perc = 0.25
-            elif r == 3:
+            elif r == 2:
                 perc = 0.25
             else:
                 raise ValueError
@@ -175,7 +175,7 @@ class CloudRegionsSynthesizer(ClusterSynthesizer):
             node = nodesynth.create_cloud_node(f'{name}_{i}')
             nodes.append(node)
 
-        if r == 1:
+        if r == 0:
             perc_storage = 0.10
         else:
             perc_storage = 0.05
