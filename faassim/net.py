@@ -521,6 +521,11 @@ class Topology(Graph):
                 n2 = nodes[j]
 
                 route = self.get_route(n1, n2)
+
+                if not route.hops:
+                    logger.debug('no route from %s to %s', n1, n2)
+                    continue
+
                 bandwidth = min([link.bandwidth for link in route.hops])  # get the maximal available bandwidth
                 bandwidth = bandwidth * 125000  # link bandwidth is given in mbit/s: * 125000 = bytes/s
 
