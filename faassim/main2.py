@@ -23,7 +23,9 @@ skippy_params = {
     'percentage_of_nodes_to_score': 100
 }
 
-weights = [6.45377, 4.78474, 8.99672, 8.92804, 1.23396]
+# urban sensing scenario weights
+weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
+
 skippy_params_opt = {
     'priorities': [
         (weights[0], BalancedResourcePriority()),

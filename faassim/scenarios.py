@@ -394,7 +394,7 @@ class CloudRegionScenario(EvaluationScenario):
     def __init__(self, vms_per_region=150, deployments=None, max_invocations=None) -> None:
         self.vms_per_region = vms_per_region
         deployments = deployments or (int(vms_per_region * 3 * 0.5))
-        max_invocations = max_invocations or (deployments ** 1.3) * 600
+        max_invocations = max_invocations or (deployments ** 1.3) * 400
         super().__init__(deployments, max_invocations)
 
     def topology(self) -> Topology:
