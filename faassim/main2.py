@@ -8,7 +8,7 @@ from core.priorities import BalancedResourcePriority, \
 from sim import stats
 from sim.faas import BadPlacementException
 from sim.faassim import Simulation
-from sim.scenarios import UrbanSensingScenario
+from sim.scenarios import CloudRegionScenario
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,8 @@ kube_params_100 = {
     'percentage_of_nodes_to_score': 100
 }
 
+Scenario = CloudRegionScenario
+
 
 def run_sim(args):
     stats.seed(123)
@@ -60,7 +62,7 @@ def run_sim(args):
     data_prefix = args[2].rstrip('_')
 
     logging.info('starting simulation %s with parameters %s', data_prefix, scheduler_parameters)
-    sim = Simulation(UrbanSensingScenario.lazy(), scheduler_parameters, faas_idler)
+    sim = Simulation(Scenario.lazy(), scheduler_parameters, faas_idler)
     then = time.time()
     try:
         sim.run()
@@ -77,12 +79,12 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     logger.info('initializing scenario')
-    UrbanSensingScenario.lazy(cells=5)
+    Scenario.lazy(vms_per_region=150)
 
     params = {
         'skippy': skippy_params,
         'skippyopt': skippy_params_opt,
-        # 'kube50': kube_params_50,
+        'kube50': kube_params_50,
         'kube100': kube_params_100,
     }
     runs = 1
@@ -97,7 +99,7 @@ def main():
         for _ in executor.map(run_sim, arguments):
             pass
 
-    UrbanSensingScenario.purge()
+    Scenario.purge()
 
 
 if __name__ == '__main__':

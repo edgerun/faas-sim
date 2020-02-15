@@ -437,7 +437,7 @@ class Topology(Graph):
 
     def get_bandwidth_graph(self) -> BandwidthGraph:
         if self._bandwidth_graph is None:
-            self._bandwidth_graph = self.create_bandwidth_graph_parallel()
+            self._bandwidth_graph = self.create_bandwidth_graph()
 
         return self._bandwidth_graph
 
@@ -466,7 +466,8 @@ class Topology(Graph):
                 route = self.get_route(n1, n2)
 
                 if not route.hops:
-                    raise ValueError('no route from', n1, 'to', n2)
+                    logger.debug('no route from %s to %s', n1, n2)
+                    continue
 
                 bandwidth = min([link.bandwidth for link in route.hops])  # get the maximal available bandwidth
                 bandwidth = bandwidth * 125000  # link bandwidth is given in mbit/s: * 125000 = bytes/s

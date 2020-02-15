@@ -19,13 +19,14 @@ logger = logging.getLogger(__name__)
 
 
 class ClusterSynthesizer:
+    internet = Internet
+    registry = Registry
 
     def create_topology(self) -> Topology:
         raise NotImplementedError
 
 
 class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
-    internet = Internet
 
     def __init__(self, cells=76, cloud_vms=None) -> None:
         super().__init__()
@@ -68,28 +69,6 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         all_edges.extend(edges)
 
         return t
-
-    def _create_sparse_cloud(self, n):
-        switch = 'switch_cloud'
-
-        nodes = list()
-        edges = list()
-
-        for i in range(n):
-            nodes.append(nodesynth.create_cloud_node(i))
-
-        for node in nodes:
-            ingress = Link(bandwidth=10000, tags={'type': 'uplink', 'zone': 'cloud', 'name': node.name})
-            egress = Link(bandwidth=10000, tags={'type': 'downlink', 'zone': 'cloud', 'name': node.name})
-
-            edges.append(Edge(node, ingress))
-            edges.append(Edge(node, egress))
-            edges.append(Edge(switch, ingress, directed=True))
-            edges.append(Edge(egress, switch, directed=True))
-
-        edges.append(Edge(switch, self.internet))
-
-        return nodes, edges
 
     def _create_cloud(self, n):
         nodes = list()
@@ -153,6 +132,67 @@ class UrbanSensingClusterSynthesizer(ClusterSynthesizer):
         nodes = cloudlet_nodes + aot_nodes
         nodesynth.set_zone(nodes, zone)
         return nodes, edges_pis + edges_lan, uplink, downlink
+
+
+class CloudRegionsSynthesizer(ClusterSynthesizer):
+    def __init__(self, regions=3, vms_per_region=150):
+        self.regions = regions
+        self.vms_per_region = vms_per_region
+
+    def create_topology(self) -> Topology:
+        all_nodes = list()
+        all_edges = list()
+        t = Topology(all_nodes, all_edges)
+
+        # create the internet
+        all_nodes.append(self.internet)
+
+        # create the registry and attach to each cloud's switch (simulates a CDN, where a registry mirror resides in
+        # each cloud region)
+        all_nodes.append(self.registry)
+
+        for r in range(self.regions):
+            nodes, edges = self._create_cloud(r, self.vms_per_region)
+            all_nodes.extend(nodes)
+            all_edges.extend(edges)
+
+        return t
+
+    def _create_cloud(self, r, n):
+        name = f'cloud_{r}'
+
+        nodes = list()
+        for i in range(n):
+            node = nodesynth.create_cloud_node(f'{name}_{i}')
+            nodes.append(node)
+
+        if r == 1:
+            perc_storage = 0.10
+        else:
+            perc_storage = 0.05
+
+        num_storage = math.ceil(n * perc_storage)
+        print(f'creating {num_storage} storage nodes in {name}')
+
+        for i in range(num_storage):
+            nodesynth.mark_storage_node(nodes[i])
+
+        # 10 GBit/s lan and a 1Gbit up/down
+        # https://medium.com/slalom-technology/examining-cross-region-communication-speeds-in-aws-9a0bee31984f
+        edges, uplink, downlink = netsynth.create_lan(nodes, 1000, 1000, internal_bw=10000, name=name)
+
+        nodesynth.set_zone(nodes, 'cloud')
+        uplink.tags['zone'] = 'cloud'
+        downlink.tags['zone'] = 'cloud'
+
+        edges.append(Edge(uplink, self.internet, directed=True))
+        edges.append(Edge(self.internet, downlink, directed=True))
+
+        # link the registry directly to the datacenter switch
+        switch = f'switch_{name}'  # comes from nodesynth.create_lan
+        edges.append(Edge(self.registry, switch, True))
+
+        return nodes, edges
 
 
 class Scenario(ABC):
@@ -337,5 +377,26 @@ class UrbanSensingScenario(EvaluationScenario):
         self._topology = synth.create_topology()
         self._topology.create_index()
         self._topology.get_bandwidth_graph()
+
+        return self._topology
+
+
+class CloudRegionScenario(EvaluationScenario):
+
+    def __init__(self, vms_per_region=150, deployments=None, max_invocations=None) -> None:
+        self.vms_per_region = vms_per_region
+        deployments = deployments or (int(vms_per_region * 3 * 0.5))
+        max_invocations = max_invocations or (deployments ** 1.3) * 600
+        super().__init__(deployments, max_invocations)
+
+    def topology(self) -> Topology:
+        if self._topology:
+            return self._topology
+
+        synth = CloudRegionsSynthesizer(vms_per_region=self.vms_per_region)
+        self._topology = synth.create_topology()
+        self._topology.create_index()
+        self._topology.get_bandwidth_graph()
+        print(self._topology.get_bandwidth_graph())
 
         return self._topology
