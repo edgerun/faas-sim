@@ -500,6 +500,26 @@ class UrbanSensingScenario(EvaluationScenario):
         return self._topology
 
 
+class IndustrialIoTScenario(EvaluationScenario):
+
+    def __init__(self, premises=10, deployments=None, max_invocations=None) -> None:
+        self.premises = premises
+        deployments = deployments or premises * 5
+        max_invocations = max_invocations or (deployments ** 1.1) * 400
+        super().__init__(deployments, max_invocations)
+
+    def topology(self) -> Topology:
+        if self._topology:
+            return self._topology
+
+        synth = IndustrialIoTSynthesizer(premises=self.premises)
+        self._topology = synth.create_topology()
+        self._topology.create_index()
+        self._topology.get_bandwidth_graph()
+
+        return self._topology
+
+
 class CloudRegionScenario(EvaluationScenario):
 
     def __init__(self, vms_per_region=150, deployments=None, max_invocations=None) -> None:

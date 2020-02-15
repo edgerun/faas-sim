@@ -8,7 +8,7 @@ from core.priorities import BalancedResourcePriority, \
 from sim import stats
 from sim.faas import BadPlacementException
 from sim.faassim import Simulation
-from sim.scenarios import CloudRegionScenario
+from sim.scenarios import CloudRegionScenario, IndustrialIoTScenario
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ kube_params_100 = {
     'percentage_of_nodes_to_score': 100
 }
 
-Scenario = CloudRegionScenario
+Scenario = IndustrialIoTScenario
 
 
 def run_sim(args):
@@ -81,7 +81,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     logger.info('initializing scenario')
-    Scenario.lazy(vms_per_region=150)
+    Scenario.lazy()
 
     params = {
         'skippy': skippy_params,
