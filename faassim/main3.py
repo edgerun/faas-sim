@@ -9,7 +9,7 @@ from core.priorities import BalancedResourcePriority, \
 from sim import stats
 from sim.faas import BadPlacementException
 from sim.faassim import Simulation
-from sim.scenarios import UrbanSensingScenario
+from sim.scenarios import UrbanSensingScenario, IndustrialIoTScenario
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,11 @@ skippy_params = {
     'percentage_of_nodes_to_score': 100
 }
 
-weights = [6.45377, 4.78474, 8.99672, 8.92804, 1.23396]
+# urban sensing scenario weights
+# weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
+
+# iiot scenario weights
+weights = [8.29646, 1.54538, 0.62121, 9.67983, 6.96152]
 skippy_params_opt = {
     'priorities': [
         (weights[0], BalancedResourcePriority()),
@@ -75,13 +79,10 @@ def run_sim(args):
     return data_prefix
 
 
-def main():
-    logging.basicConfig(level=logging.INFO)
-
+def get_scenario_01():
     # 4 cells => 87 nodes
-    logger.info('initializing scenarios')
 
-    scenarios = [
+    return [
         UrbanSensingScenario(4, 4),
         UrbanSensingScenario(4, 9),
         UrbanSensingScenario(4, 13),
@@ -104,6 +105,40 @@ def main():
         UrbanSensingScenario(4, 174)
     ]
 
+
+def get_scenario_02():
+    # 10 premises = 100 nodes
+    return [
+        IndustrialIoTScenario(10, 10),
+        IndustrialIoTScenario(10, 20),
+        # IndustrialIoTScenario(10, 30),
+        # IndustrialIoTScenario(10, 40),
+        # IndustrialIoTScenario(10, 50),
+        # IndustrialIoTScenario(10, 60),
+        # IndustrialIoTScenario(10, 70),
+        # IndustrialIoTScenario(10, 80),
+        # IndustrialIoTScenario(10, 90),
+        # IndustrialIoTScenario(10, 100),
+        # IndustrialIoTScenario(10, 110),
+        # IndustrialIoTScenario(10, 120),
+        # IndustrialIoTScenario(10, 130),
+        # IndustrialIoTScenario(10, 140),
+        # IndustrialIoTScenario(10, 150),
+        # IndustrialIoTScenario(10, 160),
+        # IndustrialIoTScenario(10, 170),
+        # IndustrialIoTScenario(10, 180),
+        # IndustrialIoTScenario(10, 190),
+        # IndustrialIoTScenario(10, 200),
+    ]
+
+
+def main():
+    logging.basicConfig(level=logging.INFO)
+
+    logger.info('initializing scenarios')
+
+    scenarios = get_scenario_02()
+
     sched_params = {
         'skippy': skippy_params,
         'skippyopt': skippy_params_opt,
@@ -115,6 +150,7 @@ def main():
 
     for scheduler, scheduler_params in sched_params.items():
         for scenario in scenarios:
+            scenario_name = scenario.__class__.__name__
             num_deployments = scenario.max_deployments
             num_nodes = len([node for node in scenario.topology().nodes if isinstance(node, Node)])
             ratio = round(num_deployments / num_nodes, 1)
@@ -122,9 +158,9 @@ def main():
             logger.info('deployment %d, nodes %d (%.2f)', num_deployments, num_nodes, ratio)
 
             # with faas idler
-            arguments.append((scenario, scheduler_params, True, f'depl_{scheduler}_idler_{ratio}'))
+            arguments.append((scenario, scheduler_params, True, f'depl_{scenario_name}_{scheduler}_idler_{ratio}'))
             # without
-            arguments.append((scenario, scheduler_params, False, f'depl_{scheduler}_noidler_{ratio}'))
+            arguments.append((scenario, scheduler_params, False, f'depl_{scenario_name}_{scheduler}_noidler_{ratio}'))
 
     with concurrent.futures.ProcessPoolExecutor() as executor:
         for _ in executor.map(run_sim, arguments):

@@ -24,7 +24,10 @@ skippy_params = {
 }
 
 # urban sensing scenario weights
-weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
+#weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
+
+# iiot scenario weights
+weights = [8.29646, 1.54538, 0.62121, 9.67983, 6.96152]
 
 skippy_params_opt = {
     'priorities': [
@@ -57,7 +60,7 @@ Scenario = IndustrialIoTScenario
 
 
 def run_sim(args):
-    stats.seed(123)
+    stats.seed(122)
 
     scheduler_parameters = args[0]
     faas_idler = args[1]
