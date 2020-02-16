@@ -9,7 +9,7 @@ from core.priorities import BalancedResourcePriority, \
 from sim import stats
 from sim.faas import BadPlacementException
 from sim.faassim import Simulation
-from sim.scenarios import UrbanSensingScenario, IndustrialIoTScenario
+from sim.scenarios import UrbanSensingScenario, IndustrialIoTScenario, CloudRegionScenario
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,11 @@ skippy_params = {
 # weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
 
 # iiot scenario weights
-weights = [8.29646, 1.54538, 0.62121, 9.67983, 6.96152]
+# weights = [8.29646, 1.54538, 0.62121, 9.67983, 6.96152]
+
+# cloud region scenario weights
+weights = [0.65992, 6.92733, 0.73502, 5.81942, 0.6711]
+
 skippy_params_opt = {
     'priorities': [
         (weights[0], BalancedResourcePriority()),
@@ -132,12 +136,37 @@ def get_scenario_02():
     ]
 
 
+def get_scenario_03():
+    # 3 regions * 150 = 450 nodes
+    return [
+        CloudRegionScenario(150, 45),
+        CloudRegionScenario(150, 90),
+        CloudRegionScenario(150, 135),
+        CloudRegionScenario(150, 180),
+        CloudRegionScenario(150, 225),
+        CloudRegionScenario(150, 270),
+        CloudRegionScenario(150, 315),
+        CloudRegionScenario(150, 360),
+        CloudRegionScenario(150, 405),
+        CloudRegionScenario(150, 450),
+        CloudRegionScenario(150, 495),
+        CloudRegionScenario(150, 540),
+        CloudRegionScenario(150, 585),
+        CloudRegionScenario(150, 630),
+        CloudRegionScenario(150, 675),
+        CloudRegionScenario(150, 720),
+        CloudRegionScenario(150, 765),
+        CloudRegionScenario(150, 810),
+        CloudRegionScenario(150, 855),
+        CloudRegionScenario(150, 900),
+    ]
+
+
 def main():
     logging.basicConfig(level=logging.INFO)
 
     logger.info('initializing scenarios')
-
-    scenarios = get_scenario_02()
+    scenarios = get_scenario_03()
 
     sched_params = {
         'skippy': skippy_params,

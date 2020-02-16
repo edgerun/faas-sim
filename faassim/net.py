@@ -478,12 +478,15 @@ class Topology(Graph):
 
         return graph
 
-    def create_bandwidth_graph_parallel(self, p=4) -> BandwidthGraph:
+    def create_bandwidth_graph_parallel(self, p=None) -> BandwidthGraph:
         import multiprocessing as mp
         """
         From a topology, create the reduced bandwidth graph required by the ClusterContext.
         :return: bandwidth[from][to] = bandwidth in bytes per second
         """
+        if p is None:
+            p = mp.cpu_count()
+
         then = time.time()
 
         nodes = self.get_hosts()

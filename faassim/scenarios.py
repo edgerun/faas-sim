@@ -262,6 +262,8 @@ class CloudRegionsSynthesizer(ClusterSynthesizer):
         # each cloud region)
         all_nodes.append(self.registry)
 
+        total_vms = self.regions * self.vms_per_region
+
         for r in range(self.regions):
             if r == 0:
                 perc = 0.5
@@ -272,7 +274,7 @@ class CloudRegionsSynthesizer(ClusterSynthesizer):
             else:
                 raise ValueError
 
-            nodes, edges = self._create_cloud(r, round(self.vms_per_region * perc))
+            nodes, edges = self._create_cloud(r, round(total_vms * perc))
             all_nodes.extend(nodes)
             all_edges.extend(edges)
 
