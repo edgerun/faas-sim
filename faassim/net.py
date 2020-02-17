@@ -1,4 +1,5 @@
 import logging
+import random
 import time
 from collections import deque, defaultdict
 from typing import List, Dict, NamedTuple, Tuple
@@ -435,6 +436,18 @@ class Topology(Graph):
 
         return list(links)
 
+    def get_all_nodes(self):
+        nodes = set()
+
+        for node in self.nodes:
+            nodes.add(node)
+
+        for edge in self.edges:
+            nodes.add(edge.source)
+            nodes.add(edge.target)
+
+        return nodes
+
     def get_bandwidth_graph(self) -> BandwidthGraph:
         if self._bandwidth_graph is None:
             self._bandwidth_graph = self.create_bandwidth_graph_parallel()
@@ -546,3 +559,65 @@ class Topology(Graph):
 def partition(lst, n):
     division = len(lst) / n
     return [lst[round(division * i):round(division * (i + 1))] for i in range(n)]
+
+
+class JsonExporter:
+
+    def write(self, topology: Topology, fd):
+        import json
+
+        json.dump(self.to_dict(topology), fd)
+
+    def get_values(self, vertex):
+        a = round(max(0, random.normalvariate(10, 1)), 2)
+        b = round(max(0, random.normalvariate(20, 3)), 2)
+
+        return [a, b]
+
+    def get_record(self, node):
+        if isinstance(node, Node):
+            return {
+                'id': str(id(node)),
+                'name': node.name,
+                'type': 'HOST',
+                'values': self.get_values(node)
+            }
+        if isinstance(node, Link):
+            return {
+                'id': str(id(node)),
+                'name': str(node.tags['name']),
+                'type': 'LINK',
+                'values': self.get_values(node)
+            }
+
+        if isinstance(node, str):
+            if node.startswith('switch_'):
+                return {
+                    'id': str(id(node)),
+                    'name': node,
+                    'type': 'SWITCH',
+                    'values': self.get_values(node)
+                }
+            if node.startswith('internet'):
+                return {
+                    'id': str(id(node)),
+                    'name': node,
+                    'type': 'BACKHAUL',
+                    'values': self.get_values(node)
+                }
+
+    def to_dict(self, topology: Topology):
+        nodes = list()
+        edges = list()
+
+        for node in topology.get_all_nodes():
+            nodes.append(self.get_record(node))
+
+        for edge in topology.edges:
+            edges.append({
+                'from': str(id(edge.source)),
+                'to': str(id(edge.target)),
+                'directed': edge.directed
+            })
+
+        return {'nodes': nodes, 'links': edges}
