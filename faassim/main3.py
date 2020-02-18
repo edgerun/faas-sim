@@ -25,13 +25,13 @@ skippy_params = {
 }
 
 # urban sensing scenario weights
-# weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
+weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
 
 # iiot scenario weights
 # weights = [8.29646, 1.54538, 0.62121, 9.67983, 6.96152]
 
 # cloud region scenario weights
-weights = [0.65992, 6.92733, 0.73502, 5.81942, 0.6711]
+# weights = [0.65992, 6.92733, 0.73502, 5.81942, 0.6711]
 
 skippy_params_opt = {
     'priorities': [
@@ -84,29 +84,29 @@ def run_sim(args):
 
 
 def get_scenario_01():
-    # 4 cells => 87 nodes
+    # 4 cells => 91 nodes
 
     return [
-        UrbanSensingScenario(4, 4),
         UrbanSensingScenario(4, 9),
-        UrbanSensingScenario(4, 13),
-        UrbanSensingScenario(4, 35),
-        UrbanSensingScenario(4, 44),
-        UrbanSensingScenario(4, 52),
-        UrbanSensingScenario(4, 61),
-        UrbanSensingScenario(4, 70),
-        UrbanSensingScenario(4, 78),
-        UrbanSensingScenario(4, 87),
-        UrbanSensingScenario(4, 96),
-        UrbanSensingScenario(4, 104),
-        UrbanSensingScenario(4, 113),
-        UrbanSensingScenario(4, 122),
-        UrbanSensingScenario(4, 131),
-        UrbanSensingScenario(4, 139),
-        UrbanSensingScenario(4, 148),
-        UrbanSensingScenario(4, 157),
-        UrbanSensingScenario(4, 165),
-        UrbanSensingScenario(4, 174)
+        UrbanSensingScenario(4, 18),
+        UrbanSensingScenario(4, 27),
+        UrbanSensingScenario(4, 36),
+        UrbanSensingScenario(4, 46),
+        UrbanSensingScenario(4, 55),
+        UrbanSensingScenario(4, 64),
+        UrbanSensingScenario(4, 73),
+        UrbanSensingScenario(4, 82),
+        UrbanSensingScenario(4, 91),
+        UrbanSensingScenario(4, 100),
+        UrbanSensingScenario(4, 109),
+        UrbanSensingScenario(4, 118),
+        UrbanSensingScenario(4, 127),
+        UrbanSensingScenario(4, 137),
+        UrbanSensingScenario(4, 146),
+        UrbanSensingScenario(4, 155),
+        UrbanSensingScenario(4, 164),
+        UrbanSensingScenario(4, 173),
+        UrbanSensingScenario(4, 182)
     ]
 
 
@@ -166,7 +166,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     logger.info('initializing scenarios')
-    scenarios = get_scenario_03()
+    scenarios = get_scenario_01()
 
     sched_params = {
         'skippy': skippy_params,
