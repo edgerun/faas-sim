@@ -172,6 +172,10 @@ class Metrics:
 
             self.log('functions', record)
 
+    def log_flow(self, num_bytes, duration, source, sink, action_type):
+        self.env.metrics.log('flow', value={'bytes': num_bytes, 'duration': duration},
+                             source=source.name, sink=sink.name, action_type=action_type)
+
     def log_network(self, num_bytes, data_type, link):
         tags = dict(link.tags)
         tags['data_type'] = data_type
@@ -344,6 +348,7 @@ def simulate_startup(env: FaasSimEnvironment, replica: FunctionReplica, result: 
 
 
 def simulate_docker_pull(env: FaasSimEnvironment, replica: FunctionReplica, result: SchedulingResult):
+    started = env.now
     # TODO: there's a lot of potential to improve fidelity here: consider image layers, simulate extraction time, etc.
     node = result.suggested_host
 
@@ -365,11 +370,13 @@ def simulate_docker_pull(env: FaasSimEnvironment, replica: FunctionReplica, resu
     yield flow.start()
     for hop in route.hops:
         env.metrics.log_network(required, 'docker_pull', hop)
+    env.metrics.log_flow(required, env.now - started, route.source, route.destination, 'docker_pull')
 
 
 def simulate_data_download(env: FaasSimEnvironment, replica: FunctionReplica):
     node = replica.node
     func = replica.function
+    started = env.now
 
     if 'data.skippy.io/receives-from-storage' not in func.pod.spec.labels:
         return
@@ -392,11 +399,13 @@ def simulate_data_download(env: FaasSimEnvironment, replica: FunctionReplica):
     yield flow.start()
     for hop in route.hops:
         env.metrics.log_network(size, 'data_download', hop)
+    env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_download')
 
 
 def simulate_data_upload(env: FaasSimEnvironment, replica: FunctionReplica):
     node = replica.node
     func = replica.function
+    started = env.now
 
     if 'data.skippy.io/sends-to-storage' not in func.pod.spec.labels:
         return
@@ -419,6 +428,7 @@ def simulate_data_upload(env: FaasSimEnvironment, replica: FunctionReplica):
     yield flow.start()
     for hop in route.hops:
         env.metrics.log_network(size, 'data_upload', hop)
+    env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_upload')
 
 
 class ExecutionSimulator:
