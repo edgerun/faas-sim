@@ -111,28 +111,28 @@ def get_scenario_01():
 
 
 def get_scenario_02():
-    # 10 premises = 100 nodes
+    # 10 premises = 120 nodes
     return [
-        IndustrialIoTScenario(10, 10),
-        IndustrialIoTScenario(10, 20),
-        IndustrialIoTScenario(10, 30),
-        IndustrialIoTScenario(10, 40),
-        IndustrialIoTScenario(10, 50),
+        IndustrialIoTScenario(10, 12),
+        IndustrialIoTScenario(10, 24),
+        IndustrialIoTScenario(10, 36),
+        IndustrialIoTScenario(10, 48),
         IndustrialIoTScenario(10, 60),
-        IndustrialIoTScenario(10, 70),
-        IndustrialIoTScenario(10, 80),
-        IndustrialIoTScenario(10, 90),
-        IndustrialIoTScenario(10, 100),
-        IndustrialIoTScenario(10, 110),
+        IndustrialIoTScenario(10, 72),
+        IndustrialIoTScenario(10, 84),
+        IndustrialIoTScenario(10, 96),
+        IndustrialIoTScenario(10, 108),
         IndustrialIoTScenario(10, 120),
-        IndustrialIoTScenario(10, 130),
-        IndustrialIoTScenario(10, 140),
-        IndustrialIoTScenario(10, 150),
-        IndustrialIoTScenario(10, 160),
-        IndustrialIoTScenario(10, 170),
+        IndustrialIoTScenario(10, 132),
+        IndustrialIoTScenario(10, 144),
+        IndustrialIoTScenario(10, 156),
+        IndustrialIoTScenario(10, 168),
         IndustrialIoTScenario(10, 180),
-        IndustrialIoTScenario(10, 190),
-        IndustrialIoTScenario(10, 200),
+        IndustrialIoTScenario(10, 192),
+        IndustrialIoTScenario(10, 204),
+        IndustrialIoTScenario(10, 216),
+        IndustrialIoTScenario(10, 228),
+        IndustrialIoTScenario(10, 240),
     ]
 
 
@@ -166,7 +166,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     logger.info('initializing scenarios')
-    scenarios = get_scenario_01()
+    scenarios = get_scenario_02()
 
     sched_params = {
         'skippy': skippy_params,
