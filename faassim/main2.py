@@ -8,7 +8,7 @@ from core.priorities import BalancedResourcePriority, \
 from sim import stats
 from sim.faas import BadPlacementException
 from sim.faassim import Simulation
-from sim.scenarios import CloudRegionScenario, IndustrialIoTScenario
+from sim.scenarios import CloudRegionScenario, IndustrialIoTScenario, UrbanSensingScenario
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,10 @@ skippy_params = {
 #weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
 
 # iiot scenario weights
-weights = [8.29646, 1.54538, 0.62121, 9.67983, 6.96152]
+# weights = [8.29646, 1.54538, 0.62121, 9.67983, 6.96152]
+
+# cloud region scenario
+weights = [0.65992, 6.92733, 0.73502, 5.81942, 0.6711]
 
 skippy_params_opt = {
     'priorities': [
@@ -56,15 +59,16 @@ kube_params_100 = {
     'percentage_of_nodes_to_score': 100
 }
 
-Scenario = IndustrialIoTScenario
+Scenario = CloudRegionScenario
 
 
 def run_sim(args):
-    stats.seed(122)
-
     scheduler_parameters = args[0]
     faas_idler = args[1]
     data_prefix = args[2].rstrip('_')
+
+    i = int(data_prefix.split('_')[-1])
+    stats.seed(i)
 
     logging.info('starting simulation %s with parameters %s', data_prefix, scheduler_parameters)
     sim = Simulation(Scenario.lazy(), scheduler_parameters, faas_idler)
@@ -84,27 +88,30 @@ def main():
     logging.basicConfig(level=logging.INFO)
 
     logger.info('initializing scenario')
-    Scenario.lazy()
+    # Scenario.lazy(4, 46) # urban sensing
+    # Scenario.lazy(10, 72) # iiot
+    Scenario.lazy(150)
 
     params = {
         'skippy': skippy_params,
         'skippyopt': skippy_params_opt,
-        'kube50': kube_params_50,
+        # 'kube50': kube_params_50,
         'kube100': kube_params_100,
     }
-    runs = 1
+    runs = 10
 
     arguments = []
     # with faas idler
-    arguments.extend([(p, True, f'{k}_idler_{i + 1:03}') for i in range(runs) for k, p in params.items()])
+    # arguments.extend([(p, True, f'{k}_idler_{i + 1:03}') for i in range(runs) for k, p in params.items()])
     # without
     arguments.extend([(p, False, f'{k}_noidler_{i + 1:03}') for i in range(runs) for k, p in params.items()])
 
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        for _ in executor.map(run_sim, arguments):
-            pass
-
-    Scenario.purge()
+    try:
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            for _ in executor.map(run_sim, arguments):
+                pass
+    finally:
+        Scenario.purge()
 
 
 if __name__ == '__main__':
