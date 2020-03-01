@@ -1,6 +1,6 @@
 from typing import Dict, Tuple
 
-from core.model import ImageState
+from skippy.core.model import ImageState
 
 # TODO: introduce distribution samplers for image size
 templates = {

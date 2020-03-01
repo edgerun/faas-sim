@@ -5,15 +5,16 @@ import pickle
 from abc import ABC
 from typing import Tuple
 
-import sim.synth.network as netsynth
-import sim.synth.nodes as nodesynth
-from core.model import Pod
-from core.storage import DataItem
-from core.utils import parse_size_string
-from sim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function, FunctionState
-from sim.net import Topology, Link, Edge, Internet, Registry
-from sim.stats import ParameterizedDistribution, PopulationSampler
-from sim.synth.pods import MLWorkflowPodSynthesizer
+from skippy.core.model import Pod
+from skippy.core.storage import DataItem
+from skippy.core.utils import parse_size_string
+
+import faassim.synth.network as netsynth
+import faassim.synth.nodes as nodesynth
+from faassim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function, FunctionState
+from faassim.net import Topology, Link, Edge, Internet, Registry
+from faassim.stats import ParameterizedDistribution, PopulationSampler
+from faassim.synth.pods import MLWorkflowPodSynthesizer
 
 logger = logging.getLogger(__name__)
 

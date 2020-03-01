@@ -2,8 +2,8 @@ import itertools
 from collections import defaultdict
 from typing import Generator, Dict, Callable, List
 
-from core.model import Node, Capacity
-from core.utils import parse_size_string, counter
+from skippy.core.model import Node, Capacity
+from skippy.core.utils import parse_size_string, counter
 
 NodeSynthesizer = Generator[Node, None, None]
 NodeFactory = List[Callable[[], Node]]

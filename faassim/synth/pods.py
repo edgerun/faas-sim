@@ -1,9 +1,10 @@
 from typing import Generator, Dict, Tuple
 
-from core.model import Pod, PodSpec, Container, ResourceRequirements, ImageState
-from core.utils import parse_size_string
-from sim.stats import BufferedSampler, ScaledParetoSampler, IntegerTruncationSampler
-from sim.synth.images import ImageSynthesizer
+from skippy.core.model import Pod, PodSpec, Container, ResourceRequirements, ImageState
+from skippy.core.utils import parse_size_string
+
+from faassim.stats import BufferedSampler, ScaledParetoSampler, IntegerTruncationSampler
+from faassim.synth.images import ImageSynthesizer
 
 PodSynthesizer = Generator[Pod, None, None]
 

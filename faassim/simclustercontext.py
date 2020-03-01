@@ -1,9 +1,9 @@
 import random
 from typing import List, Dict
 
-from core.clustercontext import ClusterContext, BandwidthGraph
-from core.model import Node, ImageState
-from core.storage import StorageIndex
+from skippy.core.clustercontext import ClusterContext, BandwidthGraph
+from skippy.core.model import Node, ImageState
+from skippy.core.storage import StorageIndex
 
 example_image_states = {
     'alexrashed/ml-wf-1-pre:0.37': ImageState(size={

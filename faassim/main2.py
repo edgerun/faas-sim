@@ -2,13 +2,14 @@ import concurrent.futures
 import logging
 import time
 
-from core.priorities import BalancedResourcePriority, \
+from skippy.core.priorities import BalancedResourcePriority, \
     LatencyAwareImageLocalityPriority, CapabilityPriority, DataLocalityPriority, LocalityTypePriority, \
     ImageLocalityPriority
-from sim import stats
-from sim.faas import BadPlacementException
-from sim.faassim import Simulation
-from sim.scenarios import CloudRegionScenario, IndustrialIoTScenario, UrbanSensingScenario
+
+from faassim import stats
+from faassim.faas import BadPlacementException
+from faassim.faassim import Simulation
+from faassim.scenarios import CloudRegionScenario
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ skippy_params = {
 }
 
 # urban sensing scenario weights
-#weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
+# weights = [6.66109, 2.77657, 6.69114, 8.47306, 1.06714]
 
 # iiot scenario weights
 # weights = [8.29646, 1.54538, 0.62121, 9.67983, 6.96152]

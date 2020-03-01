@@ -2,14 +2,15 @@ import concurrent.futures
 import logging
 import time
 
-from core.model import Node
-from core.priorities import BalancedResourcePriority, \
+from skippy.core.model import Node
+from skippy.core.priorities import BalancedResourcePriority, \
     LatencyAwareImageLocalityPriority, CapabilityPriority, DataLocalityPriority, LocalityTypePriority, \
     ImageLocalityPriority
-from sim import stats
-from sim.faas import BadPlacementException
-from sim.faassim import Simulation
-from sim.scenarios import UrbanSensingScenario, IndustrialIoTScenario, CloudRegionScenario
+
+from faassim import stats
+from faassim.faas import BadPlacementException
+from faassim.faassim import Simulation
+from faassim.scenarios import UrbanSensingScenario, IndustrialIoTScenario, CloudRegionScenario
 
 logger = logging.getLogger(__name__)
 

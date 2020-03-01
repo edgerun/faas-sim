@@ -4,10 +4,10 @@ from collections import deque, defaultdict
 from typing import List, Dict, NamedTuple, Tuple
 
 import simpy
+from skippy.core.clustercontext import BandwidthGraph
+from skippy.core.model import Node
 
-from core.clustercontext import BandwidthGraph
-from core.model import Node
-from sim.simclustercontext import SimulationClusterContext
+from faassim.simclustercontext import SimulationClusterContext
 
 logger = logging.getLogger(__name__)
 

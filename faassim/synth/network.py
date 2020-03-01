@@ -5,8 +5,9 @@ Fast creation of various topologies.
 import pprint
 from typing import List
 
-from core.model import Node
-from sim.net import Topology, Edge, Link
+from skippy.core.model import Node
+
+from faassim.net import Topology, Edge, Link
 
 
 def create_lan(nodes: List[Node], downlink_bw, uplink_bw, internal_bw=1000, name=None):

@@ -1,8 +1,8 @@
 from collections import defaultdict
 from typing import List
 
-from core.clustercontext import BandwidthGraph
-from core.model import Node
+from skippy.core.clustercontext import BandwidthGraph
+from skippy.core.model import Node
 
 # 1.25e+6 Byte/s = 10 MBit/s
 # 1.25e+7 Byte/s = 100 MBit/s
@@ -27,7 +27,7 @@ def generate_bandwidth_graph(nodes: List[Node]) -> BandwidthGraph:
     for node in nodes:
         for inner in nodes:
             bandwidth_graph[node.name][inner.name] = 1.25e+8 if node == inner else \
-            bandwidth_types[node.labels['locality.skippy.io/type']][inner.labels['locality.skippy.io/type']]
+                bandwidth_types[node.labels['locality.skippy.io/type']][inner.labels['locality.skippy.io/type']]
 
     # Also add a connection from each node to the registry
     for node in nodes:

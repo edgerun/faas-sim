@@ -4,12 +4,12 @@ from ast import literal_eval as make_tuple
 from typing import Tuple, NamedTuple
 
 import pandas as pd
+from skippy.core.clustercontext import ClusterContext
+from skippy.core.model import Pod, SchedulingResult, ImageState
+from skippy.core.utils import parse_size_string, normalize_image_name
 
-from core.clustercontext import ClusterContext
-from core.model import Pod, SchedulingResult, ImageState
-from core.utils import parse_size_string, normalize_image_name
-from sim.oracle.data.distributions import execution_time_distributions, startup_time_distributions
-from sim.stats import BoundRejectionSampler, BufferedSampler
+from faassim.oracle.data.distributions import execution_time_distributions, startup_time_distributions
+from faassim.stats import BoundRejectionSampler, BufferedSampler
 
 Bandwidth = NamedTuple('Bandwidth', [('mbit', int), ('delay', int), ('deviation', int)])
 

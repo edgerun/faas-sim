@@ -4,8 +4,8 @@ import time
 
 import pandas as pd
 
-from sim.faas import FaasSimEnvironment
-from sim.scenarios import Scenario
+from faassim.faas import FaasSimEnvironment
+from faassim.scenarios import Scenario
 
 logger = logging.getLogger(__name__)
 

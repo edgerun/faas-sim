@@ -5,14 +5,14 @@ from typing import List, Generator
 
 import pandas as pd
 import simpy
+from skippy.core.clustercontext import ClusterContext
+from skippy.core.scheduler import Scheduler
 
-from core.clustercontext import ClusterContext
-from core.scheduler import Scheduler
-from sim.model import EventType, LoggingRow
-from sim.oracle.oracle import Oracle, BandwidthUsageOracle, CostOracle, ResourceUtilizationOracle, \
-    FittedExecutionTimeOracle, FittedStartupTimeOracle, ExecutionTimeOracle, StartupTimeOracle
-from sim.stats import exp_sampler
-from sim.synth.pods import PodSynthesizer
+from faassim.model import EventType, LoggingRow
+from faassim.oracle.oracle import Oracle, BandwidthUsageOracle, CostOracle, ResourceUtilizationOracle, \
+    FittedExecutionTimeOracle, FittedStartupTimeOracle
+from faassim.stats import exp_sampler
+from faassim.synth.pods import PodSynthesizer
 
 
 def run_load_generator(env: simpy.Environment, queue: simpy.Store, pod_synth: PodSynthesizer,
