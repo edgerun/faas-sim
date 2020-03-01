@@ -12,11 +12,11 @@ from skippy.core.clustercontext import ClusterContext
 from skippy.core.model import Pod, Node, SchedulingResult
 from skippy.core.scheduler import Scheduler
 from skippy.core.utils import counter, normalize_image_name, parse_size_string
+from srds import RandomSampler, BufferedSampler
 
 import faassim.oracle.oracle as oracles
 from faassim.logging import SimulatedClock, NullLogger, RuntimeLogger
 from faassim.net import Topology, Flow
-from faassim.stats import RandomSampler, BufferedSampler
 
 logger = logging.getLogger(__name__)
 

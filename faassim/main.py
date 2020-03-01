@@ -7,12 +7,18 @@ import pandas as pd
 import simpy
 from skippy.core.clustercontext import ClusterContext
 from skippy.core.scheduler import Scheduler
+from srds import ParameterizedDistribution as PDist, BufferedSampler
 
 from faassim.model import EventType, LoggingRow
 from faassim.oracle.oracle import Oracle, BandwidthUsageOracle, CostOracle, ResourceUtilizationOracle, \
     FittedExecutionTimeOracle, FittedStartupTimeOracle
-from faassim.stats import exp_sampler
 from faassim.synth.pods import PodSynthesizer
+
+
+def exp_sampler(lambd):
+    sampler = BufferedSampler(PDist.expon(lambd))
+    while True:
+        yield sampler.sample()
 
 
 def run_load_generator(env: simpy.Environment, queue: simpy.Store, pod_synth: PodSynthesizer,

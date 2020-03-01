@@ -7,9 +7,9 @@ import pandas as pd
 from skippy.core.clustercontext import ClusterContext
 from skippy.core.model import Pod, SchedulingResult, ImageState
 from skippy.core.utils import parse_size_string, normalize_image_name
+from srds import BoundRejectionSampler, BufferedSampler
 
 from faassim.oracle.data.distributions import execution_time_distributions, startup_time_distributions
-from faassim.stats import BoundRejectionSampler, BufferedSampler
 
 Bandwidth = NamedTuple('Bandwidth', [('mbit', int), ('delay', int), ('deviation', int)])
 

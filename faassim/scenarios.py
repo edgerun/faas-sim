@@ -8,12 +8,12 @@ from typing import Tuple
 from skippy.core.model import Pod
 from skippy.core.storage import DataItem
 from skippy.core.utils import parse_size_string
+from srds import ParameterizedDistribution, PopulationSampler
 
 import faassim.synth.network as netsynth
 import faassim.synth.nodes as nodesynth
 from faassim.faas import FaasSimEnvironment, request_generator, FunctionRequest, empty, Function, FunctionState
 from faassim.net import Topology, Link, Edge, Internet, Registry
-from faassim.stats import ParameterizedDistribution, PopulationSampler
 from faassim.synth.pods import MLWorkflowPodSynthesizer
 
 logger = logging.getLogger(__name__)

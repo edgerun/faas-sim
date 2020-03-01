@@ -6,7 +6,7 @@ from skippy.core.priorities import BalancedResourcePriority, \
     LatencyAwareImageLocalityPriority, CapabilityPriority, DataLocalityPriority, LocalityTypePriority, \
     ImageLocalityPriority
 
-from faassim import stats
+import srds.srds as stats
 from faassim.faas import BadPlacementException
 from faassim.faassim import Simulation
 from faassim.scenarios import CloudRegionScenario

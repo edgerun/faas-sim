@@ -1,4 +1,4 @@
-from faassim.stats import ParameterizedDistribution as PDist
+from srds import ParameterizedDistribution as PDist
 
 execution_time_distributions = {
     ('cloud', 'alexrashed/ml-wf-1-pre'): (0.584, 1.1420000000000001, PDist.lognorm(((0.31449780857108944,), 0.36909628354997315, 0.41583220283981315))),

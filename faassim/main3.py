@@ -2,12 +2,12 @@ import concurrent.futures
 import logging
 import time
 
+import srds.srds as stats
 from skippy.core.model import Node
 from skippy.core.priorities import BalancedResourcePriority, \
     LatencyAwareImageLocalityPriority, CapabilityPriority, DataLocalityPriority, LocalityTypePriority, \
     ImageLocalityPriority
 
-from faassim import stats
 from faassim.faas import BadPlacementException
 from faassim.faassim import Simulation
 from faassim.scenarios import UrbanSensingScenario, IndustrialIoTScenario, CloudRegionScenario
