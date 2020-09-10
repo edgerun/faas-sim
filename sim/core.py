@@ -1,5 +1,5 @@
 import time
-from typing import Set
+from typing import Set, Optional
 
 import simpy
 from ether.core import Node as EtherNode
@@ -7,12 +7,17 @@ from ether.core import Node as EtherNode
 from skippy.core.clustercontext import ClusterContext
 from skippy.core.model import Node as SkippyNode
 
+Node = EtherNode
 
-class Node:
+
+class NodeState:
+    """
+    Holds simulation specific runtime knowledge about a node. For example, what docker images it has already pulled.
+    """
     skippy_node: SkippyNode
     ether_node: EtherNode
 
-    docker_images: Set = {}
+    docker_images: Set = set()
 
     @property
     def name(self):
@@ -37,7 +42,21 @@ class Environment(simpy.Environment):
         self.benchmark = None
         self.cluster = None
         self.registry = None
-        self.metrics = Metrics()
+        self.metrics = None
+        self.node_states = dict()
+
+    def get_node_state(self, name: str) -> Optional[NodeState]:
+        if name in self.node_states:
+            return self.node_states[name]
+
+        node = self.topology.find_node(name)
+        if node:
+            node_state = NodeState()
+            node_state.ether_node = node
+            self.node_states[name] = node_state
+            return node_state
+
+        return None
 
 
 def timeout_listener(env, started, max_time, interval=1):

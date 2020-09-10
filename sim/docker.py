@@ -3,6 +3,7 @@ from typing import List, Tuple, NamedTuple
 
 from sim.core import Node, Environment
 from sim.net import SafeFlow
+from sim.topology import DockerRegistry
 
 
 class ImageProperties(NamedTuple):
@@ -45,6 +46,7 @@ def split_image_name(image: str) -> Tuple[str, str]:
 def pull(env: Environment, image_str: str, node: Node):
     started = env.now
     # TODO: there's a lot of potential to improve fidelity here: consider image layers, simulate extraction time, etc.
+    #  e.g., docker pull on a 13MB container takes about 5 seconds. the simulated time at 120 MBit/sec would be <1s
 
     # find the image in the registry with the node's architecture
     images = env.registry.find(image_str, arch=node.arch)
@@ -52,20 +54,24 @@ def pull(env: Environment, image_str: str, node: Node):
         raise ValueError('image not in registry: %s arch=%s' % (image_str, node.arch))
     image = images[0]
 
-    if image in node.docker_images:
-        yield env.timeout(0)
+    node_state = env.get_node_state(node.name)
+    if node_state:
+        if image in node_state.docker_images:
+            return
+        else:
+            node_state.docker_images.add(image)
 
     size = image.size
 
     if size <= 0:
-        yield env.timeout(0)
+        return
 
     # # FIXME: crude simulation of layer sharing (90% across images is shared)
     # num_images = len(env.cluster.images_on_nodes[node.name]) - 1
     # if num_images > 0:
     #     size = size * 0.1
 
-    route = env.topology.get_route(env.topology.get_registry(), node)
+    route = env.topology.route(DockerRegistry, node)
     flow = SafeFlow(env, size, route)
 
     yield flow.start()

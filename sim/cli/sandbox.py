@@ -1,11 +1,15 @@
 import logging
 
 import ether.scenarios.urbansensing as scenario
+from ether.core import Connection
 
-import sim.faassim as faassim
+from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
-from sim.topology import Topology
+from sim.docker import ImageProperties
+from sim.metrics import Metrics
+from sim.topology import Topology, DockerRegistry
+from skippy.core.utils import parse_size_string
 
 
 class ExampleBenchmark(Benchmark):
@@ -22,17 +26,32 @@ class ExampleBenchmark(Benchmark):
 def example_topology() -> Topology:
     t = Topology()
     scenario.UrbanSensingScenario().materialize(t)
+    t.add_connection(Connection('internet', DockerRegistry))
+
     return t
 
 
 def main():
     # TODO: read experiment specification
+    topology = example_topology()
 
     logging.basicConfig(level=logging.DEBUG)
     env = Environment()
-    exp = faassim.Simulation(env, ExampleBenchmark(), example_topology())
+    env.topology = topology
+    env.metrics = Metrics(env)
+    env.registry = docker.Registry()
+    env.registry.put(ImageProperties('edgerun/go-telemd', size=parse_size_string('13M')))
 
-    exp.run()
+    route = topology.route(DockerRegistry, topology.find_node('rpi3_0'))
+    print(route)
+    flow = docker.pull(env, 'edgerun/go-telemd', topology.find_node('rpi3_0'))
+
+    env.process(flow)
+    env.run()
+    print(env.now)
+
+    # exp = faassim.Simulation(env, ExampleBenchmark(), topology)
+    # exp.run()
 
 
 if __name__ == '__main__':
