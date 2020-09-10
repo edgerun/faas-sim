@@ -1,4 +1,4 @@
-VENV_BIN = python3.7 -m venv
+VENV_BIN = python3 -m venv
 
 VENV_DIR ?= .venv
 
