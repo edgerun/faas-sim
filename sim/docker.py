@@ -13,7 +13,7 @@ class ImageProperties(NamedTuple):
     arch: str = None
 
 
-class Registry:
+class ContainerRegistry:
     """
     The registry keeps track of container images and their properties.
     """
@@ -66,7 +66,7 @@ def pull(env: Environment, image_str: str, node: Node):
     #  e.g., docker pull on a 13MB container takes about 5 seconds. the simulated time at 120 MBit/sec would be <1s
 
     # find the image in the registry with the node's architecture
-    images = env.registry.find(image_str, arch=node.arch)
+    images = env.container_registry.find(image_str, arch=node.arch)
     if not images:
         raise ValueError('image not in registry: %s arch=%s' % (image_str, node.arch))
     image = images[0]

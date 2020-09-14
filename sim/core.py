@@ -38,11 +38,12 @@ class Environment(simpy.Environment):
     def __init__(self, initial_time=0):
         super().__init__(initial_time)
         self.faas = None
+        self.simulator_factory = None
         self.topology = None
         self.storage_index = None
         self.benchmark = None
         self.cluster = None
-        self.registry = None
+        self.container_registry = None
         self.metrics = None
         self.node_states = dict()
 

@@ -21,15 +21,13 @@ class SimulationClusterContext(ClusterContext):
         self.env = env
 
         self.topology = env.topology
-        self.container_registry: docker.Registry = env.registry
+        self.container_registry: docker.ContainerRegistry = env.container_registry
+        self.bw_graph = None
+        self.nodes = None
 
         super().__init__()
 
         self.storage_index = env.storage_index or StorageIndex()
-
-        self.bw_graph = None
-        self.nodes = None
-
         self._storage_nodes = None
 
     def get_init_image_states(self) -> Dict[str, ImageState]:

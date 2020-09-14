@@ -1,10 +1,13 @@
 import logging
 import time
 
-import sim.docker as docker
 from sim.benchmark import Benchmark
 from sim.core import Environment, timeout_listener
-from sim.faas import FaasSystem, FunctionReplica, FunctionRequest
+from sim.docker import ContainerRegistry, pull as docker_pull
+from sim.faas import FaasSystem, FunctionReplica, FunctionRequest, FunctionSimulator, SimulatorFactory, \
+    FunctionDefinition
+from sim.metrics import Metrics, RuntimeLogger
+from sim.skippy import SimulationClusterContext
 from sim.topology import Topology
 
 logger = logging.getLogger(__name__)
@@ -16,10 +19,10 @@ class BadPlacementException(BaseException):
 
 class Simulation:
 
-    def __init__(self, env: Environment, benchmark: Benchmark, topology: Topology, timeout=None, name=None):
-        self.env = env
-        self.benchmark = benchmark
+    def __init__(self, topology: Topology, benchmark: Benchmark, env: Environment = None, timeout=None, name=None):
+        self.env = env or Environment()
         self.topology = topology
+        self.benchmark = benchmark
         self.timeout = timeout
         self.name = name
 
@@ -31,8 +34,8 @@ class Simulation:
 
         env.benchmark = self.benchmark
         env.topology = self.topology
-        env.faas = FaasSystem(env)
-        env.registry = docker.Registry()
+
+        self.init_environment(env)
 
         then = time.time()
 
@@ -51,13 +54,32 @@ class Simulation:
 
         logger.info('simulation ran %.2fs sim, %.2fs wall', env.now, (time.time() - then))
 
+    def init_environment(self, env):
+        if not env.simulator_factory:
+            env.simulator_factory = SimpleSimulatorFactory()
 
-class FunctionSimulator:
+        if not env.container_registry:
+            env.container_registry = ContainerRegistry()
+
+        if not env.faas:
+            env.faas = FaasSystem(env)
+
+        if not env.metrics:
+            env.metrics = Metrics(env, RuntimeLogger())
+
+        if not env.cluster:
+            env.cluster = SimulationClusterContext(env)
+
+
+class DummySimulator(FunctionSimulator):
 
     def deploy(self, env: Environment, replica: FunctionReplica):
         yield env.timeout(0)
 
     def startup(self, env: Environment, replica: FunctionReplica):
+        yield env.timeout(0)
+
+    def setup(self, env: Environment, replica: FunctionReplica):
         yield env.timeout(0)
 
     def execute(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
@@ -66,3 +88,17 @@ class FunctionSimulator:
     def teardown(self, env: Environment, replica: FunctionReplica):
         yield env.timeout(0)
 
+
+class DockerDeploySimMixin:
+    def deploy(self, env: Environment, replica: FunctionReplica):
+        node_state = env.get_node_state(replica.node)
+        yield from docker_pull(env, replica.function.image, node_state.ether_node)
+
+
+class SimpleFunctionSimulator(DockerDeploySimMixin, FunctionSimulator):
+    pass
+
+
+class SimpleSimulatorFactory(SimulatorFactory):
+    def create(self, env: Environment, fn: FunctionDefinition) -> FunctionSimulator:
+        return SimpleFunctionSimulator()

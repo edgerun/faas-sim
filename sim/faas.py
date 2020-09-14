@@ -1,3 +1,4 @@
+import abc
 import enum
 from collections import defaultdict
 from typing import List, Dict, NamedTuple
@@ -54,7 +55,7 @@ class FunctionDefinition:
     scale_factor: int = 20
     scale_zero: bool = False
 
-    def __init__(self, name, image) -> None:
+    def __init__(self, name: str, image: str) -> None:
         super().__init__()
         self.name = name
         self.image = image
@@ -107,17 +108,44 @@ class FaasSystem:
         self.functions = dict()
         self.replicas = defaultdict(list)
 
-    def get_replicas(self, function_name: str, state=None) -> List[FunctionReplica]:
+    def get_replicas(self, fn_name: str, state=None) -> List[FunctionReplica]:
         if state is None:
-            return self.replicas[function_name]
+            return self.replicas[fn_name]
 
-        return [replica for replica in self.replicas[function_name] if replica.state == state]
+        return [replica for replica in self.replicas[fn_name] if replica.state == state]
 
     def deploy(self, fn: FunctionDefinition):
-        if self.functions[fn.name]:
+        if fn.name in self.functions:
             raise ValueError('function already deployed')
+
+        yield self.env.timeout(0)
 
         # TODO: create function instance
         # TODO: create replica
 
-        pass
+    def request(self,  request: FunctionRequest):
+        yield self.env.timeout(0)
+
+
+class FunctionSimulator(abc.ABC):
+
+    def deploy(self, env: Environment, replica: FunctionReplica):
+        yield env.timeout(0)
+
+    def startup(self, env: Environment, replica: FunctionReplica):
+        yield env.timeout(0)
+
+    def setup(self, env: Environment, replica: FunctionReplica):
+        yield env.timeout(0)
+
+    def execute(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+        yield env.timeout(0)
+
+    def teardown(self, env: Environment, replica: FunctionReplica):
+        yield env.timeout(0)
+
+
+class SimulatorFactory:
+
+    def create(self, env: Environment, fn: FunctionDefinition) -> FunctionSimulator:
+        raise NotImplementedError

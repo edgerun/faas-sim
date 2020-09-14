@@ -2,24 +2,37 @@ import logging
 
 import ether.scenarios.urbansensing as scenario
 
+from faassim.faas import FunctionRequest
 from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.metrics import Metrics
-from sim.topology import Topology, DockerRegistry
+from sim.faas import FunctionDefinition
+from sim.faassim import Simulation
+from sim.topology import Topology
 from skippy.core.utils import parse_size_string
 
 
 class ExampleBenchmark(Benchmark):
 
-    def run(self, env: Environment):
-        yield env.faas.deploy('my_image_classifier')
+    def setup(self, env: Environment):
+        containers: docker.ContainerRegistry = env.container_registry
 
-        ## execute 1000 requests and wait 1 second between each request
-        for i in range(1000):
+        containers.put(ImageProperties('edgerun/ml_workflow/preprocess', parse_size_string('20M')))
+        containers.put(ImageProperties('edgerun/ml_workflow/train', parse_size_string('300M')))
+
+        for name, tag_dict in containers.images.items():
+            for tag, images in tag_dict.items():
+                print(name, tag, images)
+
+    def run(self, env: Environment):
+        yield from env.faas.deploy(FunctionDefinition('wf_01_pre', 'edgerun/ml_workflow/preprocess'))
+
+        # execute 10 requests and wait 1 second between each request
+        for i in range(10):
+            print('requesting')
             yield env.timeout(1)
-            yield env.faas.request('my_image_classifier', {})
+            yield from env.faas.request(FunctionRequest('wf_01_pre'))
 
 
 def example_topology() -> Topology:
@@ -31,26 +44,14 @@ def example_topology() -> Topology:
 
 
 def main():
+    logging.basicConfig(level=logging.DEBUG)
+
     # TODO: read experiment specification
     topology = example_topology()
+    benchmark = ExampleBenchmark()
 
-    logging.basicConfig(level=logging.DEBUG)
-    env = Environment()
-    env.topology = topology
-    env.metrics = Metrics(env)
-    env.registry = docker.Registry()
-    env.registry.put(ImageProperties('edgerun/go-telemd', size=parse_size_string('13M')))
-
-    route = topology.route(DockerRegistry, topology.find_node('rpi3_0'))
-    print(route)
-    flow = docker.pull(env, 'edgerun/go-telemd', topology.find_node('rpi3_0'))
-
-    env.process(flow)
-    env.run()
-    print(env.now)
-
-    # exp = faassim.Simulation(env, ExampleBenchmark(), topology)
-    # exp.run()
+    sim = Simulation(topology, benchmark)
+    sim.run()
 
 
 if __name__ == '__main__':
