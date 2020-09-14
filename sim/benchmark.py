@@ -1,5 +1,3 @@
-from ether.topology import Topology
-
 from sim.core import Environment
 
 

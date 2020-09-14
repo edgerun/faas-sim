@@ -1,7 +1,6 @@
 import logging
 
 import ether.scenarios.urbansensing as scenario
-from ether.core import Connection
 
 from sim import docker
 from sim.benchmark import Benchmark
@@ -26,7 +25,7 @@ class ExampleBenchmark(Benchmark):
 def example_topology() -> Topology:
     t = Topology()
     scenario.UrbanSensingScenario().materialize(t)
-    t.add_connection(Connection('internet', DockerRegistry))
+    t.init_docker_registry()
 
     return t
 

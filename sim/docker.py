@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List, Tuple, NamedTuple
+from typing import List, Tuple, NamedTuple, Dict
 
 from sim.core import Node, Environment
 from sim.net import SafeFlow
@@ -14,14 +14,23 @@ class ImageProperties(NamedTuple):
 
 
 class Registry:
+    """
+    The registry keeps track of container images and their properties.
+    """
+
+    # images['edgerun/go-telemd']['latest'] = [ImageProperties]
+    images: Dict[str, Dict[str, List[ImageProperties]]]
 
     def __init__(self) -> None:
         super().__init__()
-        # images['edgerun/go-telemd']['latest'] = [ImageProperties]
         self.images = defaultdict(lambda: defaultdict(list))
 
     def put(self, image: ImageProperties):
         self.images[image.name][image.tag].append(image)
+
+    def put_all(self, images: List[ImageProperties]):
+        for image in images:
+            self.put(image)
 
     def find(self, image: str, arch=None) -> List[ImageProperties]:
         repository, tag = split_image_name(image)
@@ -44,6 +53,14 @@ def split_image_name(image: str) -> Tuple[str, str]:
 
 
 def pull(env: Environment, image_str: str, node: Node):
+    """
+    Simulate a docker pull command of the given image on the given node.
+
+    :param env: the simulation environment
+    :param image_str: the name of the image (<repository[:tag]>)
+    :param node: the node on which to run the pull command
+    :return: a simpy process (a generator)
+    """
     started = env.now
     # TODO: there's a lot of potential to improve fidelity here: consider image layers, simulate extraction time, etc.
     #  e.g., docker pull on a 13MB container takes about 5 seconds. the simulated time at 120 MBit/sec would be <1s
@@ -76,6 +93,6 @@ def pull(env: Environment, image_str: str, node: Node):
 
     yield flow.start()
 
-    for hop in route.hops:
-        env.metrics.log_network(size, 'docker_pull', hop)
+    # for hop in route.hops:
+    #     env.metrics.log_network(size, 'docker_pull', hop)
     env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'docker_pull')

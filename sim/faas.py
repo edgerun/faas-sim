@@ -5,7 +5,13 @@ from typing import List, Dict, NamedTuple
 from ether.util import parse_size_string
 
 from sim.core import Environment
-from skippy.core.utils import counter
+
+
+def counter(start: int = 1):
+    n = start
+    while True:
+        yield n
+        n += 1
 
 
 class FunctionState(enum.Enum):
@@ -89,7 +95,6 @@ class FunctionResponse(NamedTuple):
     t_wait: float = 0
     t_exec: float = 0
     node: str = None
-
 
 
 class FaasSystem:
