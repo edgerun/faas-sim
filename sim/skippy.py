@@ -3,15 +3,17 @@ Module that glues simulation concepts to skippy concepts.
 """
 import copy
 import random
+from collections import defaultdict
 from typing import List, Dict
 
 from ether.core import Node as EtherNode
 
-from sim.core import Environment
 from sim import docker
-from sim.topology import LazyBandwidthGraph
+from sim.core import Environment
+from sim.topology import LazyBandwidthGraph, DockerRegistry
 from skippy.core.clustercontext import ClusterContext
-from skippy.core.model import Node as SkippyNode, Capacity as SkippyCapacity, ImageState
+from skippy.core.model import Node as SkippyNode, Capacity as SkippyCapacity, ImageState, Pod, PodSpec, Container, \
+    ResourceRequirements
 from skippy.core.storage import StorageIndex
 
 
@@ -31,30 +33,29 @@ class SimulationClusterContext(ClusterContext):
         self._storage_nodes = None
 
     def get_init_image_states(self) -> Dict[str, ImageState]:
-        """
-        A ImageState dictionary may look like this:
-        >>> image_states = {
-        >>>     'edgerun/ml-wf-1-pre:0.37': ImageState(size={
-        >>>         'arm': 465830200,
-        >>>         'arm64': 540391110,
-        >>>         'amd64': 533323136
-        >>>     }),
-        >>>     'edgerun/ml-wf-2-train:0.37': ImageState(size={
-        >>>         'arm': 519336111,
-        >>>         'arm64': 594174340,
-        >>>         'amd64': 550683347
-        >>>     }),
-        >>> }
-        """
-        result = dict()
+        # FIXME: fix this image state business in skippy
+        return defaultdict(lambda: None)
 
-        for image_name, tag_dict in self.container_registry.images.items():
-            for tag_name, images in tag_dict.items():
-                result[f'{image_name}:{tag_name}'] = ImageState({
-                    image.arch: image.size for image in images
-                }, 0)
+    def retrieve_image_state(self, image_name: str) -> ImageState:
+        # FIXME: hacky workaround
+        images = self.container_registry.find(image_name)
 
-        return result
+        if not images:
+            raise ValueError('No container image "%s"' % image_name)
+
+        if len(images) == 1 and images[0].arch is None:
+            sizes = {
+                'x86': images[0].size,
+                'arm': images[0].size,
+                'arm32v7': images[0].size,
+                'aarch64': images[0].size,
+                'arm64': images[0].size,
+                'amd64': images[0].size
+            }
+        else:
+            sizes = {image.arch: image.size for image in images if image.arch is not None}
+
+        return ImageState(sizes)
 
     def get_bandwidth_graph(self):
         if self.bw_graph is None:
@@ -64,7 +65,7 @@ class SimulationClusterContext(ClusterContext):
 
     def list_nodes(self) -> List[SkippyNode]:
         if self.nodes is None:
-            self.nodes = [to_skippy_node(node) for node in self.topology.get_nodes()]
+            self.nodes = [to_skippy_node(node) for node in self.topology.get_nodes() if node != DockerRegistry]
 
         return self.nodes
 
@@ -100,5 +101,29 @@ def to_skippy_node(node: EtherNode) -> SkippyNode:
     """
     capacity = SkippyCapacity(node.capacity.cpu_millis, node.capacity.memory)
     allocatable = copy.copy(capacity)
-    return SkippyNode(node.name, capacity=capacity, allocatable=allocatable, labels=copy.copy(node.labels))
 
+    labels = dict(node.labels)
+    labels['beta.kubernetes.io/arch'] = node.arch
+
+    return SkippyNode(node.name, capacity=capacity, allocatable=allocatable, labels=labels)
+
+
+def create_function_pod(fn: 'FunctionDefinition') -> Pod:
+    """
+    Creates a new Pod that hosts the given function.
+
+    :param fn: the function to package
+    :return: the Pod
+    """
+    resource_requirements = ResourceRequirements()
+    resource_requirements.requests['memory'] = fn.requests.memory
+    resource_requirements.requests['cpu'] = fn.requests.cpu
+
+    spec = PodSpec()
+    spec.containers = [Container(fn.image, resource_requirements)]
+    spec.labels = fn.labels
+
+    pod = Pod(f'pod-{fn.name}-PODID', 'faas-sim')
+    pod.spec = spec
+
+    return pod

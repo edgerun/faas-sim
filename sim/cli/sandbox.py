@@ -30,7 +30,6 @@ class ExampleBenchmark(Benchmark):
 
         # execute 10 requests and wait 1 second between each request
         for i in range(10):
-            print('requesting')
             yield env.timeout(1)
             yield from env.faas.request(FunctionRequest('wf_01_pre'))
 

@@ -9,6 +9,7 @@ from sim.faas import FaasSystem, FunctionReplica, FunctionRequest, FunctionSimul
 from sim.metrics import Metrics, RuntimeLogger
 from sim.skippy import SimulationClusterContext
 from sim.topology import Topology
+from skippy.core.scheduler import Scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,9 @@ class Simulation:
         logger.info('setting up benchmark')
         self.benchmark.setup(env)
 
+        logger.info('starting faas system')
+        env.faas.start()
+
         logger.info('starting benchmark process')
         p = env.process(self.benchmark.run(env))
 
@@ -69,6 +73,9 @@ class Simulation:
 
         if not env.cluster:
             env.cluster = SimulationClusterContext(env)
+
+        if not env.scheduler:
+            env.scheduler = Scheduler(env.cluster)
 
 
 class DummySimulator(FunctionSimulator):
@@ -95,7 +102,7 @@ class DockerDeploySimMixin:
         yield from docker_pull(env, replica.function.image, node_state.ether_node)
 
 
-class SimpleFunctionSimulator(DockerDeploySimMixin, FunctionSimulator):
+class SimpleFunctionSimulator(DockerDeploySimMixin, DummySimulator):
     pass
 
 

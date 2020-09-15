@@ -1,10 +1,10 @@
 from collections import defaultdict
-from typing import Optional, Dict
+from typing import Optional
 
 import ether.topology
 from ether.core import Node, Connection
 
-DockerRegistry = Node('dockerhub.com')
+DockerRegistry = Node('registry')
 
 
 class Topology(ether.topology.Topology):
@@ -89,8 +89,12 @@ class LazyBandwidthGraph:
             if destination in self.bwg.cache[self.source]:
                 return self.bwg.cache[self.source][destination]
 
+            if self.source == destination:
+                # FIXME: should this case maybe be handled in the scheduler/priorities?
+                return 1.25e+8
+
             route = self.bwg.topology.route_by_node_name(self.source, destination)
-            if not route:
+            if not route or not route.hops:
                 return None
 
             bandwidth = min([link.bandwidth for link in route.hops])

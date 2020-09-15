@@ -45,6 +45,7 @@ class Environment(simpy.Environment):
         self.cluster = None
         self.container_registry = None
         self.metrics = None
+        self.scheduler = None
         self.node_states = dict()
 
     def get_node_state(self, name: str) -> Optional[NodeState]:
