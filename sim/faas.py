@@ -129,18 +129,42 @@ class FaasSystem:
         if fn.name in self.functions:
             raise ValueError('function already deployed')
 
-        self.functions[fn.name] = self.functions
+        self.functions[fn.name] = fn
 
         replica = FunctionReplica()
         replica.function = fn
         replica.pod = self.create_pod(fn)
+        self.replicas[fn.name].append(replica)
 
         yield self.scheduler_queue.put(replica)
 
-    def request(self, request: FunctionRequest):
-        # TODO
+    def invoke(self, request: FunctionRequest):
+        # TODO: how to return a FunctionResponse?
         logger.debug('invoking function %s', request.name)
-        yield self.env.timeout(0)
+
+        if request.name not in self.functions:
+            logger.warning('invoking non-existing function %s', request.name)
+            return
+
+        env = self.env
+        t_received = env.now
+        func: FunctionDefinition = self.functions[request.name]
+
+        replicas = self.get_replicas(func.name, FunctionState.RUNNING)
+        if not replicas:
+            # TODO: wait for replicas to start? return 404?
+            raise NotImplementedError
+
+        # TODO: load balance between replicas
+        replica = replicas[0]
+
+        simulator: FunctionSimulator = env.simulator_factory.create(env, func)
+
+        node = env.get_node_state(replica.node)
+
+        node.current_requests.add(request)
+        yield from simulator.execute(env, replica, request)
+        node.current_requests.remove(request)
 
     def create_pod(self, fn: FunctionDefinition):
         return create_function_pod(fn)

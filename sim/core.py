@@ -12,12 +12,14 @@ class NodeState:
     Holds simulation specific runtime knowledge about a node. For example, what docker images it has already pulled.
     """
     docker_images: Set
+    current_requests: Set
 
     def __init__(self) -> None:
         super().__init__()
         self.ether_node = None
         self.skippy_node = None
         self.docker_images = set()
+        self.current_requests = set()
 
     @property
     def name(self):

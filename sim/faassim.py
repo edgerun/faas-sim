@@ -60,13 +60,13 @@ class Simulation:
 
     def init_environment(self, env):
         if not env.simulator_factory:
-            env.simulator_factory = SimpleSimulatorFactory()
+            env.simulator_factory = env.simulator_factory or self.create_simulator_factory()
 
         if not env.container_registry:
-            env.container_registry = ContainerRegistry()
+            env.container_registry = self.create_container_registry()
 
         if not env.faas:
-            env.faas = FaasSystem(env)
+            env.faas = self.create_faas_system(env)
 
         if not env.metrics:
             env.metrics = Metrics(env, RuntimeLogger())
@@ -75,7 +75,19 @@ class Simulation:
             env.cluster = SimulationClusterContext(env)
 
         if not env.scheduler:
-            env.scheduler = Scheduler(env.cluster)
+            env.scheduler = self.create_scheduler(env)
+
+    def create_container_registry(self):
+        return ContainerRegistry()
+
+    def create_simulator_factory(self):
+        return SimpleSimulatorFactory()
+
+    def create_faas_system(self, env):
+        return FaasSystem(env)
+
+    def create_scheduler(self, env):
+        return Scheduler(env.cluster)
 
 
 class DummySimulator(FunctionSimulator):
@@ -102,7 +114,19 @@ class DockerDeploySimMixin:
         yield from docker_pull(env, replica.function.image, node_state.ether_node)
 
 
-class SimpleFunctionSimulator(DockerDeploySimMixin, DummySimulator):
+class ModeledExecutionSimMixin:
+
+    def execute(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+        # 1) get parameters of base distribution (ideal case)
+        # 2) check the utilization of the node the replica is running on
+        # 3) transform distribution parameters with degradation function depending on utilization
+        # 4) sample from that distribution
+        logger.info('invoking %s on %s', request.name, replica.node)
+
+        yield env.timeout(0)
+
+
+class SimpleFunctionSimulator(ModeledExecutionSimMixin, DockerDeploySimMixin, DummySimulator):
     pass
 
 

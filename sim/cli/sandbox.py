@@ -31,7 +31,7 @@ class ExampleBenchmark(Benchmark):
         # execute 10 requests and wait 1 second between each request
         for i in range(10):
             yield env.timeout(1)
-            yield from env.faas.request(FunctionRequest('wf_01_pre'))
+            yield from env.faas.invoke(FunctionRequest('wf_01_pre'))
 
 
 def example_topology() -> Topology:
