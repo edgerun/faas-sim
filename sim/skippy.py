@@ -15,6 +15,7 @@ from skippy.core.clustercontext import ClusterContext
 from skippy.core.model import Node as SkippyNode, Capacity as SkippyCapacity, ImageState, Pod, PodSpec, Container, \
     ResourceRequirements
 from skippy.core.storage import StorageIndex
+from skippy.core.utils import counter
 
 
 class SimulationClusterContext(ClusterContext):
@@ -108,6 +109,9 @@ def to_skippy_node(node: EtherNode) -> SkippyNode:
     return SkippyNode(node.name, capacity=capacity, allocatable=allocatable, labels=labels)
 
 
+pod_counters = defaultdict(counter)
+
+
 def create_function_pod(fn: 'FunctionDefinition') -> Pod:
     """
     Creates a new Pod that hosts the given function.
@@ -123,7 +127,8 @@ def create_function_pod(fn: 'FunctionDefinition') -> Pod:
     spec.containers = [Container(fn.image, resource_requirements)]
     spec.labels = fn.labels
 
-    pod = Pod(f'pod-{fn.name}-PODID', 'faas-sim')
+    cnt = next(pod_counters[fn.name])
+    pod = Pod(f'pod-{fn.name}-{cnt}', 'faas-sim')
     pod.spec = spec
 
     return pod

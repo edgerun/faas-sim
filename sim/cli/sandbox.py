@@ -18,20 +18,20 @@ class ExampleBenchmark(Benchmark):
     def setup(self, env: Environment):
         containers: docker.ContainerRegistry = env.container_registry
 
-        containers.put(ImageProperties('edgerun/ml_workflow/preprocess', parse_size_string('20M')))
-        containers.put(ImageProperties('edgerun/ml_workflow/train', parse_size_string('300M')))
+        containers.put(ImageProperties('smttest', parse_size_string('58M')))
+        containers.put(ImageProperties('python-pi', parse_size_string('56M')))
 
         for name, tag_dict in containers.images.items():
             for tag, images in tag_dict.items():
                 print(name, tag, images)
 
     def run(self, env: Environment):
-        yield from env.faas.deploy(FunctionDefinition('wf_01_pre', 'edgerun/ml_workflow/preprocess'))
+        yield from env.faas.deploy(FunctionDefinition('smttest', 'smttest'))
 
         # execute 10 requests and wait 1 second between each request
         for i in range(10):
             yield env.timeout(1)
-            yield from env.faas.invoke(FunctionRequest('wf_01_pre'))
+            yield from env.faas.invoke(FunctionRequest('smttest'))
 
 
 def example_topology() -> Topology:

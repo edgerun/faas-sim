@@ -77,6 +77,8 @@ class FunctionReplica:
     pod: Pod
     state: FunctionState = FunctionState.CONCEIVED
 
+    simulator: 'FunctionSimulator' = None
+
 
 class FunctionRequest:
     request_id: int
@@ -106,6 +108,38 @@ class FunctionResponse(NamedTuple):
     node: str = None
 
 
+class LoadBalancer:
+    env: Environment
+    replicas: Dict[str, List[FunctionReplica]]
+
+    def __init__(self, env, replicas) -> None:
+        super().__init__()
+        self.env = env
+        self.replicas = replicas
+
+    def get_running_replicas(self, function: str):
+        return [replica for replica in self.replicas[function] if replica.state == FunctionState.RUNNING]
+
+    def next_replica(self, request: FunctionRequest) -> FunctionReplica:
+        raise NotImplementedError
+
+
+class RoundRobinLoadBalancer(LoadBalancer):
+
+    def __init__(self, env, replicas) -> None:
+        super().__init__(env, replicas)
+        self.counters = defaultdict(lambda: 0)
+
+    def next_replica(self, request: FunctionRequest) -> FunctionReplica:
+        replicas = self.get_running_replicas(request.name)
+        i = self.counters[request.name] % len(replicas)
+        self.counters[request.name] = (i + 1) % len(replicas)
+
+        replica = replicas[i]
+
+        return replica
+
+
 class FaasSystem:
     """
 
@@ -119,6 +153,8 @@ class FaasSystem:
         self.request_queue = simpy.Store(env)
         self.scheduler_queue = simpy.Store(env)
 
+        self.load_balancer = RoundRobinLoadBalancer(env, self.replicas)
+
     def get_replicas(self, fn_name: str, state=None) -> List[FunctionReplica]:
         if state is None:
             return self.replicas[fn_name]
@@ -131,9 +167,7 @@ class FaasSystem:
 
         self.functions[fn.name] = fn
 
-        replica = FunctionReplica()
-        replica.function = fn
-        replica.pod = self.create_pod(fn)
+        replica = self.create_replica(fn)
         self.replicas[fn.name].append(replica)
 
         yield self.scheduler_queue.put(replica)
@@ -146,28 +180,39 @@ class FaasSystem:
             logger.warning('invoking non-existing function %s', request.name)
             return
 
-        env = self.env
-        t_received = env.now
-        func: FunctionDefinition = self.functions[request.name]
+        t_received = self.env.now
 
-        replicas = self.get_replicas(func.name, FunctionState.RUNNING)
+        replicas = self.get_replicas(request.name, FunctionState.RUNNING)
         if not replicas:
-            # TODO: wait for replicas to start? return 404?
+            '''
+            https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
+
+            When scale_from_zero is enabled a cache is maintained in memory indicating the readiness of each function.
+            If when a request is received a function is not ready, then the HTTP connection is blocked, the function is
+            scaled to min replicas, and as soon as a replica is available the request is proxied through as per normal.
+            You will see this process taking place in the logs of the gateway component.
+            '''
+            # TODO
             raise NotImplementedError
 
-        # TODO: load balance between replicas
-        replica = replicas[0]
+        if len(replicas) > 1:
+            logger.debug('asking load balancer for replica for request %s:%d', request.name, request.request_id)
+            replica = self.next_replica(request)
+        else:
+            replica = replicas[0]
 
-        simulator: FunctionSimulator = env.simulator_factory.create(env, func)
+        logger.debug('selected replica on node %s for request %s:%d', replica.node, request.name, request.request_id)
 
-        node = env.get_node_state(replica.node)
+        yield from simulate_function_invocation(self.env, replica, request)
 
-        node.current_requests.add(request)
-        yield from simulator.execute(env, replica, request)
-        node.current_requests.remove(request)
+        # TODO: log trace
 
-    def create_pod(self, fn: FunctionDefinition):
-        return create_function_pod(fn)
+    def remove(self):
+        # TODO remove deployed function
+        raise NotImplementedError
+
+    def next_replica(self, request) -> FunctionReplica:
+        return self.load_balancer.next_replica(request)
 
     def start(self):
         self.env.process(self.run_scheduler_worker())
@@ -202,10 +247,19 @@ class FaasSystem:
             # start a new process to simulate starting of pod
             env.process(simulate_function_start(env, replica))
 
+    def create_pod(self, fn: FunctionDefinition):
+        return create_function_pod(fn)
+
+    def create_replica(self, fn: FunctionDefinition) -> FunctionReplica:
+        replica = FunctionReplica()
+        replica.function = fn
+        replica.pod = self.create_pod(fn)
+        replica.simulator = self.env.simulator_factory.create(self.env, fn)
+        return replica
+
 
 def simulate_function_start(env: Environment, replica: FunctionReplica):
-    # TODO: registry of simulators?
-    sim: FunctionSimulator = env.simulator_factory.create(env, replica.function)
+    sim: FunctionSimulator = replica.simulator
 
     logger.debug('deploying function %s to %s', replica.function.name, replica.node)
     yield from sim.deploy(env, replica)
@@ -216,6 +270,16 @@ def simulate_function_start(env: Environment, replica: FunctionReplica):
     logger.debug('running function setup %s on %s', replica.function.name, replica.node)
     replica.state = FunctionState.RUNNING
     yield from sim.setup(env, replica)  # FIXME: this is really domain-specific startup
+
+
+def simulate_function_invocation(env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    node = env.get_node_state(replica.node)
+
+    node.current_requests.add(request)
+    yield from replica.simulator.invoke(env, replica, request)
+    node.current_requests.remove(request)
+
+    # TODO: log traces
 
 
 class FunctionSimulator(abc.ABC):
@@ -229,7 +293,7 @@ class FunctionSimulator(abc.ABC):
     def setup(self, env: Environment, replica: FunctionReplica):
         yield env.timeout(0)
 
-    def execute(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
         yield env.timeout(0)
 
     def teardown(self, env: Environment, replica: FunctionReplica):

@@ -101,7 +101,7 @@ class DummySimulator(FunctionSimulator):
     def setup(self, env: Environment, replica: FunctionReplica):
         yield env.timeout(0)
 
-    def execute(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
         yield env.timeout(0)
 
     def teardown(self, env: Environment, replica: FunctionReplica):
@@ -116,7 +116,7 @@ class DockerDeploySimMixin:
 
 class ModeledExecutionSimMixin:
 
-    def execute(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
         # 1) get parameters of base distribution (ideal case)
         # 2) check the utilization of the node the replica is running on
         # 3) transform distribution parameters with degradation function depending on utilization
