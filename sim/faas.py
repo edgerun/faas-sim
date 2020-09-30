@@ -8,7 +8,7 @@ from typing import List, Dict, NamedTuple
 import simpy
 from ether.util import parse_size_string
 
-from sim.core import Environment
+from sim.core import Environment, NodeState
 from sim.skippy import create_function_pod
 from skippy.core.model import Pod
 
@@ -73,7 +73,7 @@ class FunctionReplica:
     A function replica is an instance of a function running on a specific node.
     """
     function: FunctionDefinition
-    node: str
+    node: NodeState
     pod: Pod
     state: FunctionState = FunctionState.CONCEIVED
 
@@ -201,7 +201,7 @@ class FaasSystem:
         else:
             replica = replicas[0]
 
-        logger.debug('selected replica on node %s for request %s:%d', replica.node, request.name, request.request_id)
+        logger.debug('dispatching request %s:%d to %s', request.name, request.request_id, replica.node.name)
 
         yield from simulate_function_invocation(self.env, replica, request)
 
@@ -216,6 +216,10 @@ class FaasSystem:
 
     def start(self):
         self.env.process(self.run_scheduler_worker())
+
+    def poll_available_replica(self, fn: str, interval=0.5):
+        while not self.get_replicas(fn, FunctionState.RUNNING):
+            yield self.env.timeout(interval)
 
     def run_scheduler_worker(self):
         env = self.env
@@ -242,7 +246,7 @@ class FaasSystem:
 
             logger.info('pod %s was scheduled to %s', pod.name, result.suggested_host)
 
-            replica.node = result.suggested_host.name
+            replica.node = self.env.get_node_state(result.suggested_host.name)
 
             # start a new process to simulate starting of pod
             env.process(simulate_function_start(env, replica))
@@ -261,19 +265,19 @@ class FaasSystem:
 def simulate_function_start(env: Environment, replica: FunctionReplica):
     sim: FunctionSimulator = replica.simulator
 
-    logger.debug('deploying function %s to %s', replica.function.name, replica.node)
+    logger.debug('deploying function %s to %s', replica.function.name, replica.node.name)
     yield from sim.deploy(env, replica)
     replica.state = FunctionState.STARTING
-    logger.debug('starting function %s on %s', replica.function.name, replica.node)
+    logger.debug('starting function %s on %s', replica.function.name, replica.node.name)
     yield from sim.startup(env, replica)
 
-    logger.debug('running function setup %s on %s', replica.function.name, replica.node)
+    logger.debug('running function setup %s on %s', replica.function.name, replica.node.name)
     replica.state = FunctionState.RUNNING
     yield from sim.setup(env, replica)  # FIXME: this is really domain-specific startup
 
 
 def simulate_function_invocation(env: Environment, replica: FunctionReplica, request: FunctionRequest):
-    node = env.get_node_state(replica.node)
+    node = replica.node
 
     node.current_requests.add(request)
     yield from replica.simulator.invoke(env, replica, request)

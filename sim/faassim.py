@@ -110,8 +110,7 @@ class DummySimulator(FunctionSimulator):
 
 class DockerDeploySimMixin:
     def deploy(self, env: Environment, replica: FunctionReplica):
-        node_state = env.get_node_state(replica.node)
-        yield from docker_pull(env, replica.function.image, node_state.ether_node)
+        yield from docker_pull(env, replica.function.image, replica.node.ether_node)
 
 
 class ModeledExecutionSimMixin:
@@ -121,9 +120,9 @@ class ModeledExecutionSimMixin:
         # 2) check the utilization of the node the replica is running on
         # 3) transform distribution parameters with degradation function depending on utilization
         # 4) sample from that distribution
-        logger.info('invoking %s on %s', request.name, replica.node)
+        logger.info('invoking %s on %s (%d in parallel)', request.name, replica.node.name, len(replica.node.current_requests))
 
-        yield env.timeout(0)
+        yield env.timeout(1)
 
 
 class SimpleFunctionSimulator(ModeledExecutionSimMixin, DockerDeploySimMixin, DummySimulator):

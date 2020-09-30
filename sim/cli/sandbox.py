@@ -12,6 +12,8 @@ from sim.faassim import Simulation
 from sim.topology import Topology
 from skippy.core.utils import parse_size_string
 
+logger = logging.getLogger(__name__)
+
 
 class ExampleBenchmark(Benchmark):
 
@@ -23,15 +25,23 @@ class ExampleBenchmark(Benchmark):
 
         for name, tag_dict in containers.images.items():
             for tag, images in tag_dict.items():
-                print(name, tag, images)
+                logger.info('%s, %s, %s', name, tag, images)
 
     def run(self, env: Environment):
         yield from env.faas.deploy(FunctionDefinition('smttest', 'smttest'))
 
-        # execute 10 requests and wait 1 second between each request
-        for i in range(10):
-            yield env.timeout(1)
-            yield from env.faas.invoke(FunctionRequest('smttest'))
+        logger.info('waiting for replica')
+        yield env.process(env.faas.poll_available_replica('smttest'))
+
+        # execute 10 requests in parallel
+        logger.info('executing requests')
+        ps = []
+        for i in range(16):
+            ps.append(env.process(env.faas.invoke(FunctionRequest('smttest'))))
+
+        # wait for invocation processes to finish
+        for p in ps:
+            yield p
 
 
 def example_topology() -> Topology:
