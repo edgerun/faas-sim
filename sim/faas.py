@@ -167,9 +167,14 @@ class FaasSystem:
 
         self.functions[fn.name] = fn
 
+        logger.info('deploying function %s with scale_min=%d', fn.name, fn.scale_min)
+
+        for _ in range(fn.scale_min):
+            yield from self.deploy_replica(fn)
+
+    def deploy_replica(self, fn: FunctionDefinition):
         replica = self.create_replica(fn)
         self.replicas[fn.name].append(replica)
-
         yield self.scheduler_queue.put(replica)
 
     def invoke(self, request: FunctionRequest):
@@ -192,10 +197,11 @@ class FaasSystem:
             scaled to min replicas, and as soon as a replica is available the request is proxied through as per normal.
             You will see this process taking place in the logs of the gateway component.
             '''
-            # TODO
-            raise NotImplementedError
+            yield from self.poll_available_replica(request.name)
 
-        if len(replicas) > 1:
+        if len(replicas) < 1:
+            raise ValueError
+        elif len(replicas) > 1:
             logger.debug('asking load balancer for replica for request %s:%d', request.name, request.request_id)
             replica = self.next_replica(request)
         else:
