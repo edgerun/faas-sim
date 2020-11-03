@@ -258,7 +258,7 @@ class FittedExecutionTimeOracle(Oracle):
             return 'execution_time', None
 
         host = scheduling_result.suggested_host.name
-        host_type = host[host.rindex('_') + 1:]
+        host_type = host[:host.rindex('_')]
 
         execution_time = 0
         for container in pod.spec.containers:

@@ -1,6 +1,8 @@
 import logging
 import time
 
+from skippy.core.scheduler import Scheduler
+
 from sim.benchmark import Benchmark
 from sim.core import Environment, timeout_listener
 from sim.docker import ContainerRegistry, pull as docker_pull
@@ -9,7 +11,6 @@ from sim.faas import FaasSystem, FunctionReplica, FunctionRequest, FunctionSimul
 from sim.metrics import Metrics, RuntimeLogger
 from sim.skippy import SimulationClusterContext
 from sim.topology import Topology
-from skippy.core.scheduler import Scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,8 @@ class ModeledExecutionSimMixin:
         # 2) check the utilization of the node the replica is running on
         # 3) transform distribution parameters with degradation function depending on utilization
         # 4) sample from that distribution
-        logger.info('invoking %s on %s (%d in parallel)', request.name, replica.node.name, len(replica.node.current_requests))
+        logger.info('invoking %s on %s (%d in parallel)', request.name, replica.node.name,
+                    len(replica.node.current_requests))
 
         yield env.timeout(1)
 
