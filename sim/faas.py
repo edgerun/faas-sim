@@ -7,10 +7,10 @@ from typing import List, Dict, NamedTuple
 
 import simpy
 from ether.util import parse_size_string
+from skippy.core.model import Pod
 
 from sim.core import Environment, NodeState
 from sim.skippy import create_function_pod
-from skippy.core.model import Pod
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class Resources:
 class FunctionDefinition:
     name: str
     image: str
-    labels: Dict[str, str] = {}
+    labels: Dict[str, str]
 
     requests: Resources = Resources()
 
@@ -66,6 +66,13 @@ class FunctionDefinition:
         super().__init__()
         self.name = name
         self.image = image
+        self.labels = {}
+
+    def get_resource_requirements(self) -> Dict:
+        return {
+            'cpu': self.requests.cpu,
+            'memory': self.requests.memory
+        }
 
 
 class FunctionReplica:
@@ -167,7 +174,11 @@ class FaasSystem:
 
         self.functions[fn.name] = fn
 
+        # TODO: fix skippy.get_init_image_states first
+        # self.env.metrics.log_function_definition(fn)
+
         logger.info('deploying function %s with scale_min=%d', fn.name, fn.scale_min)
+        self.env.metrics.log_scaling(fn.name, fn.scale_min)
 
         for _ in range(fn.scale_min):
             yield from self.deploy_replica(fn)
@@ -209,12 +220,18 @@ class FaasSystem:
 
         logger.debug('dispatching request %s:%d to %s', request.name, request.request_id, replica.node.name)
 
+        t_start = self.env.now
         yield from simulate_function_invocation(self.env, replica, request)
 
-        # TODO: log trace
+        t_end = self.env.now
+
+        t_wait = t_start - t_received
+        t_exec = t_end - t_start
+        self.env.metrics.log_invocation(replica.function.name, replica.node.name, t_wait, t_start, t_exec)
 
     def remove(self):
         # TODO remove deployed function
+        # TODO log scaling (removal)
         raise NotImplementedError
 
     def next_replica(self, request) -> FunctionReplica:
@@ -286,10 +303,12 @@ def simulate_function_invocation(env: Environment, replica: FunctionReplica, req
     node = replica.node
 
     node.current_requests.add(request)
-    yield from replica.simulator.invoke(env, replica, request)
-    node.current_requests.remove(request)
+    env.metrics.log_start_exec(request, replica)
 
-    # TODO: log traces
+    yield from replica.simulator.invoke(env, replica, request)
+
+    env.metrics.log_stop_exec(request, replica)
+    node.current_requests.remove(request)
 
 
 class FunctionSimulator(abc.ABC):
