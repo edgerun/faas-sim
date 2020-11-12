@@ -48,7 +48,7 @@ class Metrics:
         tags = dict(link.tags)
         tags['data_type'] = data_type
 
-        self.log('network', num_bytes, tags)
+        self.log('network', num_bytes, **tags)
 
     def log_scaling(self, function_name, replicas):
         self.log('scale', replicas, function_name=function_name)
