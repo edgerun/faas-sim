@@ -186,6 +186,7 @@ class FaasSystem:
     def deploy_replica(self, fn: FunctionDefinition):
         replica = self.create_replica(fn)
         self.replicas[fn.name].append(replica)
+        self.env.metrics.log_queue_schedule(replica)
         yield self.scheduler_queue.put(replica)
 
     def invoke(self, request: FunctionRequest):
@@ -232,6 +233,7 @@ class FaasSystem:
     def remove(self):
         # TODO remove deployed function
         # TODO log scaling (removal)
+        # TODO log teardown
         raise NotImplementedError
 
     def next_replica(self, request) -> FunctionReplica:
@@ -254,10 +256,13 @@ class FaasSystem:
             logger.debug('scheduling next replica %s', replica.function.name)
 
             # schedule the required pod
+            self.env.metrics.log_start_schedule(replica)
             pod = replica.pod
             then = time.time()
             result = env.scheduler.schedule(pod)
             duration = time.time() - then
+            self.env.metrics.log_finish_schedule(replica, result)
+
             yield env.timeout(duration)  # include scheduling latency in simulation time
 
             if logger.isEnabledFor(logging.DEBUG):
@@ -289,14 +294,18 @@ def simulate_function_start(env: Environment, replica: FunctionReplica):
     sim: FunctionSimulator = replica.simulator
 
     logger.debug('deploying function %s to %s', replica.function.name, replica.node.name)
+    env.metrics.log_deploy(replica)
     yield from sim.deploy(env, replica)
     replica.state = FunctionState.STARTING
+    env.metrics.log_startup(replica)
     logger.debug('starting function %s on %s', replica.function.name, replica.node.name)
     yield from sim.startup(env, replica)
 
     logger.debug('running function setup %s on %s', replica.function.name, replica.node.name)
     replica.state = FunctionState.RUNNING
+    env.metrics.log_setup(replica)
     yield from sim.setup(env, replica)  # FIXME: this is really domain-specific startup
+    env.metrics.log_finish_deploy(replica)
 
 
 def simulate_function_invocation(env: Environment, replica: FunctionReplica, request: FunctionRequest):

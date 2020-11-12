@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import Dict
 
 import pandas as pd
+from skippy.core.model import SchedulingResult
 
 from faassim.logging import RuntimeLogger, NullLogger
 from sim.core import Environment
@@ -87,6 +88,41 @@ class Metrics:
             'cpu': self.utilization[node.name]['cpu'] / node.ether_node.capacity.cpu_millis,
             'mem': self.utilization[node.name]['memory'] / node.ether_node.capacity.memory
         }, node=node.name)
+
+    def log_queue_schedule(self, replica: FunctionReplica):
+        self.log('schedule', 'queue', function_name=replica.function.name, replica_id=id(replica))
+
+    def log_start_schedule(self, replica: FunctionReplica):
+        self.log('schedule', 'start', function_name=replica.function.name, replica_id=id(replica))
+
+    def log_finish_schedule(self, replica: FunctionReplica, result: SchedulingResult):
+        if not result.suggested_host:
+            node_name = 'None'
+        else:
+            node_name = result.suggested_host.name
+
+        self.log('schedule', 'finish', function_name=replica.function.name, node_name=node_name,
+                 successful=node_name != 'None', replica_id=id(replica))
+
+    def log_deploy(self, replica: FunctionReplica):
+        self.log('deployment', 'deploy', function_name=replica.function.name, node_name=replica.node.name,
+                 replica_id=id(replica))
+
+    def log_startup(self, replica: FunctionReplica):
+        self.log('deployment', 'startup', function_name=replica.function.name, node_name=replica.node.name,
+                 replica_id=id(replica))
+
+    def log_setup(self, replica: FunctionReplica):
+        self.log('deployment', 'setup', function_name=replica.function.name, node_name=replica.node.name,
+                 replica_id=id(replica))
+
+    def log_finish_deploy(self, replica: FunctionReplica):
+        self.log('deployment', 'finish', function_name=replica.function.name, node_name=replica.node.name,
+                 replica_id=id(replica))
+
+    def log_teardown(self, replica: FunctionReplica):
+        self.log('deployment', 'teardown', function_name=replica.function.name, node_name=replica.node.name,
+                 replica_id=id(replica))
 
     def get(self, name, **tags):
         return self.logger.get(name, **tags)
