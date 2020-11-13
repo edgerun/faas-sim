@@ -54,7 +54,7 @@ class Metrics:
     def log_scaling(self, function_name, replicas):
         self.log('scale', replicas, function_name=function_name)
 
-    def log_invocation(self, function_name, node_name, t_wait, t_start, t_exec):
+    def log_invocation(self, function_name, node_name, t_wait, t_start, t_exec, replica_id):
         self.invocations[function_name] += 1
         self.total_invocations += 1
         self.last_invocation[function_name] = self.env.now
@@ -63,7 +63,7 @@ class Metrics:
         mem = function.get_resource_requirements().get('memory')
 
         self.log('invocations', {'t_wait': t_wait, 't_exec': t_exec, 't_start': t_start, 'memory': mem},
-                 function_name=function_name, node=node_name)
+                 function_name=function_name, node=node_name, replica_id=replica_id)
 
     def log_start_exec(self, request: FunctionRequest, replica: FunctionReplica):
         node = replica.node
