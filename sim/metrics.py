@@ -41,6 +41,16 @@ class Metrics:
 
             self.log('functions', record)
 
+    def log_function_replica(self, replica: FunctionReplica):
+        for container in replica.pod.spec.containers:
+            record = {'name': replica.function.name, 'pod': replica.pod.name, 'image': container.image}
+            # TODO fix clustercontext, maybe this is unnecessary as log_function_definition already logs the image
+            # image_state = self.env.cluster.image_states[container.image]
+            # for arch, size in image_state.size.items():
+            #     record[f'size_{arch}'] = size
+
+            self.log('function_replicas', record, replica_id=id(replica))
+
     def log_flow(self, num_bytes, duration, source, sink, action_type):
         self.log('flow', value={'bytes': num_bytes, 'duration': duration},
                  source=source.name, sink=sink.name, action_type=action_type)

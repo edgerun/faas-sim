@@ -187,6 +187,7 @@ class FaasSystem:
         replica = self.create_replica(fn)
         self.replicas[fn.name].append(replica)
         self.env.metrics.log_queue_schedule(replica)
+        self.env.metrics.log_function_replica(replica)
         yield self.scheduler_queue.put(replica)
 
     def invoke(self, request: FunctionRequest):
