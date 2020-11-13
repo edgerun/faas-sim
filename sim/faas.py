@@ -228,7 +228,7 @@ class FaasSystem:
 
         t_wait = t_start - t_received
         t_exec = t_end - t_start
-        self.env.metrics.log_invocation(replica.function.name, replica.node.name, t_wait, t_start, t_exec)
+        self.env.metrics.log_invocation(replica.function.name, replica.node.name, t_wait, t_start, t_exec, id(replica))
 
     def remove(self):
         # TODO remove deployed function
