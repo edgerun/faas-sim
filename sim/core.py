@@ -49,6 +49,7 @@ class Environment(simpy.Environment):
         self.metrics = None
         self.scheduler = None
         self.node_states = dict()
+        self.background_processes = []
 
     def get_node_state(self, name: str) -> Optional[NodeState]:
         """

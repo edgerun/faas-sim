@@ -176,6 +176,7 @@ class FaasSystem:
 
         # TODO: fix skippy.get_init_image_states first
         # self.env.metrics.log_function_definition(fn)
+        self.env.metrics.log_function_deploy(fn)
 
         logger.info('deploying function %s with scale_min=%d', fn.name, fn.scale_min)
         self.env.metrics.log_scaling(fn.name, fn.scale_min)
@@ -241,6 +242,8 @@ class FaasSystem:
         return self.load_balancer.next_replica(request)
 
     def start(self):
+        for process in self.env.background_processes:
+            self.env.process(process(self.env))
         self.env.process(self.run_scheduler_worker())
 
     def poll_available_replica(self, fn: str, interval=0.5):
@@ -290,6 +293,38 @@ class FaasSystem:
         replica.simulator = self.env.simulator_factory.create(self.env, fn)
         return replica
 
+    def discover(self, function: FunctionDefinition) -> List[FunctionReplica]:
+        return [replica for replica in self.replicas[function.name] if replica.state == FunctionState.RUNNING]
+
+    def _remove_replica(self, replica: FunctionReplica):
+        env = self.env
+        node = replica.node.ether_node
+
+        env.metrics.log_teardown(replica)
+        yield from replica.simulator.teardown(env, replica)
+
+        self.env.cluster.remove_pod_from_node(replica.pod, node)
+        replica.state = FunctionState.SUSPENDED
+        self.replicas[replica.function.name].remove(replica)
+
+        env.metrics.log('allocation', {
+            'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+            'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+        }, node=node.name)
+        env.metrics.log_scaling(replica.function.name, -1)
+
+    def suspend(self, function_name: str):
+        if function_name not in self.functions:
+            raise ValueError
+
+        function: FunctionDefinition = self.functions[function_name]
+        replicas: List[FunctionReplica] = self.discover(function)
+
+        for replica in replicas:
+            self._remove_replica(replica)
+
+        self.env.metrics.log_function_suspend(function)
+
 
 def simulate_function_start(env: Environment, replica: FunctionReplica):
     sim: FunctionSimulator = replica.simulator
@@ -319,6 +354,35 @@ def simulate_function_invocation(env: Environment, replica: FunctionReplica, req
 
     env.metrics.log_stop_exec(request, replica)
     node.current_requests.remove(request)
+
+
+def faas_idler(env: Environment, inactivity_duration=300, reconcile_interval=30):
+    """
+    https://github.com/openfaas-incubator/faas-idler
+    https://github.com/openfaas-incubator/faas-idler/blob/master/main.go
+
+    default values:
+    https://github.com/openfaas-incubator/faas-idler/blob/668991c532156275993399ee79a297a4c2d651ec/docker-compose.yml
+
+    :param env: the faas environment
+    :param inactivity_duration: i.e. 15m (Golang duration)
+    :param reconcile_interval: i.e. 1m (default value)
+    :return: an event generator
+    """
+    faas: FaasSystem = env.faas
+    while True:
+        yield env.timeout(reconcile_interval)
+
+        for function in faas.functions.values():
+            if not function.scale_zero:
+                continue
+            if function.state != FunctionState.RUNNING:
+                continue
+
+            idle_time = env.now - env.metrics.last_invocation[function.name]
+            if idle_time >= inactivity_duration:
+                faas.suspend(function.name)
+                logger.debug('%.2f function %s has been idle for %.2fs', env.now, function.name, idle_time)
 
 
 class FunctionSimulator(abc.ABC):

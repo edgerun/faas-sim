@@ -35,11 +35,21 @@ class Metrics:
         Logs the functions name, related container images and their metadata
         """
         record = {'name': fn.name, 'image': fn.image}
+        # TODO fix clustercontext
         image_state = self.env.cluster.image_states[fn.image]
         for arch, size in image_state.size.items():
             record[f'size_{arch}'] = size
 
-            self.log('functions', record)
+            self.log('functions', record, type='deploy')
+
+    def log_function_deploy(self, fn: FunctionDefinition):
+        self.log('function_deployment', 'deploy', name=fn.name, image=fn.image, function_id=id(fn))
+
+    def log_function_suspend(self, fn: FunctionDefinition):
+        self.log('function_deployment', 'suspend', name=fn.name, image=fn.image, function_id=id(fn))
+
+    def log_function_remove(self, fn: FunctionDefinition):
+        self.log('function_deployment', 'remove', name=fn.name, image=fn.image, function_id=id(fn))
 
     def log_function_replica(self, replica: FunctionReplica):
         for container in replica.pod.spec.containers:
@@ -115,23 +125,23 @@ class Metrics:
                  successful=node_name != 'None', replica_id=id(replica))
 
     def log_deploy(self, replica: FunctionReplica):
-        self.log('deployment', 'deploy', function_name=replica.function.name, node_name=replica.node.name,
+        self.log('replica_deployment', 'deploy', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
     def log_startup(self, replica: FunctionReplica):
-        self.log('deployment', 'startup', function_name=replica.function.name, node_name=replica.node.name,
+        self.log('replica_deployment', 'startup', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
     def log_setup(self, replica: FunctionReplica):
-        self.log('deployment', 'setup', function_name=replica.function.name, node_name=replica.node.name,
+        self.log('replica_deployment', 'setup', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
     def log_finish_deploy(self, replica: FunctionReplica):
-        self.log('deployment', 'finish', function_name=replica.function.name, node_name=replica.node.name,
+        self.log('replica_deployment', 'finish', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
     def log_teardown(self, replica: FunctionReplica):
-        self.log('deployment', 'teardown', function_name=replica.function.name, node_name=replica.node.name,
+        self.log('replica_deployment', 'teardown', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
     def get(self, name, **tags):
