@@ -49,6 +49,7 @@ class PythonHTTPSimulator(FunctionSimulator):
         self.queue = queue
         self.scale = scale
         self.oracle = oracle
+        self.delay = 0
 
     def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
         token = self.queue.request()
@@ -66,7 +67,8 @@ class PythonHTTPSimulator(FunctionSimulator):
         yield env.timeout(fet)
         end = env.now
         degradation = replica.node.estimate_degradation(start, end)
-        yield env.timeout(fet - (fet * degradation))
+        delay = max(0, (fet * degradation) - fet)
+        yield env.timeout(delay)
         replica.node.set_end(request.request_id, env.now)
         self.queue.release(token)
 
@@ -75,6 +77,7 @@ class PerformanceDegradationSimulator(FunctionSimulator):
 
     def __init__(self, execution_time_oracle: FittedExecutionTimeOracle):
         self.execution_time_oracle = execution_time_oracle
+        self.delay = 0
 
     def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
         _, fet = self.execution_time_oracle.estimate(env.cluster, replica.pod,
@@ -87,13 +90,15 @@ class PerformanceDegradationSimulator(FunctionSimulator):
         yield env.timeout(fet)
         end = env.now
         degradation = replica.node.estimate_degradation(start, end)
-        yield env.timeout(fet - (fet * degradation))
+        delay = max(0, (fet * degradation) - fet)
+        yield env.timeout(delay)
         replica.node.set_end(request.request_id, env.now)
 
 
 class PerformanceDegradationFactory(SimulatorFactory):
     def create(self, env: Environment, fn: FunctionDefinition) -> FunctionSimulator:
         mode = fn.labels.get('openfaas', None)
+        # return PerformanceDegradationSimulator(FittedExecutionTimeOracle())
         if mode is not None:
             if mode == 'http':
                 workers = int(fn.labels['workers'])
@@ -169,15 +174,20 @@ class DegradationBenchmark(Benchmark):
         env.process(env.faas.invoke(FunctionRequest('cpu_load')))
         env.process(env.faas.invoke(FunctionRequest('cpu_load')))
         env.process(env.faas.invoke(FunctionRequest('cpu_load')))
-        env.process(env.faas.invoke(FunctionRequest('cpu_load')))
-        env.process(env.faas.invoke(FunctionRequest('cpu_load')))
-        ps = []
-        for i in range(16):
-            ps.append(env.process(env.faas.invoke(FunctionRequest(resnet_name))))
+        # env.process(env.faas.invoke(FunctionRequest('cpu_load')))
+        # env.process(env.faas.invoke(FunctionRequest('cpu_load')))
+        clients = 4
+        requests_per_client = 50
+        for i in range(requests_per_client):
+            ps = []
+            for j in range(clients):
+                ps.append(env.process(env.faas.invoke(FunctionRequest(resnet_name))))
 
-        # wait for invocation processes to finish
-        for p in ps:
-            yield p
+            # wait for invocation processes to finish
+            for p in ps:
+                yield p
+
+            yield env.timeout(1)
 
 
 def example_topology() -> Topology:
@@ -196,6 +206,22 @@ def example_topology() -> Topology:
     return t
 
 
+class FittedSimulationSimulator(FunctionSimulator):
+
+    def __init__(self, oracle: FittedExecutionTimeOracle):
+        self.oracle = oracle
+
+    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+        _, fet = self.oracle.estimate(env.cluster, replica.pod, SchedulingResult(replica.node.ether_node, 1, []))
+        yield env.timeout(float(fet))
+
+
+class FittedEstimationFactory(SimulatorFactory):
+
+    def create(self, env: Environment, fn: FunctionDefinition) -> FunctionSimulator:
+        return FittedSimulationSimulator(FittedExecutionTimeOracle())
+
+
 def main():
     logging.basicConfig(level=logging.DEBUG)
 
@@ -204,6 +230,7 @@ def main():
     benchmark = DegradationBenchmark()
     env = Environment()
     env.simulator_factory = PerformanceDegradationFactory()
+    # env.simulator_factory = FittedEstimationFactory()
     env.metrics = Metrics(env, log=RuntimeLogger(SimulatedClock(env)))
     sim = Simulation(topology, benchmark, env=env)
     sim.run()
