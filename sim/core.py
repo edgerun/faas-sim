@@ -1,5 +1,5 @@
 import time
-from typing import Set, Optional
+from typing import Set, Optional, Any, Generator, Callable, List
 
 import simpy
 from ether.core import Node as EtherNode
@@ -49,6 +49,7 @@ class Environment(simpy.Environment):
         self.metrics = None
         self.scheduler = None
         self.node_states = dict()
+        self.background_processes: List[Callable[[Environment], Generator[simpy.events.Event, Any, Any]]] = []
 
     def get_node_state(self, name: str) -> Optional[NodeState]:
         """
