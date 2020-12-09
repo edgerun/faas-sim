@@ -56,24 +56,29 @@ class NodeState:
 
 
 def create_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarray:
-    """
-    input of model is an array with 25 elements
-    in general, the input is based on the resource usages that occurred during the function execution
-    for each resource, the millis of usage per image get recorded
-    i.e. if image A has 2 requests, during the execution and each call had 200 millis CPU, the input for this
-    image is the sum of the millis = 400.
-    after having summed up all usages per image, the input is formed by calculating the following measures:
-    mean, std dev, min, max, 25 percentile, 50 percentile and 75 percentile
-    this translates to the following indices
-    0 - 6: cpu mean, cpu std dev,...
-    7 - 13: gpu mean, gpu std dev...
-    14 - 20: io mean, io std dev...
-    21: number of running containers that have executed at least one call
-    22: sum of all cpu millis
-    23: sum of all gpu millis
-    24: sum of all io millis
-    """
+    # input of model is an array with 34 elements
+    # in general, the input is based on the resource usages that occurred during the function execution
+    # for each trace (instance) from the target service following metrics
+    # for each resource, the millis of usage per image get recorded
+    # i.e. if image A has 2 requests, during the execution and each call had 200 millis CPU, the input for this
+    # image is the sum of the millis = 400.
+    # after having summed up all usages per image, the input is formed by calculating the following measures:
+    # mean, std dev, min, max, 25 percentile, 50 percentile and 75 percentile
+    # this translates to the following indices
+    # ['cpu', 'gpu', 'blkio', 'net']
+    # 0 - 6: cpu mean, cpu std dev,...
+    # 7 - 13: gpu mean, gpu std dev...
+    # 14 - 20: blkio mean, blkio std dev...
+    # 21 - 27: net mean, net std dev...
+    # 28: number of running containers that have executed at least one call
+    # 29: sum of all cpu millis
+    # 30: sum of all gpu millis
+    # 31: sum of all blkio rate ! not scaled
+    # 32: sum of all net rate ! not scaled
+    # 33: mean ram percentage over complete experiment
     calls = []
+    resources_types = ['cpu', 'gpu', 'blkio', 'net']
+
     for call in node_state.all_requests:
         if call.start <= start_ts:
             # add only calls that are either not finished or have finished afterwards
@@ -84,12 +89,19 @@ def create_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarra
             if call.start < end_ts:
                 calls.append(call)
 
+    ram = 0
+    seen_pods = set()
     resources = defaultdict(lambda: defaultdict(list))
     for call in calls:
-        cpu_usage = float(call.replica.function.labels.get('cpu', '0'))
-        io_usage = float(call.replica.function.labels.get('io', '0'))
-        gpu_usage = float(call.replica.function.labels.get('gpu', '0'))
+        call_resources = {}
+        function = call.replica.function
+        for resource in resources_types:
+            call_resources[resource] = float(function.labels.get(resource, '0'))
 
+        pod_name = call.replica.pod.name
+        if pod_name not in seen_pods:
+            ram += call.replica.pod.spec.containers[0].resources.requests['memory']
+            seen_pods.add(pod_name)
         last_start = start_ts if start_ts >= call.start else call.start
 
         if call.end is not None:
@@ -99,25 +111,21 @@ def create_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarra
 
         overlap = first_end - last_start
 
-        resources[call.replica.pod.name]['cpu'].append(overlap * cpu_usage)
-        resources[call.replica.pod.name]['gpu'].append(overlap * gpu_usage)
-        resources[call.replica.pod.name]['io'].append(overlap * io_usage)
+        for resource in resources:
+            resources[pod_name][resource].append(overlap * call_resources[resource])
 
     sums = defaultdict(list)
-    for pod in resources.keys():
-        cpu_sum = np.sum(resources[pod]['cpu'])
-        gpu_sum = np.sum(resources[pod]['gpu'])
-        io_sum = np.sum(resources[pod]['io'])
-        sums['cpu'].append(cpu_sum)
-        sums['gpu'].append(gpu_sum)
-        sums['io'].append(io_sum)
+    for resource_type in resources_types:
+        for pod_name, resources_of_pod in resources.items():
+            resource_sum = np.sum(resources_of_pod[resource_type])
+            sums[resource_type].append(resource_sum)
 
     # make input for model
     # the values get converted to a fixed length array, i.e.: descriptive statistics
     # of the resources of all faas containers
     # skip the first element, it's only the count of containers
     input = []
-    for resource in ['cpu', 'gpu', 'io']:
+    for resource in resources_types:
         mean = np.mean(sums[resource])
         std = np.std(sums[resource])
         amin = np.min(sums[resource])
@@ -136,8 +144,11 @@ def create_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarra
     input.append(len(sums['cpu']))
 
     # add total sums resources
-    for resource in ['cpu', 'gpu', 'io']:
+    for resource in resources_types:
         input.append(np.sum(sums[resource]))
+
+    # add ram_rate in percentage too
+    input.append(ram / node_state.capacity.memory)
 
     return np.array(input)
 
