@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import Set, Optional, Any, Generator, Callable, List
+from typing import Set, Optional, Any, Generator, Callable, List, Dict
 
 import joblib
 import numpy as np
@@ -31,11 +31,9 @@ class NodeState:
         self.performance_degradation = None
 
     def estimate_degradation(self, start_ts: int, end_ts: int) -> float:
-        if self.performance_degradation is None:
-            self.performance_degradation = joblib.load(
-                f'./data/{self.ether_node.name[:self.ether_node.name.rindex("_")]}.sav')
-        x = create_input(self, start_ts, end_ts)
-        return self.performance_degradation.predict([x])[0]
+        if self.performance_degradation is not None:
+            x = create_input(self, start_ts, end_ts)
+            return self.performance_degradation.predict([x])[0]
 
     def set_end(self, request_id, end):
         for call in self.all_requests:
@@ -173,6 +171,7 @@ class Environment(simpy.Environment):
         self.scheduler = None
         self.node_states = dict()
         self.background_processes: List[Callable[[Environment], Generator[simpy.events.Event, Any, Any]]] = []
+        self.degradation_models: Dict[str, Optional[RegressorMixin]] = {}
 
     def get_node_state(self, name: str) -> Optional[NodeState]:
         """
@@ -191,6 +190,10 @@ class Environment(simpy.Environment):
         node_state.env = self
         node_state.ether_node = ether_node
         node_state.skippy_node = skippy_node
+
+        degradation_model = self.degradation_models.get(name, None)
+        if degradation_model is not None:
+            node_state.performance_degradation = degradation_model
 
         self.node_states[name] = node_state
         return node_state
