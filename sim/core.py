@@ -1,7 +1,7 @@
+import logging
 from collections import defaultdict
 from typing import Set, Optional, Any, Generator, Callable, List, Dict
 
-import joblib
 import numpy as np
 import simpy
 from ether.core import Node as EtherNode
@@ -33,7 +33,12 @@ class NodeState:
     def estimate_degradation(self, start_ts: int, end_ts: int) -> float:
         if self.performance_degradation is not None:
             x = create_input(self, start_ts, end_ts)
-            return self.performance_degradation.predict([x])[0]
+
+            if len(x) == 0:
+                # in case no other calls happened
+                return 0
+            x = np.array(x).reshape((1, -1))
+            return self.performance_degradation.predict(x)[0]
 
     def set_end(self, request_id, end):
         for call in self.all_requests:
@@ -86,17 +91,22 @@ def create_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarra
             # all calls that started afterwards but before the end are relevant
             if call.start < end_ts:
                 calls.append(call)
-
+    if len(calls) == 0:
+        return np.array([])
     ram = 0
     seen_pods = set()
     resources = defaultdict(lambda: defaultdict(list))
     for call in calls:
-        call_resources = {}
         function = call.replica.function
-        for resource in resources_types:
-            call_resources[resource] = float(function.labels.get(resource, '0'))
-
         pod_name = call.replica.pod.name
+
+        call_resources = function.get_resources_for_node(node_state.name)
+        for resource_type in resources_types:
+            resources[pod_name][resource_type].append(call_resources[resource_type])
+        if len(call_resources) == 0:
+            logging.debug(f'Function {function.name} has no resources for node {node_state.name}')
+            continue
+
         if pod_name not in seen_pods:
             ram += call.replica.pod.spec.containers[0].resources.requests['memory']
             seen_pods.add(pod_name)
@@ -109,7 +119,7 @@ def create_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarra
 
         overlap = first_end - last_start
 
-        for resource in resources:
+        for resource in resources_types:
             resources[pod_name][resource].append(overlap * call_resources[resource])
 
     sums = defaultdict(list)

@@ -74,6 +74,9 @@ class FunctionDefinition:
             'memory': self.requests.memory
         }
 
+    def get_resources_for_node(self, node: str) -> Dict[str, float]:
+        return {}
+
 
 class FunctionReplica:
     """
