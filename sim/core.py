@@ -39,6 +39,7 @@ class NodeState:
                 return 0
             x = np.array(x).reshape((1, -1))
             return self.performance_degradation.predict(x)[0]
+        return 0
 
     def set_end(self, request_id, end):
         for call in self.all_requests:
