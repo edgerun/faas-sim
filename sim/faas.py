@@ -301,7 +301,7 @@ class FaasSystem:
 
     def _remove_replica(self, replica: FunctionReplica):
         env = self.env
-        node = replica.node.ether_node
+        node = replica.node.skippy_node
 
         env.metrics.log_teardown(replica)
         yield from replica.simulator.teardown(env, replica)
