@@ -32,7 +32,7 @@ class NodeState:
 
     def estimate_degradation(self, start_ts: int, end_ts: int) -> float:
         if self.performance_degradation is not None:
-            x = create_input(self, start_ts, end_ts)
+            x = create_degradation_model_input(self, start_ts, end_ts)
 
             if len(x) == 0:
                 # in case no other calls happened
@@ -58,8 +58,21 @@ class NodeState:
     def capacity(self):
         return self.ether_node.capacity
 
+    def get_calls_in_timeframe(self, start_ts, end_ts):
+        calls = []
+        for call in self.all_requests:
+            if call.start <= start_ts:
+                # add only calls that are either not finished or have finished afterwards
+                if call.end is None or call.end > start_ts:
+                    calls.append(call)
+            else:
+                # all calls that started afterwards but before the end are relevant
+                if call.start < end_ts:
+                    calls.append(call)
+        return calls
 
-def create_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarray:
+
+def create_degradation_model_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarray:
     # input of model is an array with 34 elements
     # in general, the input is based on the resource usages that occurred during the function execution
     # for each trace (instance) from the target service following metrics
@@ -80,18 +93,9 @@ def create_input(node_state: NodeState, start_ts: int, end_ts: int) -> np.ndarra
     # 31: sum of all blkio rate ! not scaled
     # 32: sum of all net rate ! not scaled
     # 33: mean ram percentage over complete experiment
-    calls = []
     resources_types = ['cpu', 'gpu', 'blkio', 'net']
 
-    for call in node_state.all_requests:
-        if call.start <= start_ts:
-            # add only calls that are either not finished or have finished afterwards
-            if call.end is None or call.end > start_ts:
-                calls.append(call)
-        else:
-            # all calls that started afterwards but before the end are relevant
-            if call.start < end_ts:
-                calls.append(call)
+    calls = node_state.get_calls_in_timeframe(start_ts, end_ts)
     if len(calls) == 0:
         return np.array([])
     ram = 0
