@@ -9,6 +9,7 @@ from sim.docker import ContainerRegistry, pull as docker_pull
 from sim.faas import FaasSystem, FunctionReplica, FunctionRequest, FunctionSimulator, SimulatorFactory, \
     FunctionDefinition
 from sim.metrics import Metrics, RuntimeLogger
+from sim.resource import MetricsServer
 from sim.skippy import SimulationClusterContext
 from sim.topology import Topology
 
@@ -77,6 +78,9 @@ class Simulation:
 
         if not env.scheduler:
             env.scheduler = self.create_scheduler(env)
+
+        if not env.metrics_server:
+            env.metrics_server = MetricsServer()
 
     def create_container_registry(self):
         return ContainerRegistry()

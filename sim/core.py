@@ -185,6 +185,7 @@ class Environment(simpy.Environment):
         self.metrics = None
         self.scheduler = None
         self.node_states = dict()
+        self.metrics_server = None
         self.background_processes: List[Callable[[Environment], Generator[simpy.events.Event, Any, Any]]] = []
         self.degradation_models: Dict[str, Optional[RegressorMixin]] = {}
 
