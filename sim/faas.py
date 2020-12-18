@@ -10,6 +10,7 @@ from ether.util import parse_size_string
 from skippy.core.model import Pod
 
 from sim.core import Environment, NodeState
+from sim.net import SafeFlow
 from sim.skippy import create_function_pod
 
 logger = logging.getLogger(__name__)
@@ -345,6 +346,64 @@ def simulate_function_start(env: Environment, replica: FunctionReplica):
     env.metrics.log_setup(replica)
     yield from sim.setup(env, replica)  # FIXME: this is really domain-specific startup
     env.metrics.log_finish_deploy(replica)
+
+
+def simulate_data_download(env: Environment, replica: FunctionReplica):
+    node = replica.node.ether_node
+    func = replica
+    started = env.now
+
+    if 'data.skippy.io/receives-from-storage' not in func.pod.spec.labels:
+        return
+
+    # FIXME: storage
+    size = parse_size_string(func.pod.spec.labels['data.skippy.io/receives-from-storage'])
+    path = func.pod.spec.labels['data.skippy.io/receives-from-storage/path']
+
+    storage_node_name = env.cluster.get_storage_nodes(path)[0]
+    logger.debug('%.2f replica %s fetching data %s from %s', env.now, node, path, storage_node_name)
+
+    if storage_node_name == node.name:
+        # FIXME this is essentially a disk read and not a network connection
+        yield env.timeout(size / 1.25e+8)  # 1.25e+8 = 1 GBit/s
+        return
+
+    storage_node = env.cluster.get_node(storage_node_name)
+    route = env.topology.route_by_node_name(storage_node.name, node.name)
+    flow = SafeFlow(env, size, route)
+    yield flow.start()
+    for hop in route.hops:
+        env.metrics.log_network(size, 'data_download', hop)
+    env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_download')
+
+
+def simulate_data_upload(env: Environment, replica: FunctionReplica):
+    node = replica.node.ether_node
+    func = replica
+    started = env.now
+
+    if 'data.skippy.io/sends-to-storage' not in func.pod.spec.labels:
+        return
+
+    # FIXME: storage
+    size = parse_size_string(func.pod.spec.labels['data.skippy.io/sends-to-storage'])
+    path = func.pod.spec.labels['data.skippy.io/sends-to-storage/path']
+
+    storage_node_name = env.cluster.get_storage_nodes(path)[0]
+    logger.debug('%.2f replica %s uploading data %s to %s', env.now, node, path, storage_node_name)
+
+    if storage_node_name == node.name:
+        # FIXME this is essentially a disk read and not a network connection
+        yield env.timeout(size / 1.25e+8)  # 1.25e+8 = 1 GBit/s
+        return
+
+    storage_node = env.cluster.get_node(storage_node_name)
+    route = env.topology.route_by_node_name(node.name, storage_node.name)
+    flow = SafeFlow(env, size, route)
+    yield flow.start()
+    for hop in route.hops:
+        env.metrics.log_network(size, 'data_upload', hop)
+    env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_upload')
 
 
 def simulate_function_invocation(env: Environment, replica: FunctionReplica, request: FunctionRequest):
