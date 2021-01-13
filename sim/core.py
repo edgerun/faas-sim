@@ -29,6 +29,8 @@ class NodeState:
         self.current_requests = set()
         self.all_requests = []
         self.performance_degradation = None
+        self.buffer_size = 0
+        self.buffer_limit = 50
 
     def estimate_degradation(self, start_ts: int, end_ts: int) -> float:
         if self.performance_degradation is not None:
@@ -41,10 +43,30 @@ class NodeState:
             return self.performance_degradation.predict(x)[0]
         return 0
 
+    def clean_up(self):
+        if self.buffer_size >= self.buffer_limit:
+            remove_candidates = [x for x in self.all_requests if x.end is not None]
+            not_remove = set()
+            for req in self.all_requests:
+                if req.end is not None:
+                    continue
+                for past_request in remove_candidates:
+                    if req.start < past_request.end:
+                        not_remove.add(past_request)
+            for req in not_remove:
+                remove_candidates.remove(req)
+            for req in remove_candidates:
+                self.all_requests.remove(req)
+            self.buffer_size = self.buffer_size - len(remove_candidates)
+        self.buffer_size += 1
+
+
     def set_end(self, request_id, end):
         for call in self.all_requests:
             if call.request_id == request_id:
                 call.end = end
+
+        self.clean_up()
 
     @property
     def name(self):
