@@ -31,16 +31,25 @@ class NodeState:
         self.performance_degradation = None
         self.buffer_size = 0
         self.buffer_limit = 50
+        self.cache = {}
 
     def estimate_degradation(self, start_ts: int, end_ts: int) -> float:
         if self.performance_degradation is not None:
+            rounded_start = round(start_ts, 1)
+            rounded_end = round(end_ts, 1)
+            get = self.cache.get((rounded_start, rounded_end), None)
+            if get is not None:
+                return get
+
             x = create_degradation_model_input(self, start_ts, end_ts)
 
             if len(x) == 0:
                 # in case no other calls happened
                 return 0
             x = np.array(x).reshape((1, -1))
-            return self.performance_degradation.predict(x)[0]
+            y = self.performance_degradation.predict(x)[0]
+            self.cache[(rounded_start, rounded_end)] = y
+            return y
         return 0
 
     def clean_up(self):
@@ -59,7 +68,6 @@ class NodeState:
                 self.all_requests.remove(req)
             self.buffer_size = self.buffer_size - len(remove_candidates)
         self.buffer_size += 1
-
 
     def set_end(self, request_id, end):
         for call in self.all_requests:
