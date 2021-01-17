@@ -34,7 +34,7 @@ class Resources:
     memory: int
     cpu: int
 
-    def __init__(self, cpu_millis: int = 1 * 1000, memory: int = 1024 * 1024 * 1024):
+    def __init__(self, cpu_millis: int = 1 * 1000, memory: int = 1 * 1024 * 1024):
         self.memory = memory
         self.cpu = cpu_millis
 
