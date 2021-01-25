@@ -48,7 +48,7 @@ class Resources:
         :param cpu: "250m"
         :return:
         """
-        return Resources(parse_size_string(memory), int(cpu.rstrip('m')))
+        return Resources(int(cpu.rstrip('m')), parse_size_string(memory))
 
 
 class FunctionDefinition:
