@@ -342,10 +342,11 @@ def simulate_function_start(env: Environment, replica: FunctionReplica):
     yield from sim.startup(env, replica)
 
     logger.debug('running function setup %s on %s', replica.function.name, replica.node.name)
-    replica.state = FunctionState.RUNNING
     env.metrics.log_setup(replica)
     yield from sim.setup(env, replica)  # FIXME: this is really domain-specific startup
     env.metrics.log_finish_deploy(replica)
+    replica.state = FunctionState.RUNNING
+
 
 
 def simulate_data_download(env: Environment, replica: FunctionReplica):
