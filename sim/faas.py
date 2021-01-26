@@ -325,7 +325,7 @@ class FaasSystem:
         replicas: List[FunctionReplica] = self.discover(function)
 
         for replica in replicas:
-            self._remove_replica(replica)
+            yield from self._remove_replica(replica)
 
         self.env.metrics.log_function_suspend(function)
 
