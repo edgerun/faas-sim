@@ -4,7 +4,7 @@ from typing import Dict
 import pandas as pd
 from skippy.core.model import SchedulingResult
 
-from faassim.logging import RuntimeLogger, NullLogger
+from sim.logging import RuntimeLogger, NullLogger
 from sim.core import Environment
 from sim.faas import FunctionDefinition, FunctionRequest, FunctionReplica
 
