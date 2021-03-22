@@ -2,8 +2,8 @@ import logging
 
 from skippy.core.model import SchedulingResult
 
-from faassim.oracle.oracle import FittedExecutionTimeOracle
-from sim.cli.degradation import FunctionCall
+from sim.oracle import FittedExecutionTimeOracle
+from examples.degradation import FunctionCall
 from sim.core import Environment
 from sim.docker import pull as docker_pull
 from sim.faas import FunctionReplica, FunctionRequest, FunctionSimulator, SimulatorFactory, \

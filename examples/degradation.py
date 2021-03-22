@@ -1,13 +1,9 @@
 import logging
-from typing import Optional, Callable
-
 from ether.blocks.nodes import create_node
 from ether.cell import LANCell
 from simpy import Resource
-from skippy.core.model import SchedulingResult
-from skippy.core.utils import parse_size_string
+from typing import Optional, Callable
 
-from faassim.oracle.oracle import FittedExecutionTimeOracle
 from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
@@ -16,7 +12,10 @@ from sim.faas import FunctionDefinition, FunctionReplica, FunctionSimulator, Sim
 from sim.faassim import Simulation
 from sim.logging import RuntimeLogger, SimulatedClock
 from sim.metrics import Metrics
+from sim.oracle.oracle import FittedExecutionTimeOracle
 from sim.topology import Topology
+from skippy.core.model import SchedulingResult
+from skippy.core.utils import parse_size_string
 
 logger = logging.getLogger(__name__)
 
