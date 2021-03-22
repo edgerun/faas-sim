@@ -1,16 +1,16 @@
 import logging
 
 import ether.scenarios.urbansensing as scenario
+from skippy.core.utils import parse_size_string
 
-from faassim.faas import FunctionRequest
 from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
 from sim.faas import FunctionDefinition
+from sim.faas import FunctionRequest
 from sim.faassim import Simulation
 from sim.topology import Topology
-from skippy.core.utils import parse_size_string
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ class ExampleBenchmark(Benchmark):
     def setup(self, env: Environment):
         containers: docker.ContainerRegistry = env.container_registry
 
+        # fill global container registry with images
         containers.put(ImageProperties('smttest', parse_size_string('58M')))
         containers.put(ImageProperties('python-pi', parse_size_string('56M')))
 
