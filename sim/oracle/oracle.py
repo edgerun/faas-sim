@@ -1,7 +1,8 @@
 import glob
 import os
 from ast import literal_eval as make_tuple
-from typing import Tuple, NamedTuple
+from typing import NamedTuple
+from typing import Tuple, Optional
 
 import pandas as pd
 from skippy.core.clustercontext import ClusterContext
@@ -277,3 +278,15 @@ class FittedExecutionTimeOracle(Oracle):
             raise ValueError(k)
 
         return self.execution_time_samplers[k]
+
+
+class FetOracle:
+
+    def sample(self, host: str, image: str) -> Optional[float]:
+        raise NotImplementedError()
+
+
+class ResourceOracle:
+
+    def get_resources(self, host: str, image: str) -> 'FunctionResourceCharacterization':
+        raise NotImplementedError()
