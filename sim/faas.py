@@ -236,11 +236,20 @@ class FaasSystem:
         t_exec = t_end - t_start
         self.env.metrics.log_invocation(replica.function.name, replica.node.name, t_wait, t_start, t_exec, id(replica))
 
-    def remove(self):
-        # TODO remove deployed function
-        # TODO log scaling (removal)
-        # TODO log teardown
-        raise NotImplementedError
+    def remove(self, fn: FunctionDeployment):
+        self.env.metrics.log_function_deployment_lifecycle(fn, 'remove')
+
+        replica_count = self.replica_count[fn.name]
+        yield from self.scale_down(fn.name, replica_count)
+        self.faas_scalers[fn.name].stop()
+        self.avg_faas_scalers[fn.name].stop()
+        self.queue_faas_scalers[fn.name].stop()
+
+        del self.functions_deployments[fn.name]
+        del self.faas_scalers[fn.name]
+        del self.avg_faas_scalers[fn.name]
+        del self.queue_faas_scalers[fn.name]
+        del self.replica_count[fn.name]
 
     def next_replica(self, request) -> FunctionReplica:
         return self.load_balancer.next_replica(request)
