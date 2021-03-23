@@ -68,11 +68,12 @@ class ExampleBenchmark(Benchmark):
         for deployment in deployments:
             yield from env.faas.deploy(deployment)
 
+        # block until replicas become available (scheduling has finished and replicas have been deployed on the node)
         logger.info('waiting for replica')
         yield env.process(env.faas.poll_available_replica('python-pi'))
         yield env.process(env.faas.poll_available_replica('resnet50-inference'))
 
-        # run wokload
+        # run workload
         ps = []
         # execute 10 requests in parallel
         logger.info('executing 10 python-pi requests')
