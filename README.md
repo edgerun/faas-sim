@@ -16,7 +16,20 @@ faas-sim is trace-driven, and relies on profiling data from workloads and device
 It comes pre-packaged with traces from several common computing devices and representative cluster workloads.
 The following figure shows a high-level overview:
 
-<img alt="architecture-overview" width="700px" src="https://raw.github.com/edgerun/faas-sim/sim-v2/doc/figures/architecture-overview.png">
+<img alt="architecture-overview" width="700px" src="https://raw.github.com/edgerun/faas-sim/master/doc/figures/architecture-overview.png">
+
+Run examples
+------------
+
+You can run the examples we provide in https://github.com/edgerun/faas-sim/tree/master/examples by first creating a virtual environment and installing the necessary dependencies.
+
+    make venv
+    source .venv/bin/activate
+    python -m examples.<example>.main
+
+Where example refers to the specific example package.
+Check out the examples [README](https://github.com/edgerun/faas-sim/tree/master/examples/README.md) for more information.
+
 
 Maintainers
 ------------
