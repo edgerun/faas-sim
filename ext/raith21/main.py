@@ -22,7 +22,7 @@ from ext.raith21.topology import urban_sensing_topology
 from ext.raith21.util import vanilla
 from sim.core import Environment
 from sim.docker import ContainerRegistry
-from sim.faas import FaasSystem
+from sim.faas.system import DefaultFaasSystem
 from sim.faassim import Simulation
 from sim.logging import SimulatedClock, RuntimeLogger
 from sim.metrics import Metrics
@@ -72,7 +72,7 @@ env = Environment()
 env.simulator_factory = AIPythonHTTPSimulatorFactory()
 env.metrics = Metrics(env, log=RuntimeLogger(SimulatedClock(env)))
 env.topology = topology
-env.faas = FaasSystem(env, scale_by_requests=True)
+env.faas = DefaultFaasSystem(env, scale_by_requests=True)
 env.container_registry = ContainerRegistry()
 env.storage_index = storage_index
 env.cluster = SimulationClusterContext(env)

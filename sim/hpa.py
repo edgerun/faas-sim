@@ -5,7 +5,6 @@ from sim.faas import FunctionState, FaasSystem
 from sim.resource import MetricsServer
 
 
-
 class HorizontalPodAutoscaler:
 
     # Behavior and default values taken from:
@@ -27,8 +26,6 @@ class HorizontalPodAutoscaler:
 
     def run(self):
         """
-
-
         For each Function Deployment sum up the CPU usage of each running replica and take the mean.
 
         While the official implementation just uses the CPU usage reported by the metrics server,
@@ -57,13 +54,12 @@ class HorizontalPodAutoscaler:
 
         Raw Calculation:
         desiredReplicas = ceil[currentReplicas * ( currentMetricValue / desiredMetricValue )]
-
         """
         while True:
             yield self.env.timeout(self.reconcile_interval)
             metrics_server: MetricsServer = self.env.metrics_server
             faas: FaasSystem = self.env.faas
-            for function_deployment in faas.functions_deployments.values():
+            for function_deployment in faas.get_deployments():
                 running_replicas = faas.get_replicas(function_deployment.name, FunctionState.RUNNING)
                 if len(running_replicas) == 0:
                     continue

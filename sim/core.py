@@ -1,4 +1,5 @@
 import logging
+import time
 from collections import defaultdict
 from typing import Set, Optional, Any, Generator, Callable, List, Dict
 
@@ -8,8 +9,6 @@ from ether.core import Node as EtherNode
 from sklearn.base import RegressorMixin
 
 Node = EtherNode
-
-import time
 
 
 class NodeState:
@@ -202,6 +201,7 @@ class SimulationTimeoutError(BaseException):
 
 class Environment(simpy.Environment):
     cluster: 'SimulationClusterContext'
+    faas: 'FaasSystem'
 
     def __init__(self, initial_time=0):
         super().__init__(initial_time)

@@ -75,7 +75,7 @@ class Metrics:
         self.log('scale', replicas, function_name=function_name)
 
     def log_invocation(self, function_deployment, function_name, node_name, t_wait, t_start, t_exec, replica_id):
-        function = self.env.faas.functions[function_name]
+        function = self.env.faas.get_function_index()[function_name]
         mem = function.get_resource_requirements().get('memory')
 
         self.log('invocations', {'t_wait': t_wait, 't_exec': t_exec, 't_start': t_start, 'memory': mem},

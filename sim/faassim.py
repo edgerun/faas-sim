@@ -6,8 +6,8 @@ from skippy.core.scheduler import Scheduler
 from sim.benchmark import Benchmark
 from sim.core import Environment, timeout_listener
 from sim.docker import ContainerRegistry, pull as docker_pull
-from sim.faas import FaasSystem, FunctionReplica, FunctionRequest, FunctionSimulator, SimulatorFactory, \
-    FunctionDefinition
+from sim.faas import FunctionReplica, FunctionRequest, FunctionSimulator, SimulatorFactory, FunctionDefinition
+from sim.faas.system import DefaultFaasSystem
 from sim.metrics import Metrics, RuntimeLogger
 from sim.resource import MetricsServer
 from sim.skippy import SimulationClusterContext
@@ -89,7 +89,7 @@ class Simulation:
         return SimpleSimulatorFactory()
 
     def create_faas_system(self, env):
-        return FaasSystem(env)
+        return DefaultFaasSystem(env)
 
     def create_scheduler(self, env):
         return Scheduler(env.cluster)

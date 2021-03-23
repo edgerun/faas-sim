@@ -27,8 +27,8 @@ class ResourceMonitor:
             end_ts = self.env.now
             # calculate resources over function replica resources and save in metric_server
             call_cache: Dict[str, List[FunctionCall]] = {}
-            for function_deployment in faas.functions_deployments.keys():
-                for replica in faas.get_replicas(function_deployment, FunctionState.RUNNING):
+            for function_deployment in faas.get_deployments():
+                for replica in faas.get_replicas(function_deployment.name, FunctionState.RUNNING):
                     node_name = replica.node.name
                     calls = call_cache.get(node_name, None)
                     if calls is None:

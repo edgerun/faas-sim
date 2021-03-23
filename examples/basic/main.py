@@ -7,8 +7,7 @@ from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import FunctionDefinition, FunctionDeployment
-from sim.faas import FunctionRequest
+from sim.faas import FunctionDefinition, FunctionDeployment, FunctionRequest
 from sim.faassim import Simulation
 from sim.topology import Topology
 
