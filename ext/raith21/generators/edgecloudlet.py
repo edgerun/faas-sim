@@ -1,6 +1,6 @@
-from examples.ai.device import ArchProperties
-from examples.ai.generator import GeneratorSettings
-from examples.ai.model import *
+from ..device import ArchProperties
+from ..generator import GeneratorSettings
+from ..model import *
 
 edgecloudlet_settings = GeneratorSettings(
     arch={

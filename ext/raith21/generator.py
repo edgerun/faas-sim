@@ -1,4 +1,5 @@
 import datetime
+import itertools
 import multiprocessing
 import pickle
 import random
@@ -9,7 +10,6 @@ from multiprocessing.context import Process
 from pathlib import Path
 from typing import List, Dict, Tuple, Callable
 
-import itertools
 import numpy as np
 
 from ext.raith21.device import ArchProperties, GpuDevice, Device

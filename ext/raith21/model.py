@@ -13,6 +13,7 @@ VRAM:    | <= 2       |   4 - 8      |   < 32       | > 32
 Network: | <= 150Mbps | <= 500 Mbps  | <=1 Gbit     | >= 10 Gbit 
 """
 
+
 class Bins(Enum):
     LOW = 1
     MEDIUM = 2

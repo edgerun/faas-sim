@@ -1,6 +1,6 @@
-from ext.raith21.device import ArchProperties
-from ext.raith21.generator import GeneratorSettings
-from ext.raith21.model import *
+from ..device import ArchProperties
+from ..generator import GeneratorSettings
+from ..model import *
 
 cloudcpu_settings = GeneratorSettings(
     arch={

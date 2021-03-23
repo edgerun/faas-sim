@@ -5,19 +5,18 @@ from typing import List, Dict
 
 import pandas as pd
 from ether.core import Node
-
 from examples.ai.calculations import calculate_diff_entropy, calculate_requirements
-from examples.ai.etherdevices import convert_to_devices, convert_to_ether_nodes
-from examples.ai.generator import generate_devices, xeon_reqs
-from examples.ai.generators.cloudcpu import cloudcpu_settings
-from examples.ai.generators.cloudgpu import cloudgpu_settings
-from examples.ai.generators.edgecloudlet import edgecloudlet_settings
-from examples.ai.generators.edgegpu import edgegpu_settings
-from examples.ai.generators.edgesbc import edgesbc_settings
-from examples.ai.generators.edgetpu import edgetpu_settings
-from examples.ai.generators.hybridbalanced import hybridbalanced_settings
-from examples.ai.generators.hybridbalanced_jetson import hybridbalanced_jetson_settings
-from examples.ai.util import extract_model_type
+from ..etherdevices import convert_to_devices, convert_to_ether_nodes
+from ..generator import generate_devices, xeon_reqs
+from ..generators.cloudcpu import cloudcpu_settings
+from ..generators.cloudgpu import cloudgpu_settings
+from ..generators.edgecloudlet import edgecloudlet_settings
+from ..generators.edgegpu import edgegpu_settings
+from ..generators.edgesbc import edgesbc_settings
+from ..generators.edgetpu import edgetpu_settings
+from ..generators.hybridbalanced import hybridbalanced_settings
+from ..generators.hybridbalanced_jetson import hybridbalanced_jetson_settings
+from ..utils import extract_model_type
 
 
 def count_devices(nodes: List[Node]):

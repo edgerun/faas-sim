@@ -1,6 +1,7 @@
 from skippy.core.scheduler import Scheduler
 
-from ext.raith21.predicates import CanRunPred, HasEnoughRamPredicate, NodeHasAcceleratorPred, NodeHasFreeGpu, NodeHasFreeTpu
+from ext.raith21.predicates import CanRunPred, HasEnoughRamPredicate, NodeHasAcceleratorPred, NodeHasFreeGpu, \
+    NodeHasFreeTpu
 
 
 def get_predicates(fet_oracle, resource_oracle):

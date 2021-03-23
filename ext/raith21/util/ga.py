@@ -1,4 +1,4 @@
-from ext.raith21 import predicates
+from ext.raith21.util import predicates
 from ext.raith21.priorities import CapabilityMatchingPriority, ContentionPriority, ExecutionTimePriority
 
 

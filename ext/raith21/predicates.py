@@ -32,8 +32,8 @@ class CanRunPred(Predicate):
         if host == 'registry':
             return False
         image = pod.spec.containers[0].image
-        return self.fet_oracle.sample(host, image) is not None and self.resource_oracle.get_resources(host,
-                                                                                                      image) is not None
+        return self.fet_oracle.sample(host, image) is not None \
+            and self.resource_oracle.get_resources(host, image) is not None
 
 
 class NodeHasAcceleratorPred(Predicate):

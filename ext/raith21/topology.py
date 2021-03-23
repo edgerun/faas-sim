@@ -1,22 +1,19 @@
 import logging
 import random
+from typing import List
 
 from ether.blocks.cells import FiberToExchange, IoTComputeBox
-from ether.cell import GeoCell, counters, SharedLinkCell, UpDownLink
+from ether.cell import LANCell, GeoCell, counters, SharedLinkCell, UpDownLink
+from ether.core import Node
 from ether.scenarios.urbansensing import UrbanSensingScenario, default_cell_density, default_num_cells, \
     default_cloudlet_size
+from skippy.core.storage import StorageIndex
 from srds import IntegerTruncationSampler
 
 from ext.raith21 import storage
+from sim.topology import Topology
 
 logger = logging.getLogger(__name__)
-
-from typing import List
-
-from ether.cell import LANCell
-from ether.core import Node
-from sim.topology import Topology
-from skippy.core.storage import StorageIndex
 
 
 def all_internet_topology(nodes: List[Node]) -> Topology:

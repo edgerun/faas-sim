@@ -1,6 +1,6 @@
-from hwmapping.device import ArchProperties
-from hwmapping.generator import GeneratorSettings
-from hwmapping.model import *
+from ..device import ArchProperties
+from ..generator import GeneratorSettings
+from ..model import *
 
 hybridbalanced_jetson_settings = GeneratorSettings(
     arch={
