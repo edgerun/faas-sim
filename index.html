@@ -8,7 +8,7 @@
   
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <title>Welcome to FaaS-Sim’s documentation! &mdash; edgerun-faas-sim  documentation</title>
+  <title>faas-sim Overview &mdash; edgerun-faas-sim  documentation</title>
   
 
   
@@ -33,7 +33,9 @@
   <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
   <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="search.html" /> 
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Concepts" href="concepts/index.html" />
+    <link rel="prev" title="Documentation for faas-sim" href="contents.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -47,7 +49,7 @@
           
 
           
-            <a href="#" class="icon icon-home"> edgerun-faas-sim
+            <a href="contents.html" class="icon icon-home"> edgerun-faas-sim
           
 
           
@@ -77,12 +79,16 @@
               
             
             
-              <!-- Local TOC -->
-              <div class="local-toc"><ul>
-<li><a class="reference internal" href="#">Welcome to FaaS-Sim’s documentation!</a></li>
-<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+              <ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#"><em>faas-sim</em> Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#architecture">Architecture</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#background">Background</a></li>
 </ul>
-</div>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="concepts/index.html">Concepts</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/index.html">Examples</a></li>
+</ul>
+
             
           
         </div>
@@ -95,7 +101,7 @@
       <nav class="wy-nav-top" aria-label="top navigation">
         
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="#">edgerun-faas-sim</a>
+          <a href="contents.html">edgerun-faas-sim</a>
         
       </nav>
 
@@ -124,9 +130,9 @@
 
   <ul class="wy-breadcrumbs">
     
-      <li><a href="#">Docs</a> &raquo;</li>
+      <li><a href="contents.html">Docs</a> &raquo;</li>
         
-      <li>Welcome to FaaS-Sim’s documentation!</li>
+      <li><em>faas-sim</em> Overview</li>
     
     
       <li class="wy-breadcrumbs-aside">
@@ -145,18 +151,31 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
             
-  <div class="section" id="welcome-to-faas-sim-s-documentation">
-<h1>Welcome to FaaS-Sim’s documentation!<a class="headerlink" href="#welcome-to-faas-sim-s-documentation" title="Permalink to this headline">¶</a></h1>
-<div class="toctree-wrapper compound">
+  <div class="figure align-center" id="id1">
+<a class="reference internal image-reference" href="_images/logo.png"><img alt="_images/logo.png" src="_images/logo.png" style="height: 150px;" /></a>
+<p class="caption"><span class="caption-text">A framework for trace-driven simulation of serverless Function-as-a-Service platforms.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</div>
+<div class="section" id="faas-sim-overview">
+<h1><em>faas-sim</em> Overview<a class="headerlink" href="#faas-sim-overview" title="Permalink to this headline">¶</a></h1>
+<p><em>faas-sim</em> is a trace-driven simulation framework to simulate container-based function-as-a-service platforms.
+It can be used to develop, and evaluate the performance of operational strategies for such systems, like scheduling, autoscaling, load balancing, and others.</p>
+<div class="section" id="architecture">
+<h2>Architecture<a class="headerlink" href="#architecture" title="Permalink to this headline">¶</a></h2>
+<p><em>faas-sim</em> is based on the <a class="reference external" href="https://simpy.readthedocs.io">SimPy</a> discrete-event simulation framework.
+It uses <a class="reference external" href="https://github.com/edgerun/ether">Ether</a> as network simulation layer, and as source for cluster configurations and network topologies.
+By default, it uses the <a class="reference external" href="https://github.com/edgerun/skippy-core">Skippy</a> scheduling system for serverless resource scheduling,
+but schedulers, autoscalers, and load-balancers can be plugged in by the user.
+<em>faas-sim</em> is trace-driven, and uses profiling data from real workloads and devices to simulate function execution.
+It comes pre-packaged with traces from several common computing devices and representative cluster workloads.
+The following figure shows a high-level overview:</p>
+<div class="figure align-center">
+<img alt="_images/architecture-overview.png" src="_images/architecture-overview.png" />
 </div>
 </div>
-<div class="section" id="indices-and-tables">
-<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Permalink to this headline">¶</a></h1>
-<ul class="simple">
-<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
-<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
-<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
-</ul>
+<div class="section" id="background">
+<h2>Background<a class="headerlink" href="#background" title="Permalink to this headline">¶</a></h2>
+<p><em>faas-sim</em> was developed at the <a class="reference external" href="https://dsg.tuwien.ac.at">Distributed Systems Group</a> at <a class="reference external" href="https://tuwien.at">TU Wien</a> as part of a larger research effort surrounding serverless edge computing systems.</p>
+</div>
 </div>
 
 
@@ -164,6 +183,15 @@
            
           </div>
           <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="concepts/index.html" class="btn btn-neutral float-right" title="Concepts" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="contents.html" class="btn btn-neutral float-left" title="Documentation for faas-sim" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
   
 
   <hr/>

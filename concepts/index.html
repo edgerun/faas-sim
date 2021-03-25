@@ -1,0 +1,371 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Concepts &mdash; edgerun-faas-sim  documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+        <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Examples" href="../examples/index.html" />
+    <link rel="prev" title="faas-sim Overview" href="../index.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../contents.html" class="icon icon-home"> edgerun-faas-sim
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../index.html"><em>faas-sim</em> Overview</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Concepts</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#domain-model">Domain model</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#function">Function</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#functionimage">FunctionImage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#functiondeployment">FunctionDeployment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#functioncontainer">FunctionContainer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#functionreplica">FunctionReplica</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#node">Node</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#faas-system">FaaS System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#function-simulators">Function simulators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#simulation">Simulation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#topology">Topology</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#benchmark">Benchmark</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#request-generators">Request generators</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Examples</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../contents.html">edgerun-faas-sim</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../contents.html">Docs</a> &raquo;</li>
+        
+      <li>Concepts</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/concepts/index.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="concepts">
+<span id="id1"></span><h1>Concepts<a class="headerlink" href="#concepts" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="domain-model">
+<h2>Domain model<a class="headerlink" href="#domain-model" title="Permalink to this headline">¶</a></h2>
+<p>Our conceptual model of functions, deployments, and running replicas is shown in the following figure.</p>
+<div class="figure align-center" id="id2">
+<img alt="../_images/function-conceptual-view.png" src="../_images/function-conceptual-view.png" />
+<p class="caption"><span class="caption-text">Conceptual model of functions and their deployment.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</div>
+<div class="section" id="function">
+<h3>Function<a class="headerlink" href="#function" title="Permalink to this headline">¶</a></h3>
+<p>A function is the highest level of abstraction and simply refers to some functionality that is identified by a <em>name</em> that can be invoked with a <em>FunctionRequest</em>.
+For example, a function could be an object detector named “detect-objects”, that takes as input an image, and returns the bounding boxes and labels of objects in the image.
+A function is composed of several <em>FunctionImage</em> instances, one for each deployment platform.</p>
+</div>
+<div class="section" id="functionimage">
+<h3>FunctionImage<a class="headerlink" href="#functionimage" title="Permalink to this headline">¶</a></h3>
+<p>A FunctionImage is conceptually the code that implements a function on a specific deployment platform.
+For example, our “detect-objects” function could have one version that makes use of the GPU, and one version that uses a TPU (an AI accelerator).</p>
+<p>The reason for this additional abstraction has to do with the issue that, while docker images for different CPU architectures can be grouped via a <a class="reference external" href="https://docs.docker.com/engine/reference/commandline/manifest/">manifest to a multi-arch image</a> there is no way to include additional platform aspects such as GPUs or TPUs.
+Even if it were the case, it may be ambiguous which one to get.
+If two container images exist for the same function, one that uses the CPU and one that uses the GPU, it’s not</p>
+</div>
+<div class="section" id="functiondeployment">
+<h3>FunctionDeployment<a class="headerlink" href="#functiondeployment" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="functioncontainer">
+<h3>FunctionContainer<a class="headerlink" href="#functioncontainer" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="functionreplica">
+<h3>FunctionReplica<a class="headerlink" href="#functionreplica" title="Permalink to this headline">¶</a></h3>
+</div>
+<div class="section" id="node">
+<h3>Node<a class="headerlink" href="#node" title="Permalink to this headline">¶</a></h3>
+<p>A computer in the cluster that can host function replicas.
+The NodeState is a generic container for data that is needed during simulation time,
+for example to store the number of concurrent invocations to a particular replica to calculate performance degradation.</p>
+</div>
+</div>
+<div class="section" id="faas-system">
+<h2>FaaS System<a class="headerlink" href="#faas-system" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">FaasSystem</span></code> abstraction is the high-level interface a client can interact with.
+Think of it like the main API gateway of OpenFaaS or the kube-apiserver of Kubernetes.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">FaasSystem</span><span class="p">(</span><span class="n">abc</span><span class="o">.</span><span class="n">ABC</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">deploy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="n">FunctionDeployment</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">invoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">FunctionRequest</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="n">FunctionDeployment</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">discover</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionReplica</span><span class="p">]:</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">scale_down</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">remove</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">scale_up</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">replicas</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="c1"># ... and several other lookup methods</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="function-simulators">
+<h2>Function simulators<a class="headerlink" href="#function-simulators" title="Permalink to this headline">¶</a></h2>
+<p>A FunctionSimulator encapsulates the simulation code for a function, and is one of the core abstractions of <em>faas-sim</em>.
+<em>faas-sim</em> has several built-in function simulators that use traces from real functions and workloads as basis for the simulation.</p>
+<p>The FunctionSimulator methods are invoked by the simulator to simulate the the different lifecycle phases of a function.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">FunctionSimulator</span><span class="p">(</span><span class="n">abc</span><span class="o">.</span><span class="n">ABC</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">deploy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">Environment</span><span class="p">,</span> <span class="n">replica</span><span class="p">:</span> <span class="n">FunctionReplica</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="n">env</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">startup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">Environment</span><span class="p">,</span> <span class="n">replica</span><span class="p">:</span> <span class="n">FunctionReplica</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="n">env</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">Environment</span><span class="p">,</span> <span class="n">replica</span><span class="p">:</span> <span class="n">FunctionReplica</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="n">env</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">invoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">Environment</span><span class="p">,</span> <span class="n">replica</span><span class="p">:</span> <span class="n">FunctionReplica</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">FunctionRequest</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="n">env</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">teardown</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">Environment</span><span class="p">,</span> <span class="n">replica</span><span class="p">:</span> <span class="n">FunctionReplica</span><span class="p">):</span>
+        <span class="k">yield</span> <span class="n">env</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Conceptually the phases are:</p>
+<ul class="simple">
+<li><p><strong>deploy</strong>:
+the FunctionReplica is being deployed on the node (e.g., pulling the container image using a <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">pull</span></code> command)</p></li>
+<li><p><strong>startup</strong>:
+the replica is spinning up (e.g., starting the container with <code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">run</span></code>)</p></li>
+<li><p><strong>setup</strong>:
+the runtime of the replica is starting up (e.g., if the function is a container with a python runtime then it may take a while to start the interpreter)</p></li>
+<li><p><strong>invoke</strong>:
+the particular replica is being invoked by a FunctionRequest</p></li>
+<li><p><strong>teardown</strong>:
+the replica is being destroyed (e.g., because it is being scaled down)</p></li>
+</ul>
+<p>Each time the simulator creates a new function replica (because of deployment or scaling actions), the SimulatorFactory is called to create or return a FunctionSimulator for that replica.
+The SimulatorFactory can be overwritten to return the same FunctionSimulator every time, create a new instance for each function replica, or any other behavior.</p>
+</div>
+<div class="section" id="simulation">
+<h2>Simulation<a class="headerlink" href="#simulation" title="Permalink to this headline">¶</a></h2>
+<p>A simulation encapsulates the configuration and the runtime state of a simulation.
+It requires two inputs: a topology and a benchmark.</p>
+<div class="section" id="topology">
+<h3>Topology<a class="headerlink" href="#topology" title="Permalink to this headline">¶</a></h3>
+<p>Wraps an <a class="reference external" href="https://github.com/edgerun/ether">Ether</a> topology and represents the cluster configuration and the network topology.</p>
+</div>
+<div class="section" id="benchmark">
+<h3>Benchmark<a class="headerlink" href="#benchmark" title="Permalink to this headline">¶</a></h3>
+<p>A Benchmark encapsulates a particular simulation experiment.
+It is invoked as a SimPy process that sets up the runtime system (e.g., creates container images, deploys functions) and creates workload by simulating function requests.
+We provide several tools (like request generators) to create benchmarks.</p>
+<p>It has two methods: <code class="docutils literal notranslate"><span class="pre">setup</span></code> and <code class="docutils literal notranslate"><span class="pre">run</span></code>.
+Once the simulation environment has been created, the <code class="docutils literal notranslate"><span class="pre">setup</span></code> method is called,
+in which the system under test can be prepared (e.g., to populate a simulated container registry with images).
+After that, the <code class="docutils literal notranslate"><span class="pre">run</span></code> method is invoked as the main SimPy process, and the simulation runs until the process terminates.</p>
+</div>
+</div>
+<div class="section" id="request-generators">
+<h2>Request generators<a class="headerlink" href="#request-generators" title="Permalink to this headline">¶</a></h2>
+<p>Composable functions for creating workload generators.
+Usage example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">sim.requestgen</span> <span class="kn">import</span> <span class="n">expovariate_arrival_profile</span><span class="p">,</span> <span class="n">constant_rps_profile</span>
+
+<span class="n">env</span> <span class="o">=</span> <span class="o">...</span>
+<span class="n">gen</span> <span class="o">=</span> <span class="n">expovariate_arrival_profile</span><span class="p">(</span><span class="n">constant_rps_profile</span><span class="p">(</span><span class="mi">20</span><span class="p">))</span>
+
+<span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+    <span class="n">ia</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">gen</span><span class="p">)</span>
+    <span class="k">yield</span> <span class="n">env</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="n">ia</span><span class="p">)</span>
+    <span class="c1"># send next request</span>
+</pre></div>
+</div>
+<p>The following figure shows several examples and the request patterns the produce:</p>
+<div class="figure align-center" id="id3">
+<a class="reference internal image-reference" href="../_images/workload-generators.png"><img alt="../_images/workload-generators.png" src="../_images/workload-generators.png" style="width: 90%;" /></a>
+<p class="caption"><span class="caption-text">Composing inter-arrival distributions with workload patterns to generate workload.</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</div>
+<p>The first row shows how to achieve a randomized sinusoidal request pattern.
+For the interarrival distribution we use an exponential distribution.
+The probability density function (PDF) of an exponential distribution is <span class="math notranslate nohighlight">\(\lambda e^{-\lambda x}\)</span>, where <span class="math notranslate nohighlight">\(\frac{1}{\lambda}\)</span> is the mean.
+The workload pattern over follows a sine wave, and the value for <span class="math notranslate nohighlight">\(\sin(t)\)</span> is used as <span class="math notranslate nohighlight">\(\lambda\)</span> to scale the interarrival distribution.
+At simulation time we therefore sample from the distribution <span class="math notranslate nohighlight">\(\sin(t) e^{-\sin(t) x}\)</span> to receive the wait time until the next request.
+The orange line shows a moving average of the requests per second, which should roughly match the workload pattern.
+The second row shows how a constant interarrival distribution can be used to model exactly the workload pattern,
+and how a constant workload profile can be used to model a static workload pattern with randomized interarrivals.
+The last row shows Gaussian random walks (GRW), where each value represents a random sample from a Normal distribution, that is then used as value for <span class="math notranslate nohighlight">\(\mu\)</span> in the next random sample.
+The request profile can be parameterized with a <span class="math notranslate nohighlight">\(\sigma\)</span> value that affects the fluctuation over time.</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../examples/index.html" class="btn btn-neutral float-right" title="Examples" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../index.html" class="btn btn-neutral float-left" title="faas-sim Overview" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2021, Edge Run FaaS-Sim
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
