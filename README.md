@@ -30,6 +30,10 @@ You can run the examples we provide in https://github.com/edgerun/faas-sim/tree/
 Where example refers to the specific example package.
 Check out the examples [README](https://github.com/edgerun/faas-sim/tree/master/examples/README.md) for more information.
 
+Documentation
+-------------
+
+You can find the documentation at https://edgerun.github.io/faas-sim/
 
 Maintainers
 ------------
