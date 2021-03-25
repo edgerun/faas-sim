@@ -1,0 +1,12 @@
+faas-sim was originally created in 2019 at the Distributed Systems Group of TU
+Wien by Thomas Rausch. Conceptually it was heavily influenced by PipeSim [1], a
+simulator developed by Thomas Rausch and colleagues at IBM Research.
+
+Since then the development of faas-sim was driven by the following people.
+
+	Thomas Rausch <thomas@thrau.at>
+	Alexander Rashed <https://github.com/alexrashed>
+	Philipp Raith <p.raith@dsg.tuwien.ac.at>
+
+
+  [1]: https://arxiv.org/abs/2006.12587
