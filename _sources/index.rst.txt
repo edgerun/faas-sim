@@ -1,7 +1,6 @@
 .. only:: html
 
-    .. figure:: _static/logo.png
-        :height: 150px
+    .. figure:: _static/logo-h150.png
         :align: center
 
         A framework for trace-driven simulation of serverless Function-as-a-Service platforms.

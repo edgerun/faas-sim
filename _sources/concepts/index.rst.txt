@@ -28,20 +28,34 @@ FunctionImage
 A FunctionImage is conceptually the code that implements a function on a specific deployment platform.
 For example, our "detect-objects" function could have one version that makes use of the GPU, and one version that uses a TPU (an AI accelerator).
 
-The reason for this additional abstraction has to do with the issue that, while docker images for different CPU architectures can be grouped via a `manifest to a multi-arch image <https://docs.docker.com/engine/reference/commandline/manifest/>`_ there is no way to include additional platform aspects such as GPUs or TPUs.
-Even if it were the case, it may be ambiguous which one to get.
-If two container images exist for the same function, one that uses the CPU and one that uses the GPU, it's not 
+The reason for this additional abstraction has to do with the way container platforms like Docker deal with multiple computing architectures.
+Docker images for different CPU architectures can be grouped via a `manifest to a multi-arch image <https://docs.docker.com/engine/reference/commandline/manifest/>`_, and a ``docker pull`` command will pull the correct image based on the node's architecture.
+However, there is no way to include additional platform aspects such as GPUs or TPUs.
+If two container images exist for the same function, one that uses the CPU and one that uses the GPU, it may be ambiguous at runtime which image to pull.
+Instead, we want to allow the resource scheduler to affect the decision which image to deploy for a particular function.
 
 .. TODO: document the other concepts
 
 FunctionDeployment
 ------------------
 
+A FunctionDeployment is an instance of a Function with a concrete resource allocation and scaling policy configuration.
+A deployment consists of multiple FunctionContainer instances and said configurations.
+
 FunctionContainer
 -----------------
 
+A FunctionContainer is the runtime configuration of a FunctionImage.
+It has a specific resource configuration that declares how much resources are allocated on a node when a particular replica of this FunctionContainer is deployed.
+In our running example, a GPU-based "object-detector" might require less CPU but more VRAM than the CPU-based FunctionImage.
+
+
 FunctionReplica
 ---------------
+
+A FunctionReplica is a concrete instantiation of a FunctionContainer.
+It represents the actual running function (like a Docker container).
+
 
 Node
 ----
