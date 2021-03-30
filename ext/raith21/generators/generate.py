@@ -5,7 +5,8 @@ from typing import List, Dict
 
 import pandas as pd
 from ether.core import Node
-from examples.ai.calculations import calculate_diff_entropy, calculate_requirements
+
+from ..calculations import calculate_heterogeneity, calculate_requirements
 from ..etherdevices import convert_to_devices, convert_to_ether_nodes
 from ..generator import generate_devices, xeon_reqs
 from ..generators.cloudcpu import cloudcpu_settings
@@ -97,8 +98,7 @@ def main():
         devices = generate_devices(num, settings)
         ether_nodes = convert_to_ether_nodes(devices)
         folder = './data/collections/collection_12_18_2020/devices/'
-        score = calculate_diff_entropy(xeon_reqs(), calculate_requirements(convert_to_devices(ether_nodes)))
-        # score = calculate_emd(xeon_reqs(), calculate_requirements(convert_to_devices(ether_nodes)))
+        score = calculate_heterogeneity(xeon_reqs(), calculate_requirements(convert_to_devices(ether_nodes)))
         file = os.path.join(folder, f'{name}_score_{round(score, 3)}.pkl')
         with open(file, 'wb') as fd:
             pickle.dump(devices, fd)

@@ -12,8 +12,9 @@ from typing import List, Dict, Tuple, Callable
 
 import numpy as np
 
-from ext.raith21.device import ArchProperties, GpuDevice, Device
-from ext.raith21.model import Arch, Requirements, Accelerator, Bins, Disk, Location, Connection, CpuModel, GpuModel
+from .calculations import calculate_heterogeneity
+from .device import ArchProperties, GpuDevice, Device
+from .model import Arch, Requirements, Accelerator, Bins, Disk, Location, Connection, CpuModel, GpuModel
 
 
 @dataclass
@@ -475,7 +476,7 @@ def generate_settings_main():
     folder = '/mnt/ssd2data/Documents/hw_mapping_gen_settings'
     cores = 4
     base_req = xeon_reqs()
-    score_f = calculate_diff_entropy
+    score_f = calculate_heterogeneity
     generate_settings(
         base_requirement=base_req,
         heterogeneity_score=score_f,
