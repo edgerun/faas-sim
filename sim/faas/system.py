@@ -7,7 +7,7 @@ import simpy
 from ether.util import parse_size_string
 
 from sim.core import Environment
-from sim.faas import RoundRobinLoadBalancer, FunctionDeployment, FunctionReplica, FunctionDefinition, FunctionRequest, \
+from sim.faas import RoundRobinLoadBalancer, FunctionDeployment, FunctionReplica, FunctionContainer, FunctionRequest, \
     FunctionState
 from sim.net import SafeFlow
 from sim.skippy import create_function_pod
@@ -49,7 +49,7 @@ class DefaultFaasSystem(FaasSystem):
     def get_deployments(self) -> List[FunctionDeployment]:
         return list(self.functions_deployments.values())
 
-    def get_function_index(self) -> Dict[str, FunctionDefinition]:
+    def get_function_index(self) -> Dict[str, FunctionContainer]:
         return self.functions
 
     def get_replicas(self, fn_name: str, state=None) -> List[FunctionReplica]:
@@ -58,32 +58,32 @@ class DefaultFaasSystem(FaasSystem):
 
         return [replica for replica in self.replicas[fn_name] if replica.state == state]
 
-    def deploy(self, fn: FunctionDeployment):
-        if fn.name in self.functions_deployments:
+    def deploy(self, fd: FunctionDeployment):
+        if fd.name in self.functions_deployments:
             raise ValueError('function already deployed')
 
-        self.functions_deployments[fn.name] = fn
-        self.faas_scalers[fn.name] = FaasRequestScaler(fn, self.env)
-        self.avg_faas_scalers[fn.name] = AverageFaasRequestScaler(fn, self.env)
-        self.queue_faas_scalers[fn.name] = AverageQueueFaasRequestScaler(fn, self.env)
+        self.functions_deployments[fd.name] = fd
+        self.faas_scalers[fd.name] = FaasRequestScaler(fd, self.env)
+        self.avg_faas_scalers[fd.name] = AverageFaasRequestScaler(fd, self.env)
+        self.queue_faas_scalers[fd.name] = AverageQueueFaasRequestScaler(fd, self.env)
 
         if self.scale_by_requests:
-            self.env.process(self.faas_scalers[fn.name].run())
+            self.env.process(self.faas_scalers[fd.name].run())
         if self.scale_by_average_requests_per_replica:
-            self.env.process(self.avg_faas_scalers[fn.name].run())
+            self.env.process(self.avg_faas_scalers[fd.name].run())
         if self.scale_by_queue_requests_per_replica:
-            self.env.process(self.queue_faas_scalers[fn.name].run())
+            self.env.process(self.queue_faas_scalers[fd.name].run())
 
-        for name, f in fn.function_definitions.items():
-            self.functions[name] = f
+        for f in fd.fn_containers:
+            self.functions[f.image] = f
 
         # TODO log metadata
-        self.env.metrics.log_function_deployment(fn)
-        self.env.metrics.log_function_deployment_lifecycle(fn, 'deploy')
-        logger.info('deploying function %s with scale_min=%d', fn.name, fn.scale_min)
-        yield from self.scale_up(fn.name, fn.scale_min)
+        self.env.metrics.log_function_deployment(fd)
+        self.env.metrics.log_function_deployment_lifecycle(fd, 'deploy')
+        logger.info('deploying function %s with scale_min=%d', fd.name, fd.scaling_config.scale_min)
+        yield from self.scale_up(fd.name, fd.scaling_config.scale_min)
 
-    def deploy_replica(self, fn: FunctionDefinition, services: List[FunctionDefinition]):
+    def deploy_replica(self, fn: FunctionContainer, services: List[FunctionContainer]):
         """
         Creates and deploys a FunctionReplica for the given FunctionDefinition.
         In case no node supports the given FunctionDefinition, the services list dictates which FunctionDefinition to try next.
@@ -161,7 +161,7 @@ class DefaultFaasSystem(FaasSystem):
         if replica_count <= 0:
             remove = remove + replica_count
 
-        scale_min = self.functions_deployments[fn_name].scale_min
+        scale_min = self.functions_deployments[fn_name].scaling_config.scale_min
         if self.replica_count.get(fn_name, 0) - remove < scale_min:
             remove = self.replica_count.get(fn_name, 0) - scale_min
 
@@ -182,25 +182,30 @@ class DefaultFaasSystem(FaasSystem):
         return running_replicas[len(running_replicas) - n:]
 
     def scale_up(self, fn_name: str, replicas: int):
-        fn = self.functions_deployments[fn_name]
+        fd = self.functions_deployments[fn_name]
+        config = fd.scaling_config
+        ranking = fd.ranking
+
         scale = replicas
         if self.replica_count.get(fn_name, None) is None:
             self.replica_count[fn_name] = 0
-        if self.replica_count[fn_name] + replicas > fn.scale_max:
-            if self.replica_count[fn_name] >= fn.scale_max:
+
+        if self.replica_count[fn_name] + replicas > config.scale_max:
+            if self.replica_count[fn_name] >= config.scale_max:
                 logger.debug('Function %s wanted to scale up, but maximum number of replicas reached', fn_name)
                 return
-            reduce = self.replica_count[fn_name] + replicas - fn.scale_max
+            reduce = self.replica_count[fn_name] + replicas - config.scale_max
             scale = replicas - reduce
         if scale == 0:
             return
         actually_scaled = 0
-        for index, service in enumerate(fn.get_services()):
+        for index, service in enumerate(fd.get_services()):
             # check whether service has capacity, otherwise continue
             # TODO can be possible that devices are left out when scale > rest capacity is
             leftover_scale = scale
-            if fn.function_factor[service.image] * fn.scale_max < scale + self.functions_definitions[service.image]:
-                max_replicas = int(fn.function_factor[service.image] * fn.scale_max)
+            if ranking.function_factor[service.image] * config.scale_max < scale + self.functions_definitions[
+                service.image]:
+                max_replicas = int(ranking.function_factor[service.image] * config.scale_max)
                 reduce = max_replicas - (self.functions_definitions[fn_name] + replicas)
                 if reduce < 0:
                     # all replicas used
@@ -208,11 +213,11 @@ class DefaultFaasSystem(FaasSystem):
                 leftover_scale = leftover_scale - reduce
             if leftover_scale > 0:
                 for _ in range(leftover_scale):
-                    yield from self.deploy_replica(service, fn.get_services()[index:])
+                    yield from self.deploy_replica(fd.get_container(service.image), fd.get_containers()[index:])
                     actually_scaled += 1
                     scale -= 1
 
-        self.env.metrics.log_scaling(fn.name, actually_scaled)
+        self.env.metrics.log_scaling(fd.name, actually_scaled)
 
         if scale > 0:
             logger.debug("Function %s wanted to scale, but not all requested replicas were deployed: %s", fn_name,
@@ -274,17 +279,17 @@ class DefaultFaasSystem(FaasSystem):
             # start a new process to simulate starting of pod
             env.process(simulate_function_start(env, replica))
 
-    def create_pod(self, fn: FunctionDefinition):
+    def create_pod(self, fn: FunctionContainer):
         return create_function_pod(fn)
 
-    def create_replica(self, fn: FunctionDefinition) -> FunctionReplica:
+    def create_replica(self, fn: FunctionContainer) -> FunctionReplica:
         replica = FunctionReplica()
         replica.function = fn
         replica.pod = self.create_pod(fn)
         replica.simulator = self.env.simulator_factory.create(self.env, fn)
         return replica
 
-    def discover(self, function: FunctionDefinition) -> List[FunctionReplica]:
+    def discover(self, function: FunctionContainer) -> List[FunctionReplica]:
         return [replica for replica in self.replicas[function.name] if replica.state == FunctionState.RUNNING]
 
     def _remove_replica(self, replica: FunctionReplica):
@@ -308,7 +313,7 @@ class DefaultFaasSystem(FaasSystem):
         if function_name not in self.functions:
             raise ValueError
 
-        function: FunctionDefinition = self.functions[function_name]
+        function: FunctionContainer = self.functions[function_name]
         replicas: List[FunctionReplica] = self.discover(function)
 
         for replica in replicas:

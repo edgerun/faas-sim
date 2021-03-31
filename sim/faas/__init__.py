@@ -1,7 +1,9 @@
 from .core import FunctionState, Resources, FunctionResourceCharacterization, FunctionCharacterization, \
-    DeploymentRanking, FunctionDefinition, FunctionDeployment, FunctionReplica, FunctionRequest, FunctionResponse, \
-    LoadBalancer, RoundRobinLoadBalancer, FunctionSimulator, SimulatorFactory, FaasSystem
+    DeploymentRanking, FunctionContainer, FunctionDeployment, FunctionReplica, FunctionRequest, FunctionResponse, \
+    LoadBalancer, RoundRobinLoadBalancer, FunctionSimulator, SimulatorFactory, FaasSystem, FunctionImage, Function, \
+    ScalingConfiguration, ResourceConfiguration, KubernetesResourceConfiguration
 from .system import DefaultFaasSystem, simulate_data_download, simulate_data_upload
+from ..core import Environment
 
 name = 'faas'
 
@@ -9,14 +11,18 @@ __all__ = [
     'FaasSystem',
     'FunctionState',
     'Resources',
-    'FunctionResourceCharacterization',
-    'FunctionCharacterization',
     'DeploymentRanking',
-    'FunctionDefinition',
+    'FunctionContainer',
+    'Environment',
+    'Function',
+    'FunctionImage',
     'FunctionDeployment',
     'FunctionReplica',
     'FunctionRequest',
     'FunctionResponse',
+    'ScalingConfiguration',
+    'ResourceConfiguration',
+    'KubernetesResourceConfiguration',
     'LoadBalancer',
     'RoundRobinLoadBalancer',
     'FunctionSimulator',

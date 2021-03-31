@@ -8,7 +8,8 @@ from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import FunctionDefinition, FunctionDeployment, FunctionRequest
+from sim.faas import FunctionDeployment, FunctionRequest, Function, FunctionImage, ScalingConfiguration, \
+    DeploymentRanking, FunctionContainer, KubernetesResourceConfiguration
 from sim.faassim import Simulation
 from sim.topology import Topology
 
@@ -89,21 +90,59 @@ class ExampleBenchmark(Benchmark):
             yield p
 
     def prepare_deployments(self) -> List[FunctionDeployment]:
-        python_pi_deployment = FunctionDeployment(
-            name='python-pi',
-            function_definitions={
-                'python-pi-cpu': FunctionDefinition(name='python-pi', image='python-pi-cpu')
-            }
-        )
-        resnet50_inference_deployment = FunctionDeployment(
-            name='resnet50-inference',
-            function_definitions={
-                'resnet50-inference-gpu': FunctionDefinition(name='resnet50-inference', image='resnet50-inference-gpu'),
-                'resnet50-inference-cpu': FunctionDefinition(name='resnet50-inference', image='resnet50-inference-cpu')
-            }
+        resnet_fd = self.prepare_resnet_inference_deployment()
+
+        python_pi_fd = self.prepare_python_pi_deployment()
+
+        return [python_pi_fd, resnet_fd]
+
+    def prepare_python_pi_deployment(self):
+        # Design Time
+
+        python_pi = 'python-pi'
+        python_pi_cpu = FunctionImage(name=python_pi, image='python-pi-cpu')
+        python_pi_fn = Function(python_pi, fn_images=[python_pi_cpu])
+
+        # Run time
+
+        python_pi_fn_container = FunctionContainer(python_pi_cpu)
+
+        python_pi_fd = FunctionDeployment(
+            python_pi_fn,
+            [python_pi_fn_container],
+            ScalingConfiguration()
         )
 
-        return [python_pi_deployment, resnet50_inference_deployment]
+        return python_pi_fd
+
+    def prepare_resnet_inference_deployment(self):
+        # Design time
+
+        resnet_inference = 'resnet50-inference'
+        inference_cpu = 'resnet50-inference-cpu'
+        inference_gpu = 'resnet50-inference-gpu'
+
+        resnet_inference_gpu = FunctionImage(name=resnet_inference, image=inference_gpu)
+        resnet_inference_cpu = FunctionImage(name=resnet_inference, image=inference_cpu)
+        resnet_fn = Function(resnet_inference, fn_images=[resnet_inference_gpu, resnet_inference_cpu])
+
+        # Run time
+
+        # default kubernetes requested resources
+        resnet_cpu_container = FunctionContainer(resnet_inference_cpu)
+
+        # custom defined requested resources
+        request = KubernetesResourceConfiguration.create_from_str('100m', '1024Mi')
+        resnet_gpu_container = FunctionContainer(resnet_inference_gpu, resource_config=request)
+
+        resnet_fd = FunctionDeployment(
+            resnet_fn,
+            [resnet_cpu_container, resnet_gpu_container],
+            ScalingConfiguration(),
+            DeploymentRanking([inference_gpu, inference_cpu])
+        )
+
+        return resnet_fd
 
 
 if __name__ == '__main__':

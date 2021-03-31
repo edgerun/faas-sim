@@ -5,7 +5,7 @@ import pandas as pd
 from skippy.core.model import SchedulingResult
 
 from sim.core import Environment
-from sim.faas import FunctionDefinition, FunctionRequest, FunctionReplica, FunctionDeployment
+from sim.faas import FunctionContainer, FunctionRequest, FunctionReplica, FunctionDeployment
 from sim.logging import RuntimeLogger, NullLogger
 
 
@@ -36,10 +36,10 @@ class Metrics:
         """
         # TODO log metadata/handle function definitions
         # use log_function_definition
-        record = {'name': fn.name, 'image': fn.image}
+        record = {'name': fn.name}
         self.log('function_deployments', record, type='deploy')
 
-    def log_function_definition(self, fn: FunctionDefinition):
+    def log_function_definition(self, fn: FunctionContainer):
         """
         Logs the functions name, related container images and their metadata
         """
@@ -85,6 +85,7 @@ class Metrics:
     def log_fet(self, function_deployment, function_name, node_name, t_fet_start, t_fet_end, t_wait_start, t_wait_end,
                 degradation,
                 replica_id):
+        # TODO design more general? wait/degradation are specific to queue simulator/performance degradation
         self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, 't_wait_start': t_wait_start,
                           't_wait_end': t_wait_end, 'degradation': degradation},
                  function_deployment=function_deployment,
@@ -98,7 +99,7 @@ class Metrics:
         node = replica.node
         function = replica.function
 
-        for resource, value in function.get_resource_requirements().items():
+        for resource, value in function.resource_config.get_resource_requirements().items():
             self.utilization[node.name][resource] += value
 
         self.log('utilization', {

@@ -89,12 +89,29 @@ class FunctionCharacterization:
         return self.resource_oracle.get_resources(host, self.image)
 
 
+class FunctionImage:
+    # the function name
+    name: str
+
+    # the manifest list (docker image) name
+    image: str
+
+    def __init__(self, name: str, image: str):
+        self.name = name
+        self.image = image
+
+
 class DeploymentRanking:
     # TODO probably better to remove default/enable default for one image
-    images: List[str] = ['tpu', 'gpu', 'cpu']
+    images: List[str]
 
-    def __init__(self, images: List[str]):
+    # TODO probably removable after moving decision on which node to deploy pod to user
+    # percentages of scaling per image, can be used to hinder scheduler to overuse expensive resources (i.e. tpu)
+    function_factor: Dict[str, float]
+
+    def __init__(self, images: List[str], function_factor: Dict[str, float] = None):
         self.images = images
+        self.function_factor = function_factor if function_factor is not None else {image: 1 for image in images}
 
     def set_first(self, image: str):
         index = self.images.index(image)
@@ -105,30 +122,16 @@ class DeploymentRanking:
         return self.images[0]
 
 
-class FunctionDefinition:
-    # TODO is this useful on this level? can we say something about the other architectures?
-    # or would it be too cumbersome to provide this for each image?
-    requests: Resources = Resources()
+class ResourceConfiguration(abc.ABC):
 
-    name: str
+    def get_resource_requirements(self) -> Dict: ...
 
-    # the manifest list name
-    image: str
 
-    # characterization per image
-    characterization: FunctionCharacterization
+class KubernetesResourceConfiguration:
+    requests: Resources
 
-    labels: Dict[str, str]
-
-    def __init__(self, name: str, image: str, characterization: FunctionCharacterization = None,
-                 labels: Dict[str, str] = None):
-        self.name = name
-        self.image = image
-        self.characterization = characterization
-        if labels is None:
-            self.labels = {}
-        else:
-            self.labels = labels
+    def __init__(self, requests: Resources = None):
+        self.requests = requests if requests is not None else Resources()
 
     def get_resource_requirements(self) -> Dict:
         return {
@@ -136,27 +139,57 @@ class FunctionDefinition:
             'memory': self.requests.memory
         }
 
-    def sample_fet(self, host: str) -> Optional[float]:
-        return self.characterization.sample_fet(host)
-
-    def get_resources_for_node(self, host: str):
-        return self.characterization.get_resources_for_node(host)
+    @staticmethod
+    def create_from_str(cpu: str, memory: str):
+        return KubernetesResourceConfiguration(Resources.from_str(memory, cpu))
 
 
-class FunctionDeployment:
+class FunctionContainer:
+    fn_image: FunctionImage
+    resource_config: ResourceConfiguration
+    labels: Dict[str, str]
+
+    def __init__(self, fn_image: FunctionImage, resource_config: ResourceConfiguration = None,
+                 labels: Dict[str, str] = None):
+        self.fn_image = fn_image
+        self.resource_config = resource_config if resource_config is not None else KubernetesResourceConfiguration()
+        self.labels = labels if labels is not None else {}
+
+    @property
+    def name(self):
+        return self.fn_image.name
+
+    @property
+    def image(self):
+        return self.fn_image.image
+
+    def get_resource_requirements(self):
+        return self.resource_config.get_resource_requirements()
+
+
+class Function:
     name: str
-    function_definitions: Dict[str, FunctionDefinition]
+    fn_images: List[FunctionImage]
+    # TODO cascading labeling
+    labels: Dict[str, str]
 
-    # used to determine which function to take when scaling
-    ranking: DeploymentRanking
+    def __init__(self, name: str, fn_images: List[FunctionImage], labels: Dict[str, str] = None):
+        self.fn_images = fn_images
+        self.name = name
+        self.labels = labels if labels is not None else {}
 
+    def get_image(self, image: str) -> Optional[FunctionImage]:
+        for fn_image in self.fn_images:
+            if fn_image.image == image:
+                return fn_image
+        return None
+
+
+class ScalingConfiguration:
     scale_min: int = 1
     scale_max: int = 20
     scale_factor: int = 1
     scale_zero: bool = False
-
-    # percentages of scaling per image, can be used to hinder scheduler to overuse expensive resources (i.e. tpu)
-    function_factor: Dict[str, float]
 
     # average requests per second threshold for scaling
     rps_threshold: int = 20
@@ -178,34 +211,49 @@ class FunctionDeployment:
 
     target_average_rps_threshold = 0.1
 
-    def __init__(self, name: str, function_definitions: Dict[str, FunctionDefinition],
-                 ranking: DeploymentRanking = None, function_factor=None):
-        self.name = name
-        self.image = name  #
-        self.function_definitions = function_definitions
-        if ranking is None:
-            self.ranking = DeploymentRanking(list(function_definitions.keys()))
-        else:
-            self.ranking = ranking
-        if function_factor is None:
-            function_factor = {}
-            for image in function_definitions.keys():
-                function_factor[image] = 1
 
-        self.function_factor = function_factor
+class FunctionDeployment:
+    fn: Function
+    fn_containers: List[FunctionContainer]
+    scaling_config: ScalingConfiguration
+    # used to determine which function to take when scaling
+    ranking: DeploymentRanking
+
+    def __init__(self, fn: Function, fn_containers: List[FunctionContainer], scaling_config: ScalingConfiguration,
+                 deployment_ranking: DeploymentRanking = None):
+        self.fn = fn
+        self.fn_containers = fn_containers
+        self.scaling_config = scaling_config
+        if deployment_ranking is None:
+            self.ranking = DeploymentRanking([x.image for x in self.fn.fn_images])
+        else:
+            self.ranking = deployment_ranking
 
     def get_selected_service(self):
-        return self.function_definitions[self.ranking.get_first()]
+        return self.fn.get_image(self.ranking.get_first())
 
     def get_services(self):
-        return list(map(lambda i: self.function_definitions[i], self.ranking.images))
+        return list(map(lambda image: self.fn.get_image(image), self.ranking.images))
+
+    def get_containers(self):
+        return [self.get_container(image) for image in self.ranking.images]
+
+    def get_container(self, image: str) -> Optional[FunctionContainer]:
+        for fn_image in self.fn_containers:
+            if fn_image.image == image:
+                return fn_image
+        return None
+
+    @property
+    def name(self):
+        return self.fn.name
 
 
 class FunctionReplica:
     """
     A function replica is an instance of a function running on a specific node.
     """
-    function: FunctionDefinition
+    function: FunctionContainer
     node: NodeState
     pod: Pod
     state: FunctionState = FunctionState.CONCEIVED
@@ -256,7 +304,7 @@ class FaasSystem(abc.ABC):
     def get_deployments(self) -> List[FunctionDeployment]: ...
 
     @abc.abstractmethod
-    def get_function_index(self) -> Dict[str, FunctionDefinition]: ...
+    def get_function_index(self) -> Dict[str, FunctionContainer]: ...
 
     @abc.abstractmethod
     def get_replicas(self, fn_name: str, state=None) -> List[FunctionReplica]: ...
@@ -268,7 +316,7 @@ class FaasSystem(abc.ABC):
     def scale_up(self, function_name: str, replicas: int): ...
 
     @abc.abstractmethod
-    def discover(self, function: FunctionDefinition) -> List[FunctionReplica]: ...
+    def discover(self, function: FunctionContainer) -> List[FunctionReplica]: ...
 
     @abc.abstractmethod
     def suspend(self, function_name: str): ...
@@ -326,5 +374,5 @@ class FunctionSimulator(abc.ABC):
 
 class SimulatorFactory:
 
-    def create(self, env: Environment, fn: FunctionDefinition) -> FunctionSimulator:
+    def create(self, env: Environment, fn: FunctionContainer) -> FunctionSimulator:
         raise NotImplementedError

@@ -3,7 +3,7 @@ import logging
 import examples.basic.main as basic
 import sim.docker as docker
 from sim.core import Environment
-from sim.faas import FunctionDefinition, FunctionSimulator, FunctionReplica, FunctionRequest
+from sim.faas import FunctionSimulator, FunctionReplica, FunctionRequest, SimulatorFactory, FunctionContainer
 from sim.faassim import Simulation
 
 logger = logging.getLogger(__name__)
@@ -22,12 +22,12 @@ def main():
     sim.run()
 
 
-class CustomSimulatorFactory:
+class CustomSimulatorFactory(SimulatorFactory):
 
     def __init__(self) -> None:
         super().__init__()
 
-    def create(self, env: Environment, fn: FunctionDefinition) -> FunctionSimulator:
+    def create(self, env: Environment, fn: FunctionContainer) -> FunctionSimulator:
         return MyFunctionSimulator()
 
 
