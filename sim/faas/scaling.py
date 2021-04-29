@@ -27,17 +27,17 @@ def faas_idler(env: Environment, inactivity_duration=300, reconcile_interval=30)
         yield env.timeout(reconcile_interval)
 
         for deployment in faas.get_deployments():
-            if not deployment.scale_zero:
+            if not deployment.scaling_config.scale_zero:
                 continue
 
-            for function in deployment.function_definitions.values():
-                if len(faas.get_replicas(function.name, FunctionState.RUNNING)) == 0:
-                    continue
+            name = deployment.name
+            if len(faas.get_replicas(name, FunctionState.RUNNING)) == 0:
+                continue
 
-                idle_time = env.now - env.metrics.last_invocation[function.name]
-                if idle_time >= inactivity_duration:
-                    env.process(faas.suspend(function.name))
-                    logger.debug('%.2f function %s has been idle for %.2fs', env.now, function.name, idle_time)
+            idle_time = env.now - env.metrics.last_invocation[name]
+            if idle_time >= inactivity_duration:
+                env.process(faas.suspend(name))
+                logger.debug('%.2f function %s has been idle for %.2fs', env.now, name, idle_time)
 
 
 class FaasRequestScaler:

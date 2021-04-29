@@ -39,11 +39,11 @@ class Metrics:
         record = {'name': fn.name}
         self.log('function_deployments', record, type='deploy')
 
-    def log_function_definition(self, fn: FunctionContainer):
+    def log_function_definition(self, fn_name: str, fn: FunctionContainer):
         """
         Logs the functions name, related container images and their metadata
         """
-        record = {'name': fn.name, 'image': fn.image}
+        record = {'name': fn_name, 'image': fn.image}
         # TODO fix clustercontext
         image_state = self.env.cluster.image_states[fn.image]
         for arch, size in image_state.size.items():
@@ -97,7 +97,7 @@ class Metrics:
         self.last_invocation[replica.function.name] = self.env.now
 
         node = replica.node
-        function = replica.function
+        function = replica.container
 
         for resource, value in function.resource_config.get_resource_requirements().items():
             self.utilization[node.name][resource] += value
@@ -107,9 +107,9 @@ class Metrics:
             'mem': self.utilization[node.name]['memory'] / node.ether_node.capacity.memory
         }, node=node.name)
 
-    def log_stop_exec(self, request, replica):
+    def log_stop_exec(self, request, replica: FunctionReplica):
         node = replica.node
-        function = replica.function
+        function = replica.container
 
         for resource, value in function.get_resource_requirements().items():
             self.utilization[node.name][resource] -= value
@@ -136,18 +136,24 @@ class Metrics:
                  replica_id=id(replica))
 
     def log_teardown(self, replica: FunctionReplica):
-        self.log('replica_deployment', 'teardown', function_name=replica.function.name, node_name=replica.node.name,
+        name = replica.fn_name
+        node_name = replica.node.name
+        self.log('replica_deployment', 'teardown', function_name=name, node_name=node_name,
                  replica_id=id(replica))
 
     def log_function_deployment_lifecycle(self, fn: FunctionDeployment, event: str):
         self.log('function_deployment_lifecycle', event, name=fn.name, function_id=id(fn))
 
     def log_queue_schedule(self, replica: FunctionReplica):
-        self.log('schedule', 'queue', function_name=replica.function.name, image=replica.function.image,
+        name = replica.fn_name
+        image = replica.image
+        self.log('schedule', 'queue', function_name=name, image=image,
                  replica_id=id(replica))
 
     def log_start_schedule(self, replica: FunctionReplica):
-        self.log('schedule', 'start', function_name=replica.function.name, image=replica.function.image,
+        name = replica.fn_name
+        image = replica.image
+        self.log('schedule', 'start', function_name=name, image=image,
                  replica_id=id(replica))
 
     def log_finish_schedule(self, replica: FunctionReplica, result: SchedulingResult):
@@ -156,23 +162,29 @@ class Metrics:
         else:
             node_name = result.suggested_host.name
 
-        self.log('schedule', 'finish', function_name=replica.function.name, image=replica.function.image,
+        self.log('schedule', 'finish', function_name=replica.function.name, image=replica.container.image,
                  node_name=node_name,
                  successful=node_name != 'None', replica_id=id(replica))
 
     def log_function_deploy(self, replica: FunctionReplica):
-        fn = replica.function
-        self.log('function_deployment', 'deploy', name=fn.name, image=fn.image, function_id=id(fn),
+        fn = replica.container
+        image = replica.image
+        name = replica.fn_name
+        self.log('function_deployment', 'deploy', name=name, image=image, function_id=id(fn),
                  node=replica.node.name)
 
     def log_function_suspend(self, replica: FunctionReplica):
-        fn = replica.function
-        self.log('function_deployment', 'suspend', name=fn.name, image=fn.image, function_id=id(fn),
+        fn = replica.container
+        image = replica.image
+        name = replica.fn_name
+        self.log('function_deployment', 'suspend', name=name, image=image, function_id=id(fn),
                  node=replica.node.name)
 
     def log_function_remove(self, replica: FunctionReplica):
         fn = replica.function
-        self.log('function_deployment', 'remove', name=fn.name, image=fn.image, function_id=id(fn),
+        image = replica.image
+        name = replica.fn_name
+        self.log('function_deployment', 'remove', name=name, image=image, function_id=id(fn),
                  node=replica.node.name)
 
     def get(self, name, **tags):

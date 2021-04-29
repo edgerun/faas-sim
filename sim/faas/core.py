@@ -90,14 +90,10 @@ class FunctionCharacterization:
 
 
 class FunctionImage:
-    # the function name
-    name: str
-
     # the manifest list (docker image) name
     image: str
 
-    def __init__(self, name: str, image: str):
-        self.name = name
+    def __init__(self, image: str):
         self.image = image
 
 
@@ -127,7 +123,7 @@ class ResourceConfiguration(abc.ABC):
     def get_resource_requirements(self) -> Dict: ...
 
 
-class KubernetesResourceConfiguration:
+class KubernetesResourceConfiguration(ResourceConfiguration):
     requests: Resources
 
     def __init__(self, requests: Resources = None):
@@ -142,29 +138,6 @@ class KubernetesResourceConfiguration:
     @staticmethod
     def create_from_str(cpu: str, memory: str):
         return KubernetesResourceConfiguration(Resources.from_str(memory, cpu))
-
-
-class FunctionContainer:
-    fn_image: FunctionImage
-    resource_config: ResourceConfiguration
-    labels: Dict[str, str]
-
-    def __init__(self, fn_image: FunctionImage, resource_config: ResourceConfiguration = None,
-                 labels: Dict[str, str] = None):
-        self.fn_image = fn_image
-        self.resource_config = resource_config if resource_config is not None else KubernetesResourceConfiguration()
-        self.labels = labels if labels is not None else {}
-
-    @property
-    def name(self):
-        return self.fn_image.name
-
-    @property
-    def image(self):
-        return self.fn_image.image
-
-    def get_resource_requirements(self):
-        return self.resource_config.get_resource_requirements()
 
 
 class Function:
@@ -183,6 +156,25 @@ class Function:
             if fn_image.image == image:
                 return fn_image
         return None
+
+
+class FunctionContainer:
+    fn_image: FunctionImage
+    resource_config: ResourceConfiguration
+    labels: Dict[str, str]
+
+    def __init__(self, fn_image: FunctionImage, resource_config: ResourceConfiguration = None,
+                 labels: Dict[str, str] = None):
+        self.fn_image = fn_image
+        self.resource_config = resource_config if resource_config is not None else KubernetesResourceConfiguration()
+        self.labels = labels if labels is not None else {}
+
+    @property
+    def image(self):
+        return self.fn_image.image
+
+    def get_resource_requirements(self):
+        return self.resource_config.get_resource_requirements()
 
 
 class ScalingConfiguration:
@@ -253,12 +245,21 @@ class FunctionReplica:
     """
     A function replica is an instance of a function running on a specific node.
     """
-    function: FunctionContainer
+    function: FunctionDeployment
+    container: FunctionContainer
     node: NodeState
     pod: Pod
     state: FunctionState = FunctionState.CONCEIVED
 
     simulator: 'FunctionSimulator' = None
+
+    @property
+    def fn_name(self):
+        return self.function.name
+
+    @property
+    def image(self):
+        return self.container.image
 
 
 class FunctionRequest:

@@ -115,7 +115,7 @@ class DummySimulator(FunctionSimulator):
 
 class DockerDeploySimMixin:
     def deploy(self, env: Environment, replica: FunctionReplica):
-        yield from docker_pull(env, replica.function.fn_image.image, replica.node.ether_node)
+        yield from docker_pull(env, replica.image, replica.node.ether_node)
 
 
 class ModeledExecutionSimMixin:

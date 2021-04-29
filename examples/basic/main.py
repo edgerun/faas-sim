@@ -100,7 +100,7 @@ class ExampleBenchmark(Benchmark):
         # Design Time
 
         python_pi = 'python-pi'
-        python_pi_cpu = FunctionImage(name=python_pi, image='python-pi-cpu')
+        python_pi_cpu = FunctionImage(image='python-pi-cpu')
         python_pi_fn = Function(python_pi, fn_images=[python_pi_cpu])
 
         # Run time
@@ -122,8 +122,8 @@ class ExampleBenchmark(Benchmark):
         inference_cpu = 'resnet50-inference-cpu'
         inference_gpu = 'resnet50-inference-gpu'
 
-        resnet_inference_gpu = FunctionImage(name=resnet_inference, image=inference_gpu)
-        resnet_inference_cpu = FunctionImage(name=resnet_inference, image=inference_cpu)
+        resnet_inference_gpu = FunctionImage(image=inference_gpu)
+        resnet_inference_cpu = FunctionImage(image=inference_cpu)
         resnet_fn = Function(resnet_inference, fn_images=[resnet_inference_gpu, resnet_inference_cpu])
 
         # Run time
@@ -132,7 +132,7 @@ class ExampleBenchmark(Benchmark):
         resnet_cpu_container = FunctionContainer(resnet_inference_cpu)
 
         # custom defined requested resources
-        request = KubernetesResourceConfiguration.create_from_str('100m', '1024Mi')
+        request = KubernetesResourceConfiguration.create_from_str(cpu='100m', memory='1024Mi')
         resnet_gpu_container = FunctionContainer(resnet_inference_gpu, resource_config=request)
 
         resnet_fd = FunctionDeployment(

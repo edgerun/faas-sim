@@ -35,7 +35,7 @@ class MyFunctionSimulator(FunctionSimulator):
 
     def deploy(self, env: Environment, replica: FunctionReplica):
         # simulate a docker pull command for deploying the function (also done by sim.faassim.DockerDeploySimMixin)
-        yield from docker.pull(env, replica.function.image, replica.node.ether_node)
+        yield from docker.pull(env, replica.container.image, replica.node.ether_node)
 
     def startup(self, env: Environment, replica: FunctionReplica):
         logger.info('[simtime=%.2f] starting up function replica for function %s', env.now, replica.function.name)

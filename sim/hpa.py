@@ -72,8 +72,9 @@ class HorizontalPodAutoscaler:
 
                 average_cpu = sum_cpu / len(running_replicas)
 
+                target_avg_utilization = function_deployment.scaling_config.target_average_utilization
                 desired_replicas = math.ceil(
-                    len(running_replicas) * (average_cpu / function_deployment.target_average_utilization))
+                    len(running_replicas) * (average_cpu / target_avg_utilization))
 
                 updated_desired_replicas = desired_replicas
                 if len(conceived_replicas) > 0 or len(starting_replicas) > 0:
@@ -81,13 +82,13 @@ class HorizontalPodAutoscaler:
                         count = len(running_replicas) + len(conceived_replicas) + len(starting_replicas)
                         average_cpu = sum_cpu / count
                         updated_desired_replicas = math.ceil(
-                            len(running_replicas) * (average_cpu / function_deployment.target_average_utilization))
+                            len(running_replicas) * (average_cpu / target_avg_utilization))
 
                 if desired_replicas > len(running_replicas) and updated_desired_replicas < len(running_replicas):
                     # no scaling in case of reversed decision
                     continue
 
-                ratio = average_cpu / function_deployment.target_average_utilization
+                ratio = average_cpu / target_avg_utilization
                 if 1 > ratio >= 1 - self.target_tolerance:
                     # ratio is sufficiently close to 1.0
                     continue
