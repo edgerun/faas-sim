@@ -9,7 +9,7 @@ from sim.docker import ContainerRegistry, pull as docker_pull
 from sim.faas import FunctionReplica, FunctionRequest, FunctionSimulator, SimulatorFactory, FunctionContainer
 from sim.faas.system import DefaultFaasSystem
 from sim.metrics import Metrics, RuntimeLogger
-from sim.resource import MetricsServer
+from sim.resource import MetricsServer, ResourceState, ResourceMonitor
 from sim.skippy import SimulationClusterContext
 from sim.topology import Topology
 
@@ -46,6 +46,9 @@ class Simulation:
             logger.info('starting timeout listener with timeout %d', self.timeout)
             env.process(timeout_listener(env, then, self.timeout))
 
+        logger.info('starting resource monitor')
+        env.process(env.resource_monitor.run())
+
         logger.info('setting up benchmark')
         self.benchmark.setup(env)
 
@@ -81,6 +84,12 @@ class Simulation:
 
         if not env.metrics_server:
             env.metrics_server = MetricsServer()
+
+        if not env.resource_state:
+            env.resource_state = ResourceState()
+
+        if not env.resource_monitor:
+            env.resource_monitor = ResourceMonitor(env, 1)
 
     def create_container_registry(self):
         return ContainerRegistry()

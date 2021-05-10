@@ -27,30 +27,32 @@ class DefaultFaasSystem(FaasSystem):
     def __init__(self, env: Environment, scale_by_requests: bool = False,
                  scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False) -> None:
         self.env = env
-        self.functions = dict()
+        self.function_containers = dict()
         # collects all FunctionReplicas under the name of the corresponding FunctionDeployment
         self.replicas = defaultdict(list)
 
         self.request_queue = simpy.Store(env)
         self.scheduler_queue = simpy.Store(env)
 
+        # TODO let users inject LoadBalancer
         self.load_balancer = RoundRobinLoadBalancer(env, self.replicas)
+
+        self.functions_deployments: Dict[str, FunctionDeployment] = dict()
+        self.replica_count: Dict[str, int] = dict()
+        self.functions_definitions = Counter()
 
         self.scale_by_requests = scale_by_requests
         self.scale_by_average_requests_per_replica = scale_by_average_requests
         self.scale_by_queue_requests_per_replica = scale_by_queue_requests_per_replica
-        self.functions_deployments: Dict[str, FunctionDeployment] = dict()
         self.faas_scalers: Dict[str, FaasRequestScaler] = dict()
         self.avg_faas_scalers: Dict[str, AverageFaasRequestScaler] = dict()
         self.queue_faas_scalers: Dict[str, AverageQueueFaasRequestScaler] = dict()
-        self.replica_count: Dict[str, int] = dict()
-        self.functions_definitions = Counter()
 
     def get_deployments(self) -> List[FunctionDeployment]:
         return list(self.functions_deployments.values())
 
     def get_function_index(self) -> Dict[str, FunctionContainer]:
-        return self.functions
+        return self.function_containers
 
     def get_replicas(self, fn_name: str, state=None) -> List[FunctionReplica]:
         if state is None:
@@ -63,6 +65,7 @@ class DefaultFaasSystem(FaasSystem):
             raise ValueError('function already deployed')
 
         self.functions_deployments[fd.name] = fd
+        # TODO remove specific scaling approaches, it's more extendable to let users start scaling technique that iterates over FDs
         self.faas_scalers[fd.name] = FaasRequestScaler(fd, self.env)
         self.avg_faas_scalers[fd.name] = AverageFaasRequestScaler(fd, self.env)
         self.queue_faas_scalers[fd.name] = AverageQueueFaasRequestScaler(fd, self.env)
@@ -75,7 +78,7 @@ class DefaultFaasSystem(FaasSystem):
             self.env.process(self.queue_faas_scalers[fd.name].run())
 
         for f in fd.fn_containers:
-            self.functions[f.image] = f
+            self.function_containers[f.image] = f
 
         # TODO log metadata
         self.env.metrics.log_function_deployment(fd)
@@ -152,6 +155,8 @@ class DefaultFaasSystem(FaasSystem):
         del self.avg_faas_scalers[fn.name]
         del self.queue_faas_scalers[fn.name]
         del self.replica_count[fn.name]
+        for container in fn.fn_containers:
+            del self.functions_definitions[container.image]
 
     def scale_down(self, fn_name: str, remove: int):
         replica_count = len(self.get_replicas(fn_name, FunctionState.RUNNING))
@@ -171,7 +176,6 @@ class DefaultFaasSystem(FaasSystem):
         logger.info(f'scale down {fn_name} by {remove}')
         replicas = self.choose_replicas_to_remove(fn_name, remove)
         self.env.metrics.log_scaling(fn_name, -remove)
-        self.replica_count[fn_name] -= remove
         for replica in replicas:
             yield from self._remove_replica(replica)
             replicas.remove(replica)
@@ -190,23 +194,29 @@ class DefaultFaasSystem(FaasSystem):
         if self.replica_count.get(fn_name, None) is None:
             self.replica_count[fn_name] = 0
 
+        if self.replica_count[fn_name] >= config.scale_max:
+            logger.debug('Function %s wanted to scale up, but maximum number of replicas reached', fn_name)
+            return
+
+        # check whether request would exceed maximum number of containers for the function and reduce to scale to max
         if self.replica_count[fn_name] + replicas > config.scale_max:
-            if self.replica_count[fn_name] >= config.scale_max:
-                logger.debug('Function %s wanted to scale up, but maximum number of replicas reached', fn_name)
-                return
             reduce = self.replica_count[fn_name] + replicas - config.scale_max
             scale = replicas - reduce
+
         if scale == 0:
             return
         actually_scaled = 0
         for index, service in enumerate(fd.get_services()):
             # check whether service has capacity, otherwise continue
-            # TODO can be possible that devices are left out when scale > rest capacity is
             leftover_scale = scale
-            if ranking.function_factor[service.image] * config.scale_max < scale + self.functions_definitions[
+            max_replicas = int(ranking.function_factor[service.image] * config.scale_max)
+
+            # check if scaling all new pods would exceed the maximum number of replicas for this function container
+            if max_replicas * config.scale_max < leftover_scale + self.functions_definitions[
                 service.image]:
-                max_replicas = int(ranking.function_factor[service.image] * config.scale_max)
-                reduce = max_replicas - (self.functions_definitions[fn_name] + replicas)
+
+                # calculate how many pods of this service can be deployed while satisfying the max function factor
+                reduce = max_replicas - self.functions_definitions[service.image]
                 if reduce < 0:
                     # all replicas used
                     continue
@@ -270,8 +280,13 @@ class DefaultFaasSystem(FaasSystem):
             logger.info('pod %s was scheduled to %s', pod.name, result.suggested_host)
 
             replica.node = self.env.get_node_state(result.suggested_host.name)
+            node = replica.node.skippy_node
 
-            # TODO decrease when removing replica
+            env.metrics.log('allocation', {
+                'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+                'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+            }, node=node.name)
+
             self.functions_definitions[replica.image] += 1
             self.replica_count[replica.fn_name] += 1
 
@@ -308,16 +323,16 @@ class DefaultFaasSystem(FaasSystem):
             'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
             'mem': 1 - (node.allocatable.memory / node.capacity.memory)
         }, node=node.name)
-        env.metrics.log_scaling(replica.function.name, -1)
+        self.replica_count[replica.fn_name] -= 1
+        self.functions_definitions[replica.image] -= 1
 
     def suspend(self, function_name: str):
-        if function_name not in self.functions:
+        if function_name not in self.functions_deployments.keys():
             raise ValueError
 
+        # TODO interrupt startup of function containers that are starting
         replicas: List[FunctionReplica] = self.discover(function_name)
-
-        for replica in replicas:
-            yield from self._remove_replica(replica)
+        self.scale_down(function_name, len(replicas))
 
         self.env.metrics.log_function_deployment_lifecycle(self.functions_deployments[function_name], 'suspend')
 
@@ -399,12 +414,6 @@ def simulate_data_upload(env: Environment, replica: FunctionReplica):
 
 
 def simulate_function_invocation(env: Environment, replica: FunctionReplica, request: FunctionRequest):
-    node = replica.node
-
-    node.current_requests.add(request)
     env.metrics.log_start_exec(request, replica)
-
     yield from replica.simulator.invoke(env, replica, request)
-
     env.metrics.log_stop_exec(request, replica)
-    node.current_requests.remove(request)

@@ -1,6 +1,7 @@
 import logging
 
 import examples.basic.main as basic
+from examples.custom_function_sim.main import CustomSimulatorFactory
 from sim.faassim import Simulation
 
 logger = logging.getLogger(__name__)
@@ -11,6 +12,9 @@ def main():
 
     # prepare simulation with topology and benchmark from basic example
     sim = Simulation(basic.example_topology(), basic.ExampleBenchmark())
+
+    # override the SimulatorFactory factory
+    sim.create_simulator_factory = CustomSimulatorFactory
 
     # run the simulation
     sim.run()
@@ -26,7 +30,8 @@ def main():
         'functions_df': sim.env.metrics.extract_dataframe('functions'),
         'flow_df': sim.env.metrics.extract_dataframe('flow'),
         'network_df': sim.env.metrics.extract_dataframe('network'),
-        'utilization_df': sim.env.metrics.extract_dataframe('utilization'),
+        'node_utilization_df': sim.env.metrics.extract_dataframe('node_utilization'),
+        'function_utilization_df': sim.env.metrics.extract_dataframe('function_utilization'),
         'fets_df': sim.env.metrics.extract_dataframe('fets')
     }
 

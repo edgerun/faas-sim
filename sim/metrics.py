@@ -2,11 +2,13 @@ from collections import defaultdict
 from typing import Dict
 
 import pandas as pd
+from ether.core import Capacity
 from skippy.core.model import SchedulingResult
 
 from sim.core import Environment
 from sim.faas import FunctionContainer, FunctionRequest, FunctionReplica, FunctionDeployment
 from sim.logging import RuntimeLogger, NullLogger
+from sim.resource import ResourceUtilization
 
 
 class Metrics:
@@ -82,42 +84,40 @@ class Metrics:
                  function_deployment=function_deployment,
                  function_name=function_name, node=node_name, replica_id=replica_id)
 
-    def log_fet(self, function_deployment, function_name, node_name, t_fet_start, t_fet_end, t_wait_start, t_wait_end,
-                degradation,
-                replica_id):
+    def log_fet(self, function_deployment, function_name, node_name, t_fet_start, t_fet_end, replica_id, **kwargs):
         # TODO design more general? wait/degradation are specific to queue simulator/performance degradation
-        self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, 't_wait_start': t_wait_start,
-                          't_wait_end': t_wait_end, 'degradation': degradation},
+        self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, **kwargs},
                  function_deployment=function_deployment,
                  function_name=function_name, node=node_name, replica_id=replica_id)
 
-    def log_start_exec(self, request: FunctionRequest, replica: FunctionReplica):
+    def log_function_resource_utilization(self, replica: FunctionReplica, utilization: ResourceUtilization):
+        node = replica.node
+        copy = utilization.copy()
+        resources = self.__calculate_util(node.capacity, copy)
+        self.log('function_utilization', resources, node=node.name, replica_id=id(replica))
+
+    def log_resource_utilization(self, node_name: str, capacity: Capacity, utilization: ResourceUtilization):
+        resources = self.__calculate_util(capacity, utilization)
+        self.log('node_utilization', resources, node=node_name)
+
+    def __calculate_util(self, capacity, utilization):
+        update = {
+            'cpu_util': utilization.get_resource('cpu') / capacity.cpu_millis if utilization.get_resource(
+                'cpu') is not None else 0,
+            'mem_util': utilization.get_resource('memory') / capacity.memory if utilization.get_resource(
+                'memory') is not None else 0
+        }
+        resources = utilization.list_resources()
+        resources.update(update)
+        return resources
+
+    def log_start_exec(self, request: FunctionRequest, replica: FunctionReplica, **kwargs):
         self.invocations[replica.function.name] += 1
         self.total_invocations += 1
         self.last_invocation[replica.function.name] = self.env.now
 
-        node = replica.node
-        function = replica.container
-
-        for resource, value in function.resource_config.get_resource_requirements().items():
-            self.utilization[node.name][resource] += value
-
-        self.log('utilization', {
-            'cpu': self.utilization[node.name]['cpu'] / node.ether_node.capacity.cpu_millis,
-            'mem': self.utilization[node.name]['memory'] / node.ether_node.capacity.memory
-        }, node=node.name)
-
-    def log_stop_exec(self, request, replica: FunctionReplica):
-        node = replica.node
-        function = replica.container
-
-        for resource, value in function.get_resource_requirements().items():
-            self.utilization[node.name][resource] -= value
-
-        self.log('utilization', {
-            'cpu': self.utilization[node.name]['cpu'] / node.ether_node.capacity.cpu_millis,
-            'mem': self.utilization[node.name]['memory'] / node.ether_node.capacity.memory
-        }, node=node.name)
+    def log_stop_exec(self, request: FunctionRequest, replica: FunctionReplica, **kwargs):
+        pass
 
     def log_deploy(self, replica: FunctionReplica):
         self.log('replica_deployment', 'deploy', function_name=replica.function.name, node_name=replica.node.name,

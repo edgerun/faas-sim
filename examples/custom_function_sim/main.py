@@ -53,6 +53,13 @@ class MyFunctionSimulator(FunctionSimulator):
 
         logger.info('[simtime=%.2f] invoking function %s on node %s', env.now, request, replica.node.name)
 
+        # for full flexibility you decide the resources used
+        cpu_millis = replica.node.capacity.cpu_millis * 0.1
+        env.put_resource(replica, 'cpu', cpu_millis)
+        node = replica.node
+
+        node.current_requests.add(request)
+
         if replica.function.name == 'python-pi':
             if replica.node.name.startswith('rpi3'):  # those are nodes we created in basic.example_topology()
                 yield env.timeout(20)  # invoking this function takes 20 seconds on a raspberry pi
@@ -62,6 +69,10 @@ class MyFunctionSimulator(FunctionSimulator):
             yield env.timeout(0.5)  # invoking this function takes 500 ms
         else:
             yield env.timeout(0)
+
+        # also, you have to release them at the end
+        env.remove_resource(replica, 'cpu', cpu_millis)
+        node.current_requests.remove(request)
 
     def teardown(self, env: Environment, replica: FunctionReplica):
         yield env.timeout(0)

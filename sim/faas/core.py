@@ -4,6 +4,7 @@ import logging
 from collections import defaultdict
 from typing import List, Dict, NamedTuple, Optional
 
+from ether.core import Node as EtherNode
 from ether.util import parse_size_string
 from skippy.core.model import Pod
 
@@ -11,6 +12,8 @@ from sim.core import Environment, NodeState
 from sim.oracle.oracle import FetOracle, ResourceOracle
 
 logger = logging.getLogger(__name__)
+
+Node = EtherNode
 
 
 def counter(start: int = 1):

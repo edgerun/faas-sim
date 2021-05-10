@@ -3,7 +3,7 @@ from typing import Set, Optional, Any, Generator, Callable, List, Dict
 
 import numpy as np
 import simpy
-from ether.core import Node as EtherNode
+from ether.core import Node as EtherNode, Capacity
 from sklearn.base import RegressorMixin
 
 from .degradation import create_degradation_model_input
@@ -88,7 +88,7 @@ class NodeState:
         return self.ether_node.arch
 
     @property
-    def capacity(self):
+    def capacity(self) -> Capacity:
         return self.ether_node.capacity
 
     def get_calls_in_timeframe(self, start_ts, end_ts) -> List:
@@ -126,6 +126,8 @@ class Environment(simpy.Environment):
         self.scheduler = None
         self.node_states = dict()
         self.metrics_server = None
+        self.resource_state = None
+        self.resource_monitor = None
         self.background_processes: List[Callable[[Environment], Generator[simpy.events.Event, Any, Any]]] = []
         self.degradation_models: Dict[str, Optional[RegressorMixin]] = {}
 
