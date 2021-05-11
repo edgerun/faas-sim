@@ -325,6 +325,9 @@ class FaasSystem(abc.ABC):
     @abc.abstractmethod
     def suspend(self, function_name: str): ...
 
+    @abc.abstractmethod
+    def poll_available_replica(self, fn: str, interval=0.5): ...
+
 
 class LoadBalancer:
     env: Environment
