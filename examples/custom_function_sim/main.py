@@ -55,7 +55,7 @@ class MyFunctionSimulator(FunctionSimulator):
 
         # for full flexibility you decide the resources used
         cpu_millis = replica.node.capacity.cpu_millis * 0.1
-        env.put_resource(replica, 'cpu', cpu_millis)
+        env.resource_state.put_resource(replica, 'cpu', cpu_millis)
         node = replica.node
 
         node.current_requests.add(request)
@@ -71,7 +71,7 @@ class MyFunctionSimulator(FunctionSimulator):
             yield env.timeout(0)
 
         # also, you have to release them at the end
-        env.remove_resource(replica, 'cpu', cpu_millis)
+        env.resource_state.remove_resource(replica, 'cpu', cpu_millis)
         node.current_requests.remove(request)
 
     def teardown(self, env: Environment, replica: FunctionReplica):
