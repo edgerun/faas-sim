@@ -20,6 +20,7 @@ def main():
     sim.run()
 
     dfs = {
+        'allocation_df': sim.env.metrics.extract_dataframe('allocation'),
         'invocations_df': sim.env.metrics.extract_dataframe('invocations'),
         'scale_df': sim.env.metrics.extract_dataframe('scale'),
         'schedule_df': sim.env.metrics.extract_dataframe('schedule'),
