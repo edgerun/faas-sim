@@ -76,19 +76,20 @@ class Metrics:
     def log_scaling(self, function_name, replicas):
         self.log('scale', replicas, function_name=function_name)
 
-    def log_invocation(self, function_deployment, function_name, node_name, t_wait, t_start, t_exec, replica_id):
-        function = self.env.faas.get_function_index()[function_name]
+    def log_invocation(self, function_name, function_image, node_name, t_wait, t_start, t_exec, replica_id):
+        function = self.env.faas.get_function_index()[function_image]
         mem = function.get_resource_requirements().get('memory')
 
         self.log('invocations', {'t_wait': t_wait, 't_exec': t_exec, 't_start': t_start, 'memory': mem},
-                 function_deployment=function_deployment,
-                 function_name=function_name, node=node_name, replica_id=replica_id)
+                 function_name=function_name,
+                 function_image=function_image, node=node_name, replica_id=replica_id)
 
-    def log_fet(self, function_deployment, function_name, node_name, t_fet_start, t_fet_end, replica_id, **kwargs):
+    def log_fet(self, function_name, function_image, node_name, t_fet_start, t_fet_end, replica_id, request_id,
+                **kwargs):
         # TODO design more general? wait/degradation are specific to queue simulator/performance degradation
         self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, **kwargs},
-                 function_deployment=function_deployment,
-                 function_name=function_name, node=node_name, replica_id=replica_id)
+                 function_name=function_name,
+                 function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)
 
     def log_function_resource_utilization(self, replica: FunctionReplica, utilization: ResourceUtilization):
         node = replica.node
