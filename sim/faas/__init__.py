@@ -3,6 +3,7 @@ from .core import FunctionState, Resources, FunctionResourceCharacterization, Fu
     LoadBalancer, RoundRobinLoadBalancer, FunctionSimulator, SimulatorFactory, FaasSystem, FunctionImage, Function, \
     ScalingConfiguration, ResourceConfiguration, KubernetesResourceConfiguration
 from .system import DefaultFaasSystem, simulate_data_download, simulate_data_upload
+from .watchdogs import ForkingWatchdog, HTTPWatchdog
 from ..core import Environment
 
 name = 'faas'
@@ -28,5 +29,7 @@ __all__ = [
     'FunctionSimulator',
     'SimulatorFactory',
     'simulate_data_download',
-    'simulate_data_upload'
+    'simulate_data_upload',
+    'ForkingWatchdog',
+    'HTTPWatchdog'
 ]
