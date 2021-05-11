@@ -2,9 +2,12 @@ import logging
 import math
 import pickle
 import random
+import time
 
 import numpy as np
+import pandas as pd
 import simpy
+
 from sim.core import Environment
 from sim.faas import FunctionRequest, FunctionDeployment
 
@@ -15,6 +18,9 @@ __all__ = [
     'static_arrival_profile',
     'expovariate_arrival_profile',
     'function_trigger',
+    'run_arrival_profile',
+    'save_requests',
+    'pre_recorded_profile'
 ]
 
 
@@ -105,3 +111,39 @@ def function_trigger(env: Environment, deployment: FunctionDeployment, ia_genera
         pass
     except StopIteration:
         logging.error(f'{deployment.name} gen has finished')
+
+
+def run_arrival_profile(env, ia_gen, until):
+    x = list()
+    y = list()
+
+    def event_generator():
+        while True:
+            ia = next(ia_gen)
+            x.append(env.now)
+            y.append(ia)
+            yield env.timeout(ia)
+
+    then = time.time()
+    env.process(event_generator())
+    env.run(until=until)
+    print('simulating %d events took %.2f sec' % (len(x), time.time() - then))
+
+    df = pd.DataFrame(data={'simtime': x, 'ia': y}, index=pd.DatetimeIndex(pd.to_datetime(x, unit='s', origin='unix')))
+    return df
+
+
+def save_requests(profile, duration, file: str, env: simpy.Environment = None):
+    """
+    Runs the profile and saves the generated interarrival times as pkl.
+    :param profile: profile to run
+    :param duration: the duration to run the profile, in seconds
+    :param file: full file name
+    :param env: environment to run the profile, if None creates a default simpy Environment
+    """
+    if env is None:
+        env = simpy.Environment()
+    with open(file, 'wb') as fd:
+        df = run_arrival_profile(env, profile(env), until=duration)
+        ias = list(df['ia'])
+        pickle.dump(ias, fd)
