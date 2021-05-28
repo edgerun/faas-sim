@@ -13,6 +13,9 @@ Documentation for faas-sim
 
    index
    concepts/index
+   system/index
+   analysis/index
+   function_sims/index
    examples/index
 
 Indices and tables

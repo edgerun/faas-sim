@@ -35,7 +35,7 @@
   <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="Examples" href="../examples/index.html" />
+    <link rel="next" title="System" href="../system/index.html" />
     <link rel="prev" title="faas-sim Overview" href="../index.html" /> 
 </head>
 
@@ -102,6 +102,9 @@
 <li class="toctree-l2"><a class="reference internal" href="#request-generators">Request generators</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="../system/index.html">System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../analysis/index.html">Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../function_sims/index.html">Function Simulators</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Examples</a></li>
 </ul>
 
@@ -172,9 +175,9 @@
 <div class="section" id="domain-model">
 <h2>Domain model<a class="headerlink" href="#domain-model" title="Permalink to this headline">¶</a></h2>
 <p>Our conceptual model of functions, deployments, and running replicas is shown in the following figure.</p>
-<div class="figure align-center" id="id2">
+<div class="figure align-center" id="id3">
 <img alt="../_images/function-conceptual-view.png" src="../_images/function-conceptual-view.png" />
-<p class="caption"><span class="caption-text">Conceptual model of functions and their deployment.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Conceptual model of functions and their deployment.</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
 </div>
 <div class="section" id="function">
 <h3>Function<a class="headerlink" href="#function" title="Permalink to this headline">¶</a></h3>
@@ -227,18 +230,41 @@ Think of it like the main API gateway of OpenFaaS or the kube-apiserver of Kuber
 
     <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="n">FunctionDeployment</span><span class="p">):</span> <span class="o">...</span>
 
+    <span class="k">def</span> <span class="nf">suspend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span> <span class="o">...</span>
+
     <span class="k">def</span> <span class="nf">discover</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionReplica</span><span class="p">]:</span> <span class="o">...</span>
 
     <span class="k">def</span> <span class="nf">scale_down</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">remove</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span> <span class="o">...</span>
 
     <span class="k">def</span> <span class="nf">scale_up</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">replicas</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span> <span class="o">...</span>
 
-    <span class="c1"># ... and several other lookup methods</span>
+    <span class="c1"># additional lookup methods:</span>
+    <span class="k">def</span> <span class="nf">poll_available_replica</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">interval</span><span class="o">=</span><span class="mf">0.5</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">get_replicas</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">state</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionReplica</span><span class="p">]:</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">get_function_index</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">FunctionContainer</span><span class="p">]:</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">get_deployments</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionDeployment</span><span class="p">]:</span>  <span class="o">...</span>
 </pre></div>
 </div>
+<p>Conceptually the phases are:</p>
+<ul class="simple">
+<li><p><strong>deploy</strong>: makes the function invokable and deploys the minimum number of <code class="docutils literal notranslate"><span class="pre">FunctionReplica</span></code> instances on the cluster. The number of minimum running instances is configured via <code class="docutils literal notranslate"><span class="pre">ScalingConfiguration</span></code>.</p></li>
+<li><p><strong>invoke</strong>: the <code class="docutils literal notranslate"><span class="pre">LoadBalancer</span></code> selects a replica and simulates the function invocation by calling the <code class="docutils literal notranslate"><span class="pre">invoke</span></code> method of the associated <code class="docutils literal notranslate"><span class="pre">FunctionSimulator</span></code>.</p></li>
+<li><p><strong>remove</strong>: removes the function from the platform and shutsdown all running replias.</p></li>
+<li><p><strong>discover</strong>: returns all running <code class="docutils literal notranslate"><span class="pre">FunctionReplica</span></code> instances that belong to the function.</p></li>
+<li><p><strong>scale_down</strong>: removes the specified number of running <code class="docutils literal notranslate"><span class="pre">FunctionReplica</span></code> instances, with respect to the minimum requirement. The current implementation picks the most recent deployed replicas first.</p></li>
+<li><p><strong>scale_up</strong>: deploys the specified number of <code class="docutils literal notranslate"><span class="pre">FunctionReplica</span></code> instances but has to respect the maximum number specified in the <code class="docutils literal notranslate"><span class="pre">ScalingConfiguration</span></code>.</p></li>
+<li><p><strong>suspend</strong>: executes a teardown for all running replicas of a function. (used by <code class="docutils literal notranslate"><span class="pre">faas_idler</span></code>).</p></li>
+<li><p><strong>poll_available_replica</strong>: repeatedly waits and checks for running replicas of the function.</p></li>
+<li><p><strong>get_replicas</strong>: gets all replicas in the specific state of a function. Returns all replicas in case of <code class="docutils literal notranslate"><span class="pre">state</span> <span class="pre">==</span> <span class="pre">None</span></code>.</p></li>
+<li><p><strong>get_function_index</strong>: returns all deployed <code class="docutils literal notranslate"><span class="pre">FunctionContainers</span></code>.</p></li>
+<li><p><strong>get_deployments</strong>: returns all deployed <code class="docutils literal notranslate"><span class="pre">FunctionDeployment</span></code> instances.</p></li>
+</ul>
 </div>
 <div class="section" id="function-simulators">
-<h2>Function simulators<a class="headerlink" href="#function-simulators" title="Permalink to this headline">¶</a></h2>
+<span id="id2"></span><h2>Function simulators<a class="headerlink" href="#function-simulators" title="Permalink to this headline">¶</a></h2>
 <p>A FunctionSimulator encapsulates the simulation code for a function, and is one of the core abstractions of <em>faas-sim</em>.
 <em>faas-sim</em> has several built-in function simulators that use traces from real functions and workloads as basis for the simulation.</p>
 <p>The FunctionSimulator methods are invoked by the simulator to simulate the the different lifecycle phases of a function.</p>
@@ -275,6 +301,7 @@ the replica is being destroyed (e.g., because it is being scaled down)</p></li>
 </ul>
 <p>Each time the simulator creates a new function replica (because of deployment or scaling actions), the SimulatorFactory is called to create or return a FunctionSimulator for that replica.
 The SimulatorFactory can be overwritten to return the same FunctionSimulator every time, create a new instance for each function replica, or any other behavior.</p>
+<p>Get more details on function simulators in <a class="reference internal" href="../function_sims/index.html#function-simulator-details"><span class="std std-ref">Function Simulators</span></a> and our examples.</p>
 </div>
 <div class="section" id="simulation">
 <h2>Simulation<a class="headerlink" href="#simulation" title="Permalink to this headline">¶</a></h2>
@@ -311,9 +338,9 @@ Usage example:</p>
 </pre></div>
 </div>
 <p>The following figure shows several examples and the request patterns the produce:</p>
-<div class="figure align-center" id="id3">
+<div class="figure align-center" id="id4">
 <a class="reference internal image-reference" href="../_images/workload-generators.png"><img alt="../_images/workload-generators.png" src="../_images/workload-generators.png" style="width: 90%;" /></a>
-<p class="caption"><span class="caption-text">Composing inter-arrival distributions with workload patterns to generate workload.</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+<p class="caption"><span class="caption-text">Composing inter-arrival distributions with workload patterns to generate workload.</span><a class="headerlink" href="#id4" title="Permalink to this image">¶</a></p>
 </div>
 <p>The first row shows how to achieve a randomized sinusoidal request pattern.
 For the interarrival distribution we use an exponential distribution.
@@ -325,6 +352,11 @@ The second row shows how a constant interarrival distribution can be used to mod
 and how a constant workload profile can be used to model a static workload pattern with randomized interarrivals.
 The last row shows Gaussian random walks (GRW), where each value represents a random sample from a Normal distribution, that is then used as value for <span class="math notranslate nohighlight">\(\mu\)</span> in the next random sample.
 The request profile can be parameterized with a <span class="math notranslate nohighlight">\(\sigma\)</span> value that affects the fluctuation over time.</p>
+<div class="admonition hint">
+<p class="admonition-title">Hint</p>
+<p>You can find code examples to generate patterns in our Jupyter Notebook (<code class="docutils literal notranslate"><span class="pre">workload_patterns.ipynb</span></code>) and a
+simulation example under <code class="docutils literal notranslate"><span class="pre">examples/request_gen</span></code>.</p>
+</div>
 </div>
 </div>
 
@@ -336,7 +368,7 @@ The request profile can be parameterized with a <span class="math notranslate no
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="../examples/index.html" class="btn btn-neutral float-right" title="Examples" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="../system/index.html" class="btn btn-neutral float-right" title="System" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="../index.html" class="btn btn-neutral float-left" title="faas-sim Overview" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

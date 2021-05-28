@@ -1,0 +1,278 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>System &mdash; edgerun-faas-sim  documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script src="../_static/jquery.js"></script>
+        <script src="../_static/underscore.js"></script>
+        <script src="../_static/doctools.js"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Analysis" href="../analysis/index.html" />
+    <link rel="prev" title="Concepts" href="../concepts/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../contents.html" class="icon icon-home"> edgerun-faas-sim
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../index.html"><em>faas-sim</em> Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../concepts/index.html">Concepts</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">System</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#resources">Resources</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../analysis/index.html">Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../function_sims/index.html">Function Simulators</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../examples/index.html">Examples</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../contents.html">edgerun-faas-sim</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../contents.html">Docs</a> &raquo;</li>
+        
+      <li>System</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/system/index.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="system">
+<span id="id1"></span><h1>System<a class="headerlink" href="#system" title="Permalink to this headline">¶</a></h1>
+<p>In the following we describe the inner workings of our <em>FaasSystem</em> implementation.
+The API of the <cite>FaasSystem</cite> is designed around real life requirements and represents typical operations that can be found in a typical API Gateway (such as in <a class="reference external" href="https://docs.openfaas.com/">OpenFaaS</a>).
+We provide a default implementation of <code class="docutils literal notranslate"><span class="pre">FaasSystem</span></code>, called <code class="docutils literal notranslate"><span class="pre">DefaultFaasSystme</span></code> in <code class="docutils literal notranslate"><span class="pre">sim.faas.system.py</span></code>.
+The following explains the inner workings of our implementations, which components are used and how you can configure the system.</p>
+<p>We recall the methods a <code class="docutils literal notranslate"><span class="pre">FaasSystem</span></code> has to implement:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">FaasSystem</span><span class="p">(</span><span class="n">abc</span><span class="o">.</span><span class="n">ABC</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">deploy</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="n">FunctionDeployment</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">invoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">FunctionRequest</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">remove</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn</span><span class="p">:</span> <span class="n">FunctionDeployment</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">discover</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionReplica</span><span class="p">]:</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">scale_down</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">remove</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">scale_up</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">replicas</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="k">def</span> <span class="nf">suspend</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">fn_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span> <span class="o">...</span>
+
+    <span class="c1"># ... and several other lookup methods</span>
+</pre></div>
+</div>
+<p>To implement these functions, our system contains the following state:</p>
+<div class="admonition attention">
+<p class="admonition-title">Attention</p>
+<p>This section provides insights into the current implementation of <code class="docutils literal notranslate"><span class="pre">FaasSystem</span></code>.
+Be aware that this is subject to change and using lookup methods is much safer with respect to updates.</p>
+</div>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">env:</span> <span class="pre">Environment</span></code>: used to access global configured components (i.e., <code class="docutils literal notranslate"><span class="pre">Metrics</span></code>, <code class="docutils literal notranslate"><span class="pre">SimulatorFactory</span></code>, <code class="docutils literal notranslate"><span class="pre">ClusterContext</span></code>)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">function_containers:</span> <span class="pre">Dict[str,</span> <span class="pre">FunctionContainer]</span></code>: stores all available function containers from the deployed functions</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replicas:</span> <span class="pre">Dict[str,</span> <span class="pre">List[FunctionReplica]</span></code>: collects all FunctionReplicas under the name of the corresponding FunctionDeployment</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">scheduler_queue:</span> <span class="pre">simpy.Store</span></code>: contains function replicas that need to be scheduled. <code class="docutils literal notranslate"><span class="pre">scale_up</span></code> puts replicas into the queue and <code class="docutils literal notranslate"><span class="pre">run_schedule_worker</span></code> polls from it.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">load_balancer:</span> <span class="pre">LoadBalancer</span></code>: called upon <code class="docutils literal notranslate"><span class="pre">invoke</span></code> to select replica that handles the invocation. (currently round-robin)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">functions_deployments:</span> <span class="pre">Dict[str,</span> <span class="pre">FunctionDeployment</span></code>: stores the deployed functions and gets modified by <code class="docutils literal notranslate"><span class="pre">deploy</span></code> and <code class="docutils literal notranslate"><span class="pre">remove</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replica_count:</span> <span class="pre">Dict[str,</span> <span class="pre">int]</span></code>: counts the number of active replica per <code class="docutils literal notranslate"><span class="pre">FunctionDeployment</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">functions_definitions:</span> <span class="pre">Counter</span></code>: counts the number of replica per <code class="docutils literal notranslate"><span class="pre">FunctionContainer</span></code></p></li>
+</ul>
+<div class="section" id="resources">
+<span id="id2"></span><h2>Resources<a class="headerlink" href="#resources" title="Permalink to this headline">¶</a></h2>
+<p>Simulation of resources has to be implemented by users due to necessary flexibility regarding the implementation of a <code class="docutils literal notranslate"><span class="pre">FunctionSimulator</span></code>. In example, the execution of a function can be delayed through queuing.
+Therefore, resources are not immediately used and it’s the <code class="docutils literal notranslate"><span class="pre">FunctionSimulator's</span></code> responsibility to consume them at the right time.</p>
+<p><em>faas-sim</em> offers a standardized interface to manage resources which is based on dictionaries.
+This allows <em>faas-sim</em> to implement common componnents (such as resource monitoring for nodes &amp; functions, as well as an implementation of <a class="reference external" href="https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/">Kubernetes’ HPA</a>)
+Resources get added up.</p>
+<p>The following code shows an example on consuming resources:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">CpuConsumingSim</span><span class="p">(</span><span class="n">FunctionSimulator</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">queue</span><span class="p">:</span> <span class="n">simpy</span><span class="o">.</span><span class="n">Resource</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">queue</span> <span class="o">=</span> <span class="n">queue</span>
+
+    <span class="k">def</span> <span class="nf">invoke</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">env</span><span class="p">:</span> <span class="n">Environment</span><span class="p">,</span> <span class="n">replica</span><span class="p">:</span> <span class="n">FunctionReplica</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">FunctionRequest</span><span class="p">):</span>
+        <span class="n">token</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">queue</span><span class="o">.</span><span class="n">request</span><span class="p">()</span>
+        <span class="k">yield</span> <span class="n">token</span>
+
+        <span class="c1"># definition of resources is up to users</span>
+        <span class="c1"># here we assume that a function call needs 20% cpu usage of the whole call</span>
+        <span class="n">env</span><span class="o">.</span><span class="n">resource_state</span><span class="o">.</span><span class="n">put_resource</span><span class="p">(</span><span class="n">replica</span><span class="p">,</span> <span class="s1">&#39;cpu&#39;</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">)</span>
+
+        <span class="k">yield</span> <span class="n">env</span><span class="o">.</span><span class="n">timeout</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+        <span class="c1"># release resources</span>
+        <span class="n">env</span><span class="o">.</span><span class="n">resource_state</span><span class="o">.</span><span class="n">remove_resource</span><span class="p">(</span><span class="n">replica</span><span class="p">,</span> <span class="s1">&#39;cpu&#39;</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">Environment</span></code> object contains a resource monitor which continuously collects the momentary resource utilization and puts into the <code class="docutils literal notranslate"><span class="pre">MetricsServer</span></code> which can be used to query the average usage of a certain resource.</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../analysis/index.html" class="btn btn-neutral float-right" title="Analysis" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../concepts/index.html" class="btn btn-neutral float-left" title="Concepts" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2021, Edge Run FaaS-Sim
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
