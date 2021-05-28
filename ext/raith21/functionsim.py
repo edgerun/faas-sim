@@ -142,8 +142,7 @@ class AIPythonHTTPSimulator(FunctionSimulator):
                 yield from simulate_data_upload(env, replica)
             t_fet_end = env.now
             env.metrics.log_fet(request.name, replica.image, replica.node.name, t_fet_start, t_fet_end,
-                                t_wait_start, t_wait_end, 1,
-                                id(replica))
+                                id(replica), request.request_id, t_wait_start=t_wait_start, t_wait_end=t_wait_end)
             replica.node.set_end(request.request_id, t_fet_end)
         except KeyError:
             pass
