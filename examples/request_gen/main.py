@@ -8,9 +8,10 @@ from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import FunctionDeployment, FunctionRequest, Function, FunctionImage, ScalingConfiguration, \
-    DeploymentRanking, FunctionContainer, KubernetesResourceConfiguration
+from sim.faas import FunctionDeployment, Function, FunctionImage, ScalingConfiguration, \
+    FunctionContainer
 from sim.faassim import Simulation
+from sim.requestgen import function_trigger, constant_rps_profile, expovariate_arrival_profile
 from sim.topology import Topology
 
 logger = logging.getLogger(__name__)
@@ -49,14 +50,6 @@ class ExampleBenchmark(Benchmark):
         containers.put(ImageProperties('python-pi-cpu', parse_size_string('58M'), arch='x86'))
         containers.put(ImageProperties('python-pi-cpu', parse_size_string('58M'), arch='aarch64'))
 
-        containers.put(ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='arm32'))
-        containers.put(ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='x86'))
-        containers.put(ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='aarch64'))
-
-        containers.put(ImageProperties('resnet50-inference-gpu', parse_size_string('56M'), arch='arm32'))
-        containers.put(ImageProperties('resnet50-inference-gpu', parse_size_string('56M'), arch='x86'))
-        containers.put(ImageProperties('resnet50-inference-gpu', parse_size_string('56M'), arch='aarch64'))
-
         # log all the images in the container
         for name, tag_dict in containers.images.items():
             for tag, images in tag_dict.items():
@@ -72,29 +65,17 @@ class ExampleBenchmark(Benchmark):
         # block until replicas become available (scheduling has finished and replicas have been deployed on the node)
         logger.info('waiting for replica')
         yield env.process(env.faas.poll_available_replica('python-pi'))
-        yield env.process(env.faas.poll_available_replica('resnet50-inference'))
 
-        # run workload
-        ps = []
-        # execute 10 requests in parallel
-        logger.info('executing 10 python-pi requests')
-        for i in range(10):
-            ps.append(env.process(env.faas.invoke(FunctionRequest('python-pi'))))
+        # generate profile
+        ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=20))
 
-        logger.info('executing 10 resnet50-inference requests')
-        for i in range(10):
-            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-inference'))))
-
-        # wait for invocation processes to finish
-        for p in ps:
-            yield p
+        # run profile
+        yield from function_trigger(env, deployments[0], ia_generator, max_requests=100)
 
     def prepare_deployments(self) -> List[FunctionDeployment]:
-        resnet_fd = self.prepare_resnet_inference_deployment()
-
         python_pi_fd = self.prepare_python_pi_deployment()
 
-        return [python_pi_fd, resnet_fd]
+        return [python_pi_fd]
 
     def prepare_python_pi_deployment(self):
         # Design Time
@@ -114,35 +95,6 @@ class ExampleBenchmark(Benchmark):
         )
 
         return python_pi_fd
-
-    def prepare_resnet_inference_deployment(self):
-        # Design time
-
-        resnet_inference = 'resnet50-inference'
-        inference_cpu = 'resnet50-inference-cpu'
-        inference_gpu = 'resnet50-inference-gpu'
-
-        resnet_inference_gpu = FunctionImage(image=inference_gpu)
-        resnet_inference_cpu = FunctionImage(image=inference_cpu)
-        resnet_fn = Function(resnet_inference, fn_images=[resnet_inference_gpu, resnet_inference_cpu])
-
-        # Run time
-
-        # default kubernetes requested resources
-        resnet_cpu_container = FunctionContainer(resnet_inference_cpu)
-
-        # custom defined requested resources
-        request = KubernetesResourceConfiguration.create_from_str(cpu='100m', memory='1024Mi')
-        resnet_gpu_container = FunctionContainer(resnet_inference_gpu, resource_config=request)
-
-        resnet_fd = FunctionDeployment(
-            resnet_fn,
-            [resnet_cpu_container, resnet_gpu_container],
-            ScalingConfiguration(),
-            DeploymentRanking([inference_gpu, inference_cpu])
-        )
-
-        return resnet_fd
 
 
 if __name__ == '__main__':

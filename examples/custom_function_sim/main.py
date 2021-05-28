@@ -3,7 +3,7 @@ import logging
 import examples.basic.main as basic
 import sim.docker as docker
 from sim.core import Environment
-from sim.faas import FunctionDefinition, FunctionSimulator, FunctionReplica, FunctionRequest
+from sim.faas import FunctionSimulator, FunctionReplica, FunctionRequest, SimulatorFactory, FunctionContainer
 from sim.faassim import Simulation
 
 logger = logging.getLogger(__name__)
@@ -22,12 +22,12 @@ def main():
     sim.run()
 
 
-class CustomSimulatorFactory:
+class CustomSimulatorFactory(SimulatorFactory):
 
     def __init__(self) -> None:
         super().__init__()
 
-    def create(self, env: Environment, fn: FunctionDefinition) -> FunctionSimulator:
+    def create(self, env: Environment, fn: FunctionContainer) -> FunctionSimulator:
         return MyFunctionSimulator()
 
 
@@ -35,7 +35,7 @@ class MyFunctionSimulator(FunctionSimulator):
 
     def deploy(self, env: Environment, replica: FunctionReplica):
         # simulate a docker pull command for deploying the function (also done by sim.faassim.DockerDeploySimMixin)
-        yield from docker.pull(env, replica.function.image, replica.node.ether_node)
+        yield from docker.pull(env, replica.container.image, replica.node.ether_node)
 
     def startup(self, env: Environment, replica: FunctionReplica):
         logger.info('[simtime=%.2f] starting up function replica for function %s', env.now, replica.function.name)
@@ -53,6 +53,13 @@ class MyFunctionSimulator(FunctionSimulator):
 
         logger.info('[simtime=%.2f] invoking function %s on node %s', env.now, request, replica.node.name)
 
+        # for full flexibility you decide the resources used
+        cpu_millis = replica.node.capacity.cpu_millis * 0.1
+        env.resource_state.put_resource(replica, 'cpu', cpu_millis)
+        node = replica.node
+
+        node.current_requests.add(request)
+
         if replica.function.name == 'python-pi':
             if replica.node.name.startswith('rpi3'):  # those are nodes we created in basic.example_topology()
                 yield env.timeout(20)  # invoking this function takes 20 seconds on a raspberry pi
@@ -62,6 +69,10 @@ class MyFunctionSimulator(FunctionSimulator):
             yield env.timeout(0.5)  # invoking this function takes 500 ms
         else:
             yield env.timeout(0)
+
+        # also, you have to release them at the end
+        env.resource_state.remove_resource(replica, 'cpu', cpu_millis)
+        node.current_requests.remove(request)
 
     def teardown(self, env: Environment, replica: FunctionReplica):
         yield env.timeout(0)

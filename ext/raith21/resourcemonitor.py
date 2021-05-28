@@ -11,7 +11,7 @@ from sim.resource import ResourceWindow
 
 # TODO migrate this to faas (needs to extract FunctionCall)
 
-class ResourceMonitor:
+class Raith21ResourceMonitor:
     """Simpy process - continuously collects resource data"""
 
     def __init__(self, env: Environment, resource_oracle: ResourceOracle):

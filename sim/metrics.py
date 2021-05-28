@@ -2,11 +2,13 @@ from collections import defaultdict
 from typing import Dict
 
 import pandas as pd
+from ether.core import Capacity
 from skippy.core.model import SchedulingResult
 
 from sim.core import Environment
-from sim.faas import FunctionDefinition, FunctionRequest, FunctionReplica, FunctionDeployment
+from sim.faas import FunctionContainer, FunctionRequest, FunctionReplica, FunctionDeployment
 from sim.logging import RuntimeLogger, NullLogger
+from sim.resource import ResourceUtilization
 
 
 class Metrics:
@@ -36,14 +38,14 @@ class Metrics:
         """
         # TODO log metadata/handle function definitions
         # use log_function_definition
-        record = {'name': fn.name, 'image': fn.image}
+        record = {'name': fn.name}
         self.log('function_deployments', record, type='deploy')
 
-    def log_function_definition(self, fn: FunctionDefinition):
+    def log_function_definition(self, fn_name: str, fn: FunctionContainer):
         """
         Logs the functions name, related container images and their metadata
         """
-        record = {'name': fn.name, 'image': fn.image}
+        record = {'name': fn_name, 'image': fn.image}
         # TODO fix clustercontext
         image_state = self.env.cluster.image_states[fn.image]
         for arch, size in image_state.size.items():
@@ -74,49 +76,49 @@ class Metrics:
     def log_scaling(self, function_name, replicas):
         self.log('scale', replicas, function_name=function_name)
 
-    def log_invocation(self, function_deployment, function_name, node_name, t_wait, t_start, t_exec, replica_id):
-        function = self.env.faas.get_function_index()[function_name]
+    def log_invocation(self, function_name, function_image, node_name, t_wait, t_start, t_exec, replica_id, **kwargs):
+        function = self.env.faas.get_function_index()[function_image]
         mem = function.get_resource_requirements().get('memory')
 
-        self.log('invocations', {'t_wait': t_wait, 't_exec': t_exec, 't_start': t_start, 'memory': mem},
-                 function_deployment=function_deployment,
-                 function_name=function_name, node=node_name, replica_id=replica_id)
+        self.log('invocations', {'t_wait': t_wait, 't_exec': t_exec, 't_start': t_start, 'memory': mem, **kwargs},
+                 function_name=function_name,
+                 function_image=function_image, node=node_name, replica_id=replica_id)
 
-    def log_fet(self, function_deployment, function_name, node_name, t_fet_start, t_fet_end, t_wait_start, t_wait_end,
-                degradation,
-                replica_id):
-        self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, 't_wait_start': t_wait_start,
-                          't_wait_end': t_wait_end, 'degradation': degradation},
-                 function_deployment=function_deployment,
-                 function_name=function_name, node=node_name, replica_id=replica_id)
+    def log_fet(self, function_name, function_image, node_name, t_fet_start, t_fet_end, replica_id, request_id,
+                **kwargs):
+        # TODO design more general? wait/degradation are specific to queue simulator/performance degradation
+        self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, **kwargs},
+                 function_name=function_name,
+                 function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)
 
-    def log_start_exec(self, request: FunctionRequest, replica: FunctionReplica):
+    def log_function_resource_utilization(self, replica: FunctionReplica, utilization: ResourceUtilization):
+        node = replica.node
+        copy = utilization.copy()
+        resources = self.__calculate_util(node.capacity, copy)
+        self.log('function_utilization', resources, node=node.name, replica_id=id(replica))
+
+    def log_resource_utilization(self, node_name: str, capacity: Capacity, utilization: ResourceUtilization):
+        resources = self.__calculate_util(capacity, utilization)
+        self.log('node_utilization', resources, node=node_name)
+
+    def __calculate_util(self, capacity, utilization):
+        update = {
+            'cpu_util': utilization.get_resource('cpu') / capacity.cpu_millis if utilization.get_resource(
+                'cpu') is not None else 0,
+            'mem_util': utilization.get_resource('memory') / capacity.memory if utilization.get_resource(
+                'memory') is not None else 0
+        }
+        resources = utilization.list_resources()
+        resources.update(update)
+        return resources
+
+    def log_start_exec(self, request: FunctionRequest, replica: FunctionReplica, **kwargs):
         self.invocations[replica.function.name] += 1
         self.total_invocations += 1
         self.last_invocation[replica.function.name] = self.env.now
 
-        node = replica.node
-        function = replica.function
-
-        for resource, value in function.get_resource_requirements().items():
-            self.utilization[node.name][resource] += value
-
-        self.log('utilization', {
-            'cpu': self.utilization[node.name]['cpu'] / node.ether_node.capacity.cpu_millis,
-            'mem': self.utilization[node.name]['memory'] / node.ether_node.capacity.memory
-        }, node=node.name)
-
-    def log_stop_exec(self, request, replica):
-        node = replica.node
-        function = replica.function
-
-        for resource, value in function.get_resource_requirements().items():
-            self.utilization[node.name][resource] -= value
-
-        self.log('utilization', {
-            'cpu': self.utilization[node.name]['cpu'] / node.ether_node.capacity.cpu_millis,
-            'mem': self.utilization[node.name]['memory'] / node.ether_node.capacity.memory
-        }, node=node.name)
+    def log_stop_exec(self, request: FunctionRequest, replica: FunctionReplica, **kwargs):
+        pass
 
     def log_deploy(self, replica: FunctionReplica):
         self.log('replica_deployment', 'deploy', function_name=replica.function.name, node_name=replica.node.name,
@@ -135,18 +137,24 @@ class Metrics:
                  replica_id=id(replica))
 
     def log_teardown(self, replica: FunctionReplica):
-        self.log('replica_deployment', 'teardown', function_name=replica.function.name, node_name=replica.node.name,
+        name = replica.fn_name
+        node_name = replica.node.name
+        self.log('replica_deployment', 'teardown', function_name=name, node_name=node_name,
                  replica_id=id(replica))
 
     def log_function_deployment_lifecycle(self, fn: FunctionDeployment, event: str):
         self.log('function_deployment_lifecycle', event, name=fn.name, function_id=id(fn))
 
     def log_queue_schedule(self, replica: FunctionReplica):
-        self.log('schedule', 'queue', function_name=replica.function.name, image=replica.function.image,
+        name = replica.fn_name
+        image = replica.image
+        self.log('schedule', 'queue', function_name=name, image=image,
                  replica_id=id(replica))
 
     def log_start_schedule(self, replica: FunctionReplica):
-        self.log('schedule', 'start', function_name=replica.function.name, image=replica.function.image,
+        name = replica.fn_name
+        image = replica.image
+        self.log('schedule', 'start', function_name=name, image=image,
                  replica_id=id(replica))
 
     def log_finish_schedule(self, replica: FunctionReplica, result: SchedulingResult):
@@ -155,23 +163,29 @@ class Metrics:
         else:
             node_name = result.suggested_host.name
 
-        self.log('schedule', 'finish', function_name=replica.function.name, image=replica.function.image,
+        self.log('schedule', 'finish', function_name=replica.function.name, image=replica.container.image,
                  node_name=node_name,
                  successful=node_name != 'None', replica_id=id(replica))
 
     def log_function_deploy(self, replica: FunctionReplica):
-        fn = replica.function
-        self.log('function_deployment', 'deploy', name=fn.name, image=fn.image, function_id=id(fn),
+        fn = replica.container
+        image = replica.image
+        name = replica.fn_name
+        self.log('function_deployment', 'deploy', name=name, image=image, function_id=id(fn),
                  node=replica.node.name)
 
     def log_function_suspend(self, replica: FunctionReplica):
-        fn = replica.function
-        self.log('function_deployment', 'suspend', name=fn.name, image=fn.image, function_id=id(fn),
+        fn = replica.container
+        image = replica.image
+        name = replica.fn_name
+        self.log('function_deployment', 'suspend', name=name, image=image, function_id=id(fn),
                  node=replica.node.name)
 
     def log_function_remove(self, replica: FunctionReplica):
         fn = replica.function
-        self.log('function_deployment', 'remove', name=fn.name, image=fn.image, function_id=id(fn),
+        image = replica.image
+        name = replica.fn_name
+        self.log('function_deployment', 'remove', name=name, image=image, function_id=id(fn),
                  node=replica.node.name)
 
     def get(self, name, **tags):

@@ -30,6 +30,18 @@ You can run the examples we provide in https://github.com/edgerun/faas-sim/tree/
 Where example refers to the specific example package.
 Check out the examples [README](https://github.com/edgerun/faas-sim/tree/master/examples/README.md) for more information.
 
+Run notebooks
+-------------
+
+Notebooks are located in `notebooks`.
+You need to install `faas-sim` in editable state to run the notebooks.
+Inside `notebooks` import modules from `sim`.
+
+To install the project (assuming you already created and activated a virtual environment via `make venv`):
+
+      pip install -e .
+      jupyter notebook
+
 Documentation
 -------------
 

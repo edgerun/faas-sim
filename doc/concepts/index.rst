@@ -82,13 +82,47 @@ Think of it like the main API gateway of OpenFaaS or the kube-apiserver of Kuber
 
         def remove(self, fn: FunctionDeployment): ...
 
+        def suspend(self, fn_name: str): ...
+
         def discover(self, fn_name: str) -> List[FunctionReplica]: ...
 
         def scale_down(self, fn_name: str, remove: int): ...
 
         def scale_up(self, fn_name: str, replicas: int): ...
 
-        # ... and several other lookup methods
+        # additional lookup methods:
+        def poll_available_replica(self, fn: str, interval=0.5): ...
+
+        def get_replicas(self, fn_name: str, state=None) -> List[FunctionReplica]: ...
+
+        def get_function_index(self) -> Dict[str, FunctionContainer]: ...
+
+        def get_deployments(self) -> List[FunctionDeployment]:  ...
+
+Conceptually the phases are:
+
+* **deploy**: makes the function invokable and deploys the minimum number of ``FunctionReplica`` instances on the cluster. The number of minimum running instances is configured via ``ScalingConfiguration``.
+
+* **invoke**: the ``LoadBalancer`` selects a replica and simulates the function invocation by calling the ``invoke`` method of the associated ``FunctionSimulator``.
+* **remove**: removes the function from the platform and shutsdown all running replias.
+
+* **discover**: returns all running ``FunctionReplica`` instances that belong to the function.
+
+* **scale_down**: removes the specified number of running ``FunctionReplica`` instances, with respect to the minimum requirement. The current implementation picks the most recent deployed replicas first.
+
+* **scale_up**: deploys the specified number of ``FunctionReplica`` instances but has to respect the maximum number specified in the ``ScalingConfiguration``.
+
+* **suspend**: executes a teardown for all running replicas of a function. (used by ``faas_idler``).
+
+* **poll_available_replica**: repeatedly waits and checks for running replicas of the function.
+
+* **get_replicas**: gets all replicas in the specific state of a function. Returns all replicas in case of ``state == None``.
+
+* **get_function_index**: returns all deployed ``FunctionContainers``.
+
+* **get_deployments**: returns all deployed ``FunctionDeployment`` instances.
+
+.. _Function Simulators:
 
 Function simulators
 ===================
@@ -101,19 +135,19 @@ The FunctionSimulator methods are invoked by the simulator to simulate the the d
 .. code-block:: python
 
     class FunctionSimulator(abc.ABC):
-    
+
         def deploy(self, env: Environment, replica: FunctionReplica):
             yield env.timeout(0)
-    
+
         def startup(self, env: Environment, replica: FunctionReplica):
             yield env.timeout(0)
-    
+
         def setup(self, env: Environment, replica: FunctionReplica):
             yield env.timeout(0)
-    
+
         def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
             yield env.timeout(0)
-    
+
         def teardown(self, env: Environment, replica: FunctionReplica):
             yield env.timeout(0)
 
@@ -133,6 +167,7 @@ Conceptually the phases are:
 Each time the simulator creates a new function replica (because of deployment or scaling actions), the SimulatorFactory is called to create or return a FunctionSimulator for that replica.
 The SimulatorFactory can be overwritten to return the same FunctionSimulator every time, create a new instance for each function replica, or any other behavior.
 
+Get more details on function simulators in :ref:`Function Simulator Details` and our examples.
 
 Simulation
 ==========
@@ -166,7 +201,7 @@ Usage example:
 .. code-block:: python
 
     from sim.requestgen import expovariate_arrival_profile, constant_rps_profile
- 
+
     env = ...
     gen = expovariate_arrival_profile(constant_rps_profile(20))
 
@@ -176,7 +211,7 @@ Usage example:
         # send next request
 
 
-.. TODO: upload an example and a cleaned up version of workload_patterns.ipynb
+
 
 The following figure shows several examples and the request patterns the produce:
 
@@ -196,3 +231,9 @@ The second row shows how a constant interarrival distribution can be used to mod
 and how a constant workload profile can be used to model a static workload pattern with randomized interarrivals.
 The last row shows Gaussian random walks (GRW), where each value represents a random sample from a Normal distribution, that is then used as value for :math:`\mu` in the next random sample.
 The request profile can be parameterized with a :math:`\sigma` value that affects the fluctuation over time.
+
+.. hint::
+
+    You can find code examples to generate patterns in our Jupyter Notebook (``workload_patterns.ipynb``) and a
+    simulation example under ``examples/request_gen``.
+

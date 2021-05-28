@@ -9,6 +9,7 @@ from skippy.core.storage import StorageIndex
 
 from ext.raith21 import images
 from ext.raith21.benchmark.constant import ConstantBenchmark
+from ext.raith21.characterization import get_raith21_function_characterizations
 from ext.raith21.deployments import create_all_deployments
 from ext.raith21.etherdevices import convert_to_ether_nodes
 from ext.raith21.fet import ai_execution_time_distributions
@@ -69,7 +70,8 @@ topology = urban_sensing_topology(ether_nodes, storage_index)
 # Initialize environment
 env = Environment()
 
-env.simulator_factory = AIPythonHTTPSimulatorFactory()
+env.simulator_factory = AIPythonHTTPSimulatorFactory(
+    get_raith21_function_characterizations(resource_oracle, fet_oracle))
 env.metrics = Metrics(env, log=RuntimeLogger(SimulatedClock(env)))
 env.topology = topology
 env.faas = DefaultFaasSystem(env, scale_by_requests=True)
