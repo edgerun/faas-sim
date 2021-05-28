@@ -88,9 +88,9 @@ class DefaultFaasSystem(FaasSystem):
 
     def deploy_replica(self, fd: FunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer]):
         """
-        Creates and deploys a FunctionReplica for the given FunctionDefinition.
-        In case no node supports the given FunctionDefinition, the services list dictates which FunctionDefinition to try next.
-        In case no FunctionDefinition can be hosted, the scheduling process terminates and logs the failed attempt
+        Creates and deploys a FunctionReplica for the given FunctionContainer.
+        In case no node supports the given FunctionContainer, the services list dictates which FunctionContainer to try next.
+        In case no FunctionContainer can be hosted, the scheduling process terminates and logs the failed attempt
         """
         replica = self.create_replica(fd, fn)
         self.replicas[fd.name].append(replica)
