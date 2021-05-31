@@ -67,7 +67,7 @@ class FaasRequestScaler:
             config = self.fn.scaling_config
             if (invocations / self.reconcile_interval) >= self.threshold:
                 scale = (config.scale_factor / 100) * config.scale_max
-                yield from faas.scale_up(self.fn_name, int(scale))
+                yield from faas.scale_up(self.fn_name, int(scale),{})
                 logger.debug(f'scaled up {self.fn_name} by {scale}')
             else:
                 scale = (config.scale_factor / 100) * config.scale_max

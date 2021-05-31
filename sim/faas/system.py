@@ -84,19 +84,20 @@ class DefaultFaasSystem(FaasSystem):
         self.env.metrics.log_function_deployment(fd)
         self.env.metrics.log_function_deployment_lifecycle(fd, 'deploy')
         logger.info('deploying function %s with scale_min=%d', fd.name, fd.scaling_config.scale_min)
-        yield from self.scale_up(fd.name, fd.scaling_config.scale_min)
+        yield from self.scale_up(fd.name, fd.scaling_config.scale_min, fd.fn.labels)
 
-    def deploy_replica(self, fd: FunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer]):
+    def deploy_replica(self, fd: FunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer],
+                       labels=None):
         """
         Creates and deploys a FunctionReplica for the given FunctionContainer.
         In case no node supports the given FunctionContainer, the services list dictates which FunctionContainer to try next.
         In case no FunctionContainer can be hosted, the scheduling process terminates and logs the failed attempt
         """
-        replica = self.create_replica(fd, fn)
+        replica = self.create_replica(fd, fn, labels)
         self.replicas[fd.name].append(replica)
         self.env.metrics.log_queue_schedule(replica)
         self.env.metrics.log_function_replica(replica)
-        yield self.scheduler_queue.put((replica, services))
+        yield self.scheduler_queue.put((replica, services, labels))
 
     def invoke(self, request: FunctionRequest):
         # TODO: how to return a FunctionResponse?
@@ -185,7 +186,7 @@ class DefaultFaasSystem(FaasSystem):
         running_replicas = self.get_replicas(fn_name, FunctionState.RUNNING)
         return running_replicas[len(running_replicas) - n:]
 
-    def scale_up(self, fn_name: str, replicas: int):
+    def scale_up(self, fn_name: str, replicas: int, labels):
         fd = self.functions_deployments[fn_name]
         config = fd.scaling_config
         ranking = fd.ranking
@@ -223,7 +224,8 @@ class DefaultFaasSystem(FaasSystem):
                 leftover_scale = leftover_scale - reduce
             if leftover_scale > 0:
                 for _ in range(leftover_scale):
-                    yield from self.deploy_replica(fd, fd.get_container(service.image), fd.get_containers()[index:])
+                    yield from self.deploy_replica(fd, fd.get_container(service.image), fd.get_containers()[index:],
+                                                   labels)
                     actually_scaled += 1
                     scale -= 1
 
@@ -250,7 +252,7 @@ class DefaultFaasSystem(FaasSystem):
 
         while True:
             replica: FunctionReplica
-            replica, services = yield self.scheduler_queue.get()
+            replica, services, labels = yield self.scheduler_queue.get()
 
             logger.debug('scheduling next replica %s', replica.function.name)
 
@@ -271,7 +273,7 @@ class DefaultFaasSystem(FaasSystem):
                 self.replicas[replica.fn_name].remove(replica)
                 if len(services) > 0:
                     logger.warning('retry scheduling pod %s', pod.name)
-                    yield from self.deploy_replica(replica.function, services[0], services[1:])
+                    yield from self.deploy_replica(replica.function, services[0], services[1:], labels)
                 else:
                     logger.error('pod %s cannot be scheduled', pod.name)
 
@@ -294,14 +296,16 @@ class DefaultFaasSystem(FaasSystem):
             # start a new process to simulate starting of pod
             env.process(simulate_function_start(env, replica))
 
-    def create_pod(self, fd: FunctionDeployment, fn: FunctionContainer):
-        return create_function_pod(fd, fn)
+    def create_pod(self, fd: FunctionDeployment, fn: FunctionContainer, labels=None):
+        pod = create_function_pod(fd, fn)
+        pod.spec.labels.update(labels)
+        return pod
 
-    def create_replica(self, fd: FunctionDeployment, fn: FunctionContainer) -> FunctionReplica:
+    def create_replica(self, fd: FunctionDeployment, fn: FunctionContainer, labels=None) -> FunctionReplica:
         replica = FunctionReplica()
         replica.function = fd
         replica.container = fn
-        replica.pod = self.create_pod(fd, fn)
+        replica.pod = self.create_pod(fd, fn, labels)
         replica.simulator = self.env.simulator_factory.create(self.env, fn)
         return replica
 
