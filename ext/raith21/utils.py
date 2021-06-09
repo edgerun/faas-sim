@@ -36,6 +36,14 @@ def create_service_deployments(fet_oracle: FetOracle, resource_oracle: ResourceO
     del all_deployments[images.resnet50_training_function]
     return all_deployments
 
+def create_inference_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[str, FunctionDeployment]:
+    all_deployments = create_all_deployments(fet_oracle, resource_oracle)
+    # del all_deployments[images.tf_gpu_function]
+    # del all_deployments[images.pi_function]
+    # del all_deployments[images.fio_function]
+    del all_deployments[images.resnet50_training_function]
+    del all_deployments[images.resnet50_preprocessing_function]
+    return all_deployments
 
 def create_deployments_for_profile(profile: str, fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[
     str, FunctionDeployment]:
@@ -45,5 +53,7 @@ def create_deployments_for_profile(profile: str, fet_oracle: FetOracle, resource
         return create_mixed_deployments(fet_oracle, resource_oracle)
     elif profile == 'service':
         return create_service_deployments(fet_oracle, resource_oracle)
+    elif profile == 'inference':
+        return create_inference_deployments(fet_oracle, resource_oracle)
     else:
         raise ValueError(f'unknown profile: {profile}')

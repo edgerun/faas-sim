@@ -6,7 +6,6 @@ from ether.core import Node, Connection
 
 DockerRegistry = Node('registry')
 
-
 class Topology(ether.topology.Topology):
 
     def __init__(self, incoming_graph_data=None, **attr):

@@ -84,6 +84,7 @@ class DefaultFaasSystem(FaasSystem):
         self.env.metrics.log_function_deployment(fd)
         self.env.metrics.log_function_deployment_lifecycle(fd, 'deploy')
         logger.info('deploying function %s with scale_min=%d', fd.name, fd.scaling_config.scale_min)
+        # Initial deployment simply sets the minimum scale
         yield from self.scale_up(fd.name, fd.scaling_config.scale_min)
 
     def deploy_replica(self, fd: FunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer]):
@@ -134,7 +135,8 @@ class DefaultFaasSystem(FaasSystem):
         yield from simulate_function_invocation(self.env, replica, request)
 
         t_end = self.env.now
-
+        # TODO Add load-balancer incurred routing delay here
+        # TODO log info s.t. load-balancer can
         t_wait = t_start - t_received
         t_exec = t_end - t_start
         self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_wait, t_start,
@@ -241,6 +243,7 @@ class DefaultFaasSystem(FaasSystem):
             self.env.process(process(self.env))
         self.env.process(self.run_scheduler_worker())
 
+    # Pauses iteratively over the set interval until an instance of the requested function is running
     def poll_available_replica(self, fn: str, interval=0.5):
         while not self.get_replicas(fn, FunctionState.RUNNING):
             yield self.env.timeout(interval)
@@ -353,7 +356,6 @@ def simulate_function_start(env: Environment, replica: FunctionReplica):
     yield from sim.setup(env, replica)  # FIXME: this is really domain-specific startup
     env.metrics.log_finish_deploy(replica)
     replica.state = FunctionState.RUNNING
-
 
 def simulate_data_download(env: Environment, replica: FunctionReplica):
     node = replica.node.ether_node

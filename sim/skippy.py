@@ -17,6 +17,7 @@ from sim import docker
 from sim.core import Environment
 from sim.faas import FunctionContainer, FunctionDeployment
 from sim.topology import LazyBandwidthGraph, DockerRegistry
+from ext.jjnp21.topology import get_non_client_nodes
 
 
 class SimulationClusterContext(ClusterContext):
@@ -67,7 +68,8 @@ class SimulationClusterContext(ClusterContext):
 
     def list_nodes(self) -> List[SkippyNode]:
         if self.nodes is None:
-            self.nodes = [to_skippy_node(node) for node in self.topology.get_nodes() if node != DockerRegistry]
+            self.nodes = [to_skippy_node(node) for node in get_non_client_nodes(self.topology) if node != DockerRegistry]
+            # self.nodes = [to_skippy_node(node) for node in self.topology.get_nodes() if node != DockerRegistry]
 
         return self.nodes
 

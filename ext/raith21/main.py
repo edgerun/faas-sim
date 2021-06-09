@@ -19,7 +19,7 @@ from ext.raith21.generators.cloudcpu import cloudcpu_settings
 from ext.raith21.oracles import Raith21ResourceOracle, Raith21FetOracle
 from ext.raith21.predicates import CanRunPred, NodeHasAcceleratorPred, NodeHasFreeGpu, NodeHasFreeTpu
 from ext.raith21.resources import ai_resources_per_node_image
-from ext.raith21.topology import urban_sensing_topology
+from ext.raith21.topology import urban_sensing_topology, HeterogeneousUrbanSensingScenario
 from ext.raith21.util import vanilla
 from sim.core import Environment
 from sim.docker import ContainerRegistry
@@ -28,12 +28,19 @@ from sim.faassim import Simulation
 from sim.logging import SimulatedClock, RuntimeLogger
 from sim.metrics import Metrics
 from sim.skippy import SimulationClusterContext
+from ether.vis import draw_basic
+from ether.core import Node, Connection
+from ether.cell import LANCell
+import matplotlib.pyplot as plt
+import pickle
+
+from sim.topology import Topology
 
 np.random.seed(1234)
 random.seed(1234)
 logging.basicConfig(level=logging.INFO)
 
-num_devices = 100
+num_devices = 30
 devices = generate_devices(num_devices, cloudcpu_settings)
 ether_nodes = convert_to_ether_nodes(devices)
 
@@ -65,7 +72,24 @@ benchmark = ConstantBenchmark('mixed', duration=200, rps=50)
 
 # Initialize topology
 storage_index = StorageIndex()
-topology = urban_sensing_topology(ether_nodes, storage_index)
+# topology = urban_sensing_topology(ether_nodes, storage_index)
+topology = Topology()
+HeterogeneousUrbanSensingScenario(ether_nodes, storage_index).materialize(topology)
+topology.init_docker_registry()
+# we should be able to attach something to the upstream 'switch_cloudlet_0'
+
+cental_lb_node = Node('load-balancer')
+# topology.add_node(lb_node)
+c = LANCell([cental_lb_node], backhaul='switch_cloudlet_0')
+c.materialize(topology)
+
+all_lb_nodes = [node for node in topology.nodes if isinstance(node, Node)]
+
+
+#draw topology
+draw_basic(topology)
+plt.show()
+exit(0)
 
 # Initialize environment
 env = Environment()
@@ -97,4 +121,9 @@ dfs = {
     "utilization_df": sim.env.metrics.extract_dataframe('utilization'),
     'fets_df': sim.env.metrics.extract_dataframe('fets')
 }
+
+with open('outfile.pickle', 'wb') as f:
+    pickle.dump(dfs, f)
+    f.flush()
+    f.close()
 print(len(dfs))

@@ -269,6 +269,7 @@ class FunctionRequest:
     request_id: int
     name: str
     size: float = None
+    load_balancer = None
 
     id_generator = counter()
 

@@ -111,26 +111,34 @@ class AIPythonHTTPSimulator(FunctionSimulator):
         yield from docker_pull(env, replica.image, replica.node.ether_node)
 
     def setup(self, env: Environment, replica: FunctionReplica):
-        image = replica.pod.spec.containers[0].image
-        if 'inference' in image:
-            yield from simulate_data_download(env, replica)
+        yield from iter(())
+        # image = replica.pod.spec.containers[0].image
+        # todo re-add this. was just commented out for debugging
+        # if 'inference' in image:
+        #     yield from simulate_data_download(env, replica)
 
     def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
-        token = self.queue.request()
+        token = self.queue.request() #add one to the queue
         t_wait_start = env.now
         yield token  # wait for access
         t_wait_end = env.now
         t_fet_start = env.now
         # because of GIL and Threads, we can easily estimate the additional time caused by concurrent requests to the
         # same Function
-        factor = max(1, self.scale(self.queue.count, self.queue.capacity))
+        factor = max(1, self.scale(self.queue.count, self.queue.capacity)) # based on how simpy works this is just ALWAYS 1, since count is the number of active workers, not the ones pending...
+        # Todo for me (jacob):
+        # figure out if this factor isn't "double charging" the execution time
+        # shouldn't the simpy queue with the worker count and yield alone be the source of the delay?
+        # i.e. the pure execution time is static, what causes higher E2E times is the fact that requests are waiting
+        # for a worker to be available, no? This way we first wait for the worker AND have a higher FET according
+        # to how many requests are waiting. Or is this how it really works in practise?
+
         try:
             fet = self.characterization.sample_fet(replica.node.name)
             if fet is None:
                 logging.error(f"FET for node {replica.node.name} for function {self.deployment.image} was not found")
                 raise ValueError(f'{replica.node.name}')
-            fet = float(fet) * factor
-
+            fet = float(fet) * factor * 0.25
             image = replica.pod.spec.containers[0].image
             if 'preprocessing' in image or 'training' in image:
                 yield from simulate_data_download(env, replica)
@@ -142,7 +150,8 @@ class AIPythonHTTPSimulator(FunctionSimulator):
                 yield from simulate_data_upload(env, replica)
             t_fet_end = env.now
             env.metrics.log_fet(request.name, replica.image, replica.node.name, t_fet_start, t_fet_end,
-                                id(replica), request.request_id, t_wait_start=t_wait_start, t_wait_end=t_wait_end)
+                                id(replica), request.request_id, t_wait_start=t_wait_start, t_wait_end=t_wait_end, t_wait=t_wait_end - t_wait_start, t_fet=t_fet_end - t_fet_start)
+
             replica.node.set_end(request.request_id, t_fet_end)
         except KeyError:
             pass

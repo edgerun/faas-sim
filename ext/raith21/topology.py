@@ -47,6 +47,9 @@ class XeonCloudlet(LANCell):
         super().__init__(nodes, backhaul=backhaul)
 
     def create_nodes(self) -> List[LANCell]:
+        # Explanation for myself:
+        # Creates the racks within the cloudlet, where all nodes in a rack are connected by a switch
+        # the "nodes" that are returned are the cells/racks. the term cells or rack_cells would be more accurate there
         nodes = []
         rack = []
         for node in self.xeons:
@@ -55,6 +58,7 @@ class XeonCloudlet(LANCell):
                 cell = LANCell(rack, backhaul=self.switch)
                 nodes.append(cell)
                 rack = []
+        # this just creates the last smaller rack in case len(node) % rack_count != 0
         if len(rack) > 0:
             cell = LANCell(rack, backhaul=self.switch)
             nodes.append(cell)
@@ -133,7 +137,7 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
             def select_nodes(nodes, n):
                 if n > len(nodes):
                     diff = n - len(nodes)
-                    n -= diff
+                    n -= diff #so basically if n>len(nodes) then n=len(nodes)
                 return nodes[selected_size:], nodes[:selected_size]
 
             selected_accelerator_nodes = []
@@ -169,6 +173,7 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
                 aot_nodes = aot_nodes[size:]
             if len(selected_accelerator_nodes) > 0:
                 box = IoTComputeBox(selected_accelerator_nodes)
+                # This works because the shared link cell materialization recursively resolves this nested list structure
                 neighborhood = SharedLinkCell(
                     nodes=[
                         selected_nuc_nodes,
