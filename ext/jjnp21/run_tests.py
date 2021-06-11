@@ -1,5 +1,6 @@
 from main import *
 
+
 tests = []
 results = []
 tests.append(TestRunSettings(title='RR centralized', placement_policy='central', lb_type='rr', duration=300, req_per_sec=50))
