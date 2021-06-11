@@ -14,7 +14,7 @@ class LoadBalancerType(Enum):
 
 class LoadBalancerPlacementStrategy(Enum):
     CENTRAL = 1
-    ALL_NODES = 1
+    ALL_NODES = 2
 
 
 class ClientLoadBalancerResolvingStrategy(Enum):

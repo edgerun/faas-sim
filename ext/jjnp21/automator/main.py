@@ -45,7 +45,7 @@ class ExperimentRunAutomator:
         self.iterations = iterations
 
     def run(self, reporting_interval: int = 15) -> List[Result]:
-        thread_count = max(os.cpu_count(), self.worker_count)
+        thread_count = min(os.cpu_count(), self.worker_count)
         self.task_queue = JoinableQueue()
         self.result_queue = Queue()
         workers = [ExperimentWorker(self.task_queue, self.result_queue) for i in range(0, thread_count)]

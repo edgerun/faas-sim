@@ -1,12 +1,15 @@
 import random
 import numpy as np
 
+from ext.jjnp21.topology import IndustrialIoTScenario
 from ext.raith21.etherdevices import convert_to_ether_nodes
 from ext.raith21.generator import generate_devices
 from ext.raith21.generators.cloudcpu import cloudcpu_settings
 from ext.raith21.topology import HeterogeneousUrbanSensingScenario
 from sim.topology import Topology
 from skippy.core.storage import StorageIndex
+from ether.core import Connection
+from ether.qos import latency
 
 
 class TopologyFactory:
@@ -41,4 +44,22 @@ class GlobalIndustrialIoTScenario(TopologyFactory):
         self.seed = seed
 
     def create(self) -> Topology:
-        pass
+        topology = Topology()
+        scenario1 = IndustrialIoTScenario('iot-1', num_premises=5, clients_per_premise=2, internet='internet_chix')
+        scenario1.materialize(topology)
+        scenario2 = IndustrialIoTScenario('iot-2', num_premises=2, clients_per_premise=4, internet='internet_nyc')
+        scenario2.materialize(topology)
+        scenario3 = IndustrialIoTScenario('iot-3', num_premises=3, clients_per_premise=3, internet='internet_sydney')
+        scenario3.materialize(topology)
+        scenario4 = IndustrialIoTScenario('iot-4', num_premises=6, clients_per_premise=5, internet='internet_stuttgart')
+        scenario4.materialize(topology)
+        # Todo add proper latencies
+        topology.add_connection(Connection('internet_chix', 'internet_nyc', latency_dist=latency.business_isp))
+        topology.add_connection(Connection('internet_chix', 'internet_sydney', latency_dist=latency.business_isp))
+        topology.add_connection(Connection('internet_chix', 'internet_stuttgart', latency_dist=latency.business_isp))
+        topology.add_connection(Connection('internet_nyc', 'internet_sydney', latency_dist=latency.business_isp))
+        topology.add_connection(Connection('internet_nyc', 'internet_stuttgart', latency_dist=latency.business_isp))
+        topology.add_connection(Connection('internet_sydney', 'internet_stuttgart', latency_dist=latency.business_isp))
+        topology.init_docker_registry()
+
+        return topology

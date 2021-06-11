@@ -65,8 +65,8 @@ def run_experiment(experiment: Experiment) -> Result:
     # Load balancer shenanigans
     cental_lb_node = Node('load-balancer')
     topology.add_node(cental_lb_node)
-    # c = LANCell([cental_lb_node], backhaul='internet_chix')
-    c = LANCell([cental_lb_node], backhaul='internet')
+    c = LANCell([cental_lb_node], backhaul='internet_chix')
+    # c = LANCell([cental_lb_node], backhaul='internet')
     c.materialize(topology)
 
     all_lb_nodes = [node for node in get_non_client_nodes(topology) if isinstance(node, Node)]
@@ -80,10 +80,10 @@ def run_experiment(experiment: Experiment) -> Result:
         raise Exception('Invalid load balancer placement strategy')
 
     load_balancers = []
-    if experiment.lb_type == LoadBalancerType.ROUND_ROBIN:
+    if experiment.lb_type == LoadBalancerType.LEAST_RESPONSE_TIME:
         for node in lb_nodes:
             load_balancers.append(LocalizedLeastResponseTimeLoadBalancer(env, node, env.faas.replicas))
-    elif experiment.lb_type == LoadBalancerType.LEAST_RESPONSE_TIME:
+    elif experiment.lb_type == LoadBalancerType.ROUND_ROBIN:
         for node in lb_nodes:
             load_balancers.append(LocalizedRoundRobinLoadBalancer(env, node, env.faas.replicas))
     else:
@@ -100,6 +100,10 @@ def run_experiment(experiment: Experiment) -> Result:
         env.faas.set_load_balancer(wrapper_lb)
 
     env.container_registry = ContainerRegistry()
+
+    #
+    print(lb_nodes)
+    print(wrapper_lb)
 
     predicates = []
     predicates.extend(Scheduler.default_predicates)
