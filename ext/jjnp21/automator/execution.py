@@ -9,8 +9,12 @@ from ext.jjnp21.load_balancers.localized_rr import LocalizedRoundRobinLoadBalanc
 from ext.jjnp21.localized_lb_system import LocalizedLoadBalancerFaasSystem
 from ext.jjnp21.topology import get_non_client_nodes
 from ext.raith21.characterization import get_raith21_function_characterizations
+from ext.raith21.fet import ai_execution_time_distributions
 from ext.raith21.functionsim import AIPythonHTTPSimulatorFactory
-from ext.raith21.main import resource_oracle, fet_oracle, storage_index, sched_params
+from ext.raith21.oracles import Raith21FetOracle, Raith21ResourceOracle
+from ext.raith21.predicates import CanRunPred, NodeHasAcceleratorPred, NodeHasFreeGpu, NodeHasFreeTpu
+from ext.raith21.resources import ai_resources_per_node_image
+from ext.raith21.util import vanilla
 from sim.core import Environment, Node
 from sim.docker import ContainerRegistry
 from sim.faassim import Simulation
@@ -47,6 +51,11 @@ def run_experiment(experiment: Experiment) -> Result:
     topology = experiment.topology_factory.create()
     benchmark = experiment.benchmark_factory.create()
     env = Environment()
+    env.topology = topology
+    env.benchmark = benchmark
+
+    fet_oracle = Raith21FetOracle(ai_execution_time_distributions)
+    resource_oracle = Raith21ResourceOracle(ai_resources_per_node_image)
     env.simulator_factory = AIPythonHTTPSimulatorFactory(
         get_raith21_function_characterizations(resource_oracle, fet_oracle))
     env.metrics = Metrics(env, log=RuntimeLogger(SimulatedClock(env)))
@@ -91,7 +100,23 @@ def run_experiment(experiment: Experiment) -> Result:
         env.faas.set_load_balancer(wrapper_lb)
 
     env.container_registry = ContainerRegistry()
-    env.storage_index = storage_index
+
+    predicates = []
+    predicates.extend(Scheduler.default_predicates)
+    predicates.extend([
+        CanRunPred(fet_oracle, resource_oracle),
+        NodeHasAcceleratorPred(),
+        NodeHasFreeGpu(),
+        NodeHasFreeTpu()
+    ])
+    priorities = vanilla.get_priorities()
+    sched_params = {
+        'percentage_of_nodes_to_score': 100,
+        'priorities': priorities,
+        'predicates': predicates
+    }
+
+    # env.storage_index = storage_index
     env.cluster = SimulationClusterContext(env)
     env.scheduler = Scheduler(env.cluster, **sched_params)
 

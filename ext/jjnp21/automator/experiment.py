@@ -36,8 +36,6 @@ class Experiment:
     lb_placement_strategy: LoadBalancerPlacementStrategy
     client_lb_resolving_strategy: ClientLoadBalancerResolvingStrategy
     client_placement_strategy: ClientPlacementStrategy
-    duration: int = 300
-    req_per_sec: int = 50
     seed: int = 42
 
 

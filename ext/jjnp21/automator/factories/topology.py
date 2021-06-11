@@ -1,13 +1,12 @@
-from random import random
-
+import random
 import numpy as np
 
 from ext.raith21.etherdevices import convert_to_ether_nodes
 from ext.raith21.generator import generate_devices
 from ext.raith21.generators.cloudcpu import cloudcpu_settings
-from ext.raith21.main import storage_index
 from ext.raith21.topology import HeterogeneousUrbanSensingScenario
 from sim.topology import Topology
+from skippy.core.storage import StorageIndex
 
 
 class TopologyFactory:
@@ -29,6 +28,7 @@ class RaithHeterogeneousUrbanSensingFactory(TopologyFactory):
         devices = generate_devices(self.node_count, cloudcpu_settings)
         ether_nodes = convert_to_ether_nodes(devices)
         topology = Topology()
+        storage_index = StorageIndex()
         HeterogeneousUrbanSensingScenario(ether_nodes, storage_index).materialize(topology)
         topology.init_docker_registry()
         return topology

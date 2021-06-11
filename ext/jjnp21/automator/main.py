@@ -28,11 +28,7 @@ class ExperimentTask:
         self.experiment = experiment
 
     def __call__(self, *args, **kwargs) -> Result:
-        # run_experiment(self.experiment)
-        result = Result()
-        result.experiment = self.experiment
-        result.run_duration_seconds = 123
-        return result
+        return run_experiment(self.experiment)
 
 
 class ExperimentRunAutomator:
