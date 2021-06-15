@@ -138,7 +138,7 @@ class AIPythonHTTPSimulator(FunctionSimulator):
             if fet is None:
                 logging.error(f"FET for node {replica.node.name} for function {self.deployment.image} was not found")
                 raise ValueError(f'{replica.node.name}')
-            fet = float(fet) * factor * 0.25
+            fet = float(fet) * factor * 0.025
             image = replica.pod.spec.containers[0].image
             if 'preprocessing' in image or 'training' in image:
                 yield from simulate_data_download(env, replica)

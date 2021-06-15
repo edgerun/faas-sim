@@ -6,11 +6,11 @@ from ext.jjnp21.automator.experiment import Result
 
 
 def set_generic_kpis(row: Dict, df: DataFrame, name: str, property_key: str):
-    row[name + ' mean'] = df[property_key].mean()
-    row[name + ' q50'] = df[property_key].quantile(0.5)
-    row[name + ' q75'] = df[property_key].quantile(0.75)
-    row[name + ' q90'] = df[property_key].quantile(0.90)
-    row[name + ' q99'] = df[property_key].quantile(0.99)
+    row[name + ' mean'] = round(df[property_key].mean(), 4)
+    row[name + ' q50'] = round(df[property_key].quantile(0.5), 4)
+    row[name + ' q75'] = round(df[property_key].quantile(0.75), 4)
+    row[name + ' q90'] = round(df[property_key].quantile(0.90), 4)
+    row[name + ' q99'] = round(df[property_key].quantile(0.99), 4)
 
 
 def set_e2e_kpis(row: Dict, inv_df: DataFrame):
@@ -52,7 +52,7 @@ def set_request_tx_kpis(row: Dict, inv_df: DataFrame):
 
 def set_node_type_distribution(row: Dict, inv_df: DataFrame):
     nodes = inv_df['node'].unique()
-    types = ['rpi3', 'tx2', 'nuc', 'rockpi', 'rpi4', 'xeon']
+    types = ['rpi3', 'rpi4', 'tx2', 'nuc', 'rockpi', 'nx', 'coral', 'nano', 'xeoncpu', 'xeongpu', 'cloudvm']
     results = {}
     node_counts = {}
     typed_results = {}
@@ -73,7 +73,7 @@ def set_node_type_distribution(row: Dict, inv_df: DataFrame):
 
     row['nodes_by_type'] = str(node_counts)
     row['total_rq_by_type'] = str(typed_results)
-    row['avg_rq_by_type'] = str(typed_results)
+    row['avg_rq_by_type'] = str(avg_typed_results)
 
 
 class BasicResultAnalyzer:

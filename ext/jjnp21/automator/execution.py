@@ -65,8 +65,8 @@ def run_experiment(experiment: Experiment) -> Result:
     # Load balancer shenanigans
     cental_lb_node = Node('load-balancer')
     topology.add_node(cental_lb_node)
-    c = LANCell([cental_lb_node], backhaul='internet_chix')
-    # c = LANCell([cental_lb_node], backhaul='internet')
+    # c = LANCell([cental_lb_node], backhaul='internet_chix')
+    c = LANCell([cental_lb_node], backhaul='internet')
     c.materialize(topology)
 
     all_lb_nodes = [node for node in get_non_client_nodes(topology) if isinstance(node, Node)]

@@ -6,7 +6,7 @@ from ext.raith21.resources import ai_resources_per_node_image
 from ext.raith21.utils import create_deployments_for_profile
 from sim.benchmark import BenchmarkBase, set_degradation
 from sim.core import Environment
-from sim.requestgen import expovariate_arrival_profile, constant_rps_profile, sine_rps_profile
+from sim.requestgen import expovariate_arrival_profile, constant_rps_profile, sine_rps_profile, static_arrival_profile
 
 
 class ConstantBenchmark(BenchmarkBase):
@@ -93,12 +93,15 @@ class ConstantBenchmark(BenchmarkBase):
     def set_mixed_profiles(self, env: Environment):
         self.arrival_profiles[images.resnet50_inference_function] = \
             expovariate_arrival_profile(constant_rps_profile(self.rps))
+        self.arrival_profiles[images.resnet50_inference_function] = static_arrival_profile(constant_rps_profile(self.rps))
 
-        self.arrival_profiles[images.mobilenet_inference_function] = \
-            expovariate_arrival_profile(constant_rps_profile(self.rps))
+        # self.arrival_profiles[images.mobilenet_inference_function] = \
+        #     expovariate_arrival_profile(constant_rps_profile(self.rps))
+        self.arrival_profiles[images.mobilenet_inference_function] = static_arrival_profile(constant_rps_profile(self.rps))
 
-        self.arrival_profiles[images.speech_inference_function] = \
-            expovariate_arrival_profile(constant_rps_profile(self.rps))
+        # self.arrival_profiles[images.speech_inference_function] = \
+        #     expovariate_arrival_profile(constant_rps_profile(self.rps))
+        self.arrival_profiles[images.speech_inference_function] = static_arrival_profile(constant_rps_profile(self.rps))
         # self.arrival_profiles[images.speech_inference_function] = \
         #     constant_rps_profile(0)
 
@@ -139,6 +142,9 @@ class ConstantBenchmark(BenchmarkBase):
         for deployment in deployments.values():
             deployment.scale_min = 5
             deployment.scaling_config.target_queue_length = 0.5 # see if this does anything
+            # deployment.scaling_config.target_average_rps_threshold = 1
+            deployment.scaling_config.target_average_rps = 10
+            deployment.scaling_config.alert_window = 30
             # deployment.target_average_utilization = 1
         # this should only take into account nodes that aren't clients!
 
@@ -150,12 +156,12 @@ class ConstantBenchmark(BenchmarkBase):
         deployments[images.resnet50_inference_function].rps_threshold_duration = 10
 
         deployments[images.mobilenet_inference_function].rps_threshold = 70
-        deployments[images.mobilenet_inference_function].scale_max = int(0.25 * no_of_devices)
+        deployments[images.mobilenet_inference_function].scale_max = int(0.7 * no_of_devices)
         deployments[images.mobilenet_inference_function].scale_factor = 5
         deployments[images.mobilenet_inference_function].rps_threshold_duration = 10
 
         deployments[images.speech_inference_function].rps_threshold = 40
-        deployments[images.speech_inference_function].scale_max = int(0.25 * no_of_devices)
+        deployments[images.speech_inference_function].scale_max = int(0.7 * no_of_devices)
         deployments[images.speech_inference_function].scale_factor = 5
         deployments[images.speech_inference_function].rps_threshold_duration = 15
 

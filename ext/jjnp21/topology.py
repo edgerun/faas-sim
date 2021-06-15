@@ -32,6 +32,8 @@ class SmallCloudlet(LANCell):
 
     def _create_rack(self):
         return LANCell([create_vm_node] * self.server_per_rack, backhaul=self.switch)
+        # Todo: Replace this (create_vm_node) with a xeon node. right now it is a generic 'cloud_vm', which the
+        # FET oracle does not recognize. honestly no idea where it pulls values for those from
 
 
 class ClientGroup(LANCell):

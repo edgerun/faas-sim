@@ -61,7 +61,12 @@ class WeightedRoundRobinProvider:
         self.last = -1
         self.n = len(response_times)
         self.max_weight = 1
+        # self.hit_list = {}
         self._set_weights(response_times)
+        # if len(self.replicas) > 1:
+        #     print(f'WRR count: {len(self.replicas)}')
+        #for debugging only
+
 
     def __str__(self):
         return str(self.weights)
@@ -72,10 +77,12 @@ class WeightedRoundRobinProvider:
         self.weights[replica_id] = w
         self.replicas.append(replica_id)
         self.gcd = self._calculate_gcd()
+        # self.hit_list[replica_id] = False
 
     def remove_replica(self, replica_id: int):
         self.replicas.remove(replica_id)
         del self.weights[replica_id]
+        # del self.hit_list[replica_id]
         if self.last >= len(self.replicas):
             self.last = -1
         self.n -= 1
@@ -87,6 +94,7 @@ class WeightedRoundRobinProvider:
             w = int(round(max(1.0, pow(10 / (rt / min_weight), self.scaling))))
             self.weights[r_id] = w
             # print('Setting ' + str(r_id) + ' to W' + str(w) + ' based on rt-avg: ' + str(rt))
+            # self.hit_list[r_id] = False
         self.max_weight = max(self.weights.values())
         self.gcd = self._calculate_gcd()
 
@@ -101,6 +109,7 @@ class WeightedRoundRobinProvider:
                     valid = False
                     break
             if valid and i > 1:
+                gcd = i
                 break
         return gcd
 
@@ -112,17 +121,18 @@ class WeightedRoundRobinProvider:
                 if self.cw <= 0:
                     self.cw = self.max_weight
             if self.weights[self.replicas[self.last]] > self.cw:
+                # self.hit_list[self.replicas[self.last]] = True # for debugging only
                 return self.replicas[self.last]
 
 
 class LeastResponseTimeLoadBalancer(LoadBalancer):
     # TODOs
     # [x] Check for new functions and new replicas + integrate them
-    # [ ] Integrate new replicas in a smarter way (currently we just reset the metrics provider)
-    # [ ] pay attention to node state (running, etc.)
+    # [x] Integrate new replicas in a smarter way (currently we just reset the metrics provider)
+    # [x] pay attention to node state (running, etc.)
 
     def __init__(self, env: Environment, replicas: Dict[str, List[FunctionReplica]],
-                 lrt_window: float = 45, weight_update_frequency: float = 10) -> None:
+                 lrt_window: float = 30, weight_update_frequency: float = 15) -> None:
         super().__init__(env, replicas)
         self.count = Counter()
 
@@ -188,7 +198,7 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
         return replica_ids
 
     def _add_replica(self, function_name: str, replica_id: int):
-        # print('adding replica')
+        # print(f'adding replica: {function_name} {self._replica_by_id(replica_id).node.name}')
         self.lrt_providers[function_name].add_replica(replica_id)
         self.wrr_providers[function_name].add_replica(replica_id)
 
@@ -228,6 +238,20 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
         # print('*********************************************')
         # print('Updating weights for LB: ' + str(id(self)))
         for function_name, _ in self.replicas.items():
+            # Debugging: log out hitlist
+            # if len(list(self.wrr_providers[function_name].hit_list.keys())) > 15:
+            #     non_hit = []
+            #     weight_list = []
+            #     for rid, val in self.wrr_providers[function_name].hit_list.items():
+            #         if not val:
+            #             non_hit.append(self._replica_by_id(rid).node.name)
+            #         weight_list.append((self._replica_by_id(rid).node.name, self.wrr_providers[function_name].weights[rid]))
+            #     if len(non_hit) > 0:
+            #         print(f'{function_name}: {str(weight_list)}')
+            #         print(self.wrr_providers[function_name].gcd)
+            #         print('------------------')
+            #         # print(f'{function_name}: {str(non_hit)}')
+
             response_times = self.lrt_providers[function_name].get_response_times()
             self.wrr_providers[function_name] = WeightedRoundRobinProvider(response_times)
 
