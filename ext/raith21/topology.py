@@ -87,7 +87,7 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
 
     def __init__(self, nodes: List[Node], storage_index: StorageIndex, num_cells=default_num_cells,
                  cell_density=default_cell_density,
-                 cloudlet_size=default_cloudlet_size, internet='internet') -> None:
+                 cloudlet_size=default_cloudlet_size, internet='internet', client_ratio: float = 0) -> None:
         self.nodes = nodes
         self.storage_index = storage_index
         self.xeon_nodes = self._get_xeon_nodes()

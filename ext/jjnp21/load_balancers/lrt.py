@@ -61,7 +61,7 @@ class WeightedRoundRobinProvider:
         self.last = -1
         self.n = len(response_times)
         self.max_weight = 1
-        # self.hit_list = {}
+        self.hit_list = {}
         self._set_weights(response_times)
         # if len(self.replicas) > 1:
         #     print(f'WRR count: {len(self.replicas)}')
@@ -77,12 +77,12 @@ class WeightedRoundRobinProvider:
         self.weights[replica_id] = w
         self.replicas.append(replica_id)
         self.gcd = self._calculate_gcd()
-        # self.hit_list[replica_id] = False
+        self.hit_list[replica_id] = False
 
     def remove_replica(self, replica_id: int):
         self.replicas.remove(replica_id)
         del self.weights[replica_id]
-        # del self.hit_list[replica_id]
+        del self.hit_list[replica_id]
         if self.last >= len(self.replicas):
             self.last = -1
         self.n -= 1
@@ -94,7 +94,7 @@ class WeightedRoundRobinProvider:
             w = int(round(max(1.0, pow(10 / (rt / min_weight), self.scaling))))
             self.weights[r_id] = w
             # print('Setting ' + str(r_id) + ' to W' + str(w) + ' based on rt-avg: ' + str(rt))
-            # self.hit_list[r_id] = False
+            self.hit_list[r_id] = False
         self.max_weight = max(self.weights.values())
         self.gcd = self._calculate_gcd()
 
@@ -111,6 +111,7 @@ class WeightedRoundRobinProvider:
             if valid and i > 1:
                 gcd = i
                 break
+        # print(f'GCD calclated is: {gcd}')
         return gcd
 
     def next_id(self) -> int:
@@ -120,8 +121,8 @@ class WeightedRoundRobinProvider:
                 self.cw -= self.gcd
                 if self.cw <= 0:
                     self.cw = self.max_weight
-            if self.weights[self.replicas[self.last]] > self.cw:
-                # self.hit_list[self.replicas[self.last]] = True # for debugging only
+            if self.weights[self.replicas[self.last]] >= self.cw:
+                self.hit_list[self.replicas[self.last]] = True # for debugging only
                 return self.replicas[self.last]
 
 
@@ -239,7 +240,7 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
         # print('Updating weights for LB: ' + str(id(self)))
         for function_name, _ in self.replicas.items():
             # Debugging: log out hitlist
-            # if len(list(self.wrr_providers[function_name].hit_list.keys())) > 15:
+            # if len(list(self.wrr_providers[function_name].hit_list.keys())) > 12:
             #     non_hit = []
             #     weight_list = []
             #     for rid, val in self.wrr_providers[function_name].hit_list.items():
@@ -248,9 +249,11 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
             #         weight_list.append((self._replica_by_id(rid).node.name, self.wrr_providers[function_name].weights[rid]))
             #     if len(non_hit) > 0:
             #         print(f'{function_name}: {str(weight_list)}')
+            #         print(f'{function_name} {str(non_hit)}')
             #         print(self.wrr_providers[function_name].gcd)
+            #
             #         print('------------------')
-            #         # print(f'{function_name}: {str(non_hit)}')
+                    # print(f'{function_name}: {str(non_hit)}')
 
             response_times = self.lrt_providers[function_name].get_response_times()
             self.wrr_providers[function_name] = WeightedRoundRobinProvider(response_times)
@@ -261,6 +264,7 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
             # print(function_name)
             # print(w_dict)
             # print('--------------------------------------')
+        self.last_weight_update = self.env.now
         # print('*********************************************')
 
     def report_response_time(self, request, replica: FunctionReplica, response_time: float):

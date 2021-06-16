@@ -8,7 +8,7 @@ from ext.jjnp21.automator.main import ExperimentRunAutomator
 
 node_count = 100
 rps = 50
-duration = 300
+duration = 500
 
 e1 = Experiment('Round Robin centralized',
                 lb_type=LoadBalancerType.ROUND_ROBIN,
