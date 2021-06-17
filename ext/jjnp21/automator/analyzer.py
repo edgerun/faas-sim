@@ -45,9 +45,10 @@ def set_total_reuqest_count(row: Dict, inv_df: DataFrame):
 
 def set_request_tx_kpis(row: Dict, inv_df: DataFrame):
     # In case we only have dummy values, don't include it
-    if inv_df['tx_time'].mean() == 0:
+    if inv_df['tx_time_cl_lb'].mean() == 0:
         return
-    set_generic_kpis(row, inv_df, 'rq_tx_time', 'tx_time')
+    set_generic_kpis(row, inv_df, 'tx_time_cl_lb', 'tx_time_cl_lb')
+    set_generic_kpis(row, inv_df, 'tx_time_lb_fx', 'tx_time_lb_fx')
 
 
 def set_node_type_distribution(row: Dict, inv_df: DataFrame):

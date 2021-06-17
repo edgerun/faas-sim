@@ -9,7 +9,9 @@ from ether.scenarios.urbansensing import UrbanSensingScenario, default_cell_dens
     default_cloudlet_size
 from skippy.core.storage import StorageIndex
 from srds import IntegerTruncationSampler
+from ether.blocks import nodes as ether_block_nodes
 
+from ext.jjnp21.topology import client_label
 from ext.raith21 import storage
 from sim.topology import Topology
 
@@ -99,14 +101,27 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
         self.nano_nodes = self._get_nano_nodes()
         self.coral_nodes = self._get_coral_nodes()
         self.nuc_nodes = self._get_nuc_nodes()
-
+        self.client_nodes = self.create_client_nodes(client_ratio)
+        self.nodes.extend(self.client_nodes)
         super().__init__(num_cells, cell_density, cloudlet_size, internet)
+
+    def create_client_nodes(self, client_ratio: float = 0) -> List[Node]:
+        if client_ratio == 0:
+            return []
+        client_count = int(round(len(self.nodes) * client_ratio))
+        clients = [ether_block_nodes.rpi3() for _ in range(client_count)]
+        for client in clients:
+            client.labels[client_label] = 'True'
+        return clients
 
     def create_city(self) -> GeoCell:
         aot_nodes = []
         aot_nodes.extend(self.create_rpi3_aot_nodes())
         aot_nodes.extend(self.create_rpi4_aot_nodes())
         aot_nodes.extend(self.create_rockpi_aot_nodes())
+
+        aot_nodes.extend(self.client_nodes)
+
         nx_nodes = self.nx_nodes
         tx2_nodes = self.tx2_nodes
         nano_nodes = self.nano_nodes
@@ -137,7 +152,7 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
             def select_nodes(nodes, n):
                 if n > len(nodes):
                     diff = n - len(nodes)
-                    n -= diff #so basically if n>len(nodes) then n=len(nodes)
+                    n -= diff  # so basically if n>len(nodes) then n=len(nodes)
                 return nodes[selected_size:], nodes[:selected_size]
 
             selected_accelerator_nodes = []
@@ -228,13 +243,14 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
                 continue
 
             for bucket in storage.bucket_names:
+                if isinstance(non_empty_node, IoTComputeBox):
+                    continue
                 self.storage_index.mb(bucket, non_empty_node.name)
 
         for item in storage.data_items:
             self.storage_index.put(item)
 
-        city = GeoCell(self.num_cells, nodes=neighborhoods, density=self.cell_density)
-
+        city = GeoCell(1, nodes=neighborhoods, density=self.cell_density)
         return city
 
     def _create_aot_nodes(self, nodes: List[Node], size: int):

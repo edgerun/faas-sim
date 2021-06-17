@@ -56,29 +56,31 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
 
         lb_client_latency = 0
         lb_function_latency = 0
-        tx_time = 0
+        tx_time_cl_lb = 0
+        tx_time_lb_fx = 0
         t_start = self.env.now
 
         if request.load_balancer is not None and hasattr(request, 'client_node'):
-            start = self.env.now
-        # right now I used 250kb request payload, which should be a small JPG with the added HTTP overhead
+            # right now I used 250kb request payload, which should be a small JPG with the added HTTP overhead
+            cl_lb_start = self.env.now
             yield from simulate_request_transfer(self.env, request.load_balancer.node.name, request.client_node.name, 250)
-            tx_time = self.env.now - start
+            tx_time_cl_lb = self.env.now - cl_lb_start
+            lb_fx_start = self.env.now
+            yield from simulate_request_transfer(self.env, request.load_balancer.node.name, replica.node.ether_node.name, 250)
+            tx_time_lb_fx = self.env.now - lb_fx_start
 
-        if request.load_balancer is not None and hasattr(request, 'client_node'):
-            latency = self.env.topology.latency(request.load_balancer.node, request.client_node) * 0.001
-            lb_client_latency = latency
-            yield self.env.timeout(latency * 2)
-
-        if request.load_balancer is not None and \
-                (isinstance(request.load_balancer, LocalizedLeastResponseTimeLoadBalancer)
-                 or isinstance(request.load_balancer, LocalizedRoundRobinLoadBalancer)):
-            lb_node = request.load_balancer.node
-            lb_latency = self.env.topology.latency(lb_node, replica.node.ether_node) * 0.001
-            lb_function_latency = lb_latency
-            yield self.env.timeout(lb_latency * 2)  # * 2 for full round trip
-        # else:
-        #     print('lol')
+        # if request.load_balancer is not None and hasattr(request, 'client_node'):
+        #     latency = self.env.topology.latency(request.load_balancer.node, request.client_node) * 0.001
+        #     lb_client_latency = latency
+        #     yield self.env.timeout(latency * 2)
+        #
+        # if request.load_balancer is not None and \
+        #         (isinstance(request.load_balancer, LocalizedLeastResponseTimeLoadBalancer)
+        #          or isinstance(request.load_balancer, LocalizedRoundRobinLoadBalancer)):
+        #     lb_node = request.load_balancer.node
+        #     lb_latency = self.env.topology.latency(lb_node, replica.node.ether_node) * 0.001
+        #     lb_function_latency = lb_latency
+        #     yield self.env.timeout(lb_latency * 2)
 
         yield from simulate_function_invocation(self.env, replica, request)
 
@@ -92,7 +94,8 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
         t_exec = t_end - t_start
         self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_wait, t_start,
                                         t_exec, id(replica), lb_client_latency=lb_client_latency,
-                                        lb_function_latency=lb_function_latency, tx_time=tx_time)
+                                        lb_function_latency=lb_function_latency, tx_time_cl_lb=tx_time_cl_lb,
+                                        tx_time_lb_fx=tx_time_cl_lb)
 
 
 def simulate_request_transfer(env: Environment, src_name: str, dest_name: str, size_kb: int) -> float:

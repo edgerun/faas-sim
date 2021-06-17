@@ -8,7 +8,8 @@ from ext.raith21.generators.cloudcpu import cloudcpu_settings
 from ext.raith21.topology import HeterogeneousUrbanSensingScenario
 from sim.topology import Topology
 from skippy.core.storage import StorageIndex
-from ether.core import Connection
+from ether.core import Connection, Node
+from ether.cell import LANCell
 from ether.qos import latency
 
 
@@ -21,9 +22,10 @@ class RaithHeterogeneousUrbanSensingFactory(TopologyFactory):
     seed: int
     node_count: int
 
-    def __init__(self, node_count: int = 100, seed: int = 42) -> None:
+    def __init__(self, node_count: int = 100, seed: int = 42, client_ratio=0) -> None:
         self.seed = seed
         self.node_count = node_count
+        self.client_ratio = client_ratio
 
     def create(self) -> Topology:
         np.random.seed(self.seed)
@@ -32,7 +34,7 @@ class RaithHeterogeneousUrbanSensingFactory(TopologyFactory):
         ether_nodes = convert_to_ether_nodes(devices)
         topology = Topology()
         storage_index = StorageIndex()
-        HeterogeneousUrbanSensingScenario(ether_nodes, storage_index).materialize(topology)
+        HeterogeneousUrbanSensingScenario(ether_nodes, storage_index, client_ratio=self.client_ratio).materialize(topology)
         topology.init_docker_registry()
         return topology
 
