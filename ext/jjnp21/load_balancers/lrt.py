@@ -258,9 +258,9 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
             response_times = self.lrt_providers[function_name].get_response_times()
             self.wrr_providers[function_name] = WeightedRoundRobinProvider(response_times)
 
-            w_dict = dict()
-            for r_id, w in self.wrr_providers[function_name].weights.items():
-                w_dict[self._replica_by_id(r_id).node.ether_node.name] = w
+            # w_dict = dict()
+            # for r_id, w in self.wrr_providers[function_name].weights.items():
+            #     w_dict[self._replica_by_id(r_id).node.ether_node.name] = w
             # print(function_name)
             # print(w_dict)
             # print('--------------------------------------')
@@ -272,5 +272,7 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
         self._sync_replica_state()
         self.lrt_providers[request.name].record_response_time(id(replica), response_time)
         if self._should_update_weights():
-            self._sync_replica_state()
+            # self._sync_replica_state()
             self._update_weights()
+            # todo there seems to be a bug here where a replica gets accessed by id even though it doesn't exist (anymore)
+            # not sure how this can be with _update_weights, but figure out what's going on...

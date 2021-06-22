@@ -4,6 +4,7 @@ import time
 
 import numpy as np
 from ext.jjnp21.automator.experiment import *
+from ext.jjnp21.experiments.net_vis import draw_custom
 from ext.jjnp21.load_balancers.localized_lrt import LocalizedLeastResponseTimeLoadBalancer, LocalizedLRTLBWrapper
 from ext.jjnp21.load_balancers.localized_rr import LocalizedRoundRobinLoadBalancer
 from ext.jjnp21.localized_lb_system import LocalizedLoadBalancerFaasSystem
@@ -16,6 +17,7 @@ from ext.raith21.predicates import CanRunPred, NodeHasAcceleratorPred, NodeHasFr
 from ext.raith21.resources import ai_resources_per_node_image
 from ext.raith21.util import vanilla
 from sim.core import Environment, Node
+from ether.core import Connection
 from sim.docker import ContainerRegistry
 from sim.faassim import Simulation
 from sim.logging import RuntimeLogger, SimulatedClock
@@ -63,19 +65,22 @@ def run_experiment(experiment: Experiment) -> Result:
     env.faas = faas
 
     # Load balancer shenanigans
-    cental_lb_node = Node('load-balancer')
-    topology.add_node(cental_lb_node)
+    # central_lb_node = Node('load-balancer')
+    # topology.add_node(central_lb_node)
     # c = LANCell([cental_lb_node], backhaul='internet_chix')
-    c = LANCell([cental_lb_node], backhaul='internet')
-    c.materialize(topology)
+    central_lb_node = topology.get_load_balancer_node()
+    print(f'central lb node is:{central_lb_node.name}')
 
-    all_lb_nodes = [node for node in get_non_client_nodes(topology) if isinstance(node, Node)]
+    # topology.connect_load_balancer(central_lb_node)
+
+
+    all_lb_nodes = [node for node in get_non_client_nodes(topology) if isinstance(node, Node) and node.name != 'registry' and not node.name.startswith('internet')]
 
     lb_nodes = []
     if experiment.lb_placement_strategy == LoadBalancerPlacementStrategy.ALL_NODES:
         lb_nodes = all_lb_nodes
     elif experiment.lb_placement_strategy == LoadBalancerPlacementStrategy.CENTRAL:
-        lb_nodes = [cental_lb_node]
+        lb_nodes = [central_lb_node]
     else:
         raise Exception('Invalid load balancer placement strategy')
 

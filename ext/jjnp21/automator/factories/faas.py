@@ -10,4 +10,5 @@ class FaaSFactory:
 
 class LocalizedLoadBalancerFaaSFactory(FaaSFactory):
     def create(self, env: Environment) -> FaasSystem:
-        return LocalizedLoadBalancerFaasSystem(env, scale_by_average_requests=True)
+        return LocalizedLoadBalancerFaasSystem(env, scale_static=True)
+        # return LocalizedLoadBalancerFaasSystem(env, scale_by_average_requests=True)

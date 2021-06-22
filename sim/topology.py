@@ -1,3 +1,4 @@
+import random
 from collections import defaultdict
 from typing import Optional
 
@@ -5,6 +6,8 @@ import ether.topology
 from ether.core import Node, Connection
 
 DockerRegistry = Node('registry')
+
+supports_central_load_balancer = 'supports_central_load_balancer'
 
 class Topology(ether.topology.Topology):
 
@@ -21,6 +24,30 @@ class Topology(ether.topology.Topology):
         for node in self.nodes:
             if isinstance(node, str) and node.startswith('internet'):
                 self.add_connection(Connection(node, DockerRegistry))
+
+    def get_load_balancer_node(self):
+        """
+        Returns a random node with the 'supports load balancer' label. If not present it will add a new node
+        and connect it to the first node with 'internet' in it.
+        """
+        candidates = []
+        for node in self.nodes:
+            if isinstance(node, Node) and node.labels.get(supports_central_load_balancer) is not None:
+                candidates.append(node)
+        if len(candidates) == 0:
+            lb_node = Node('load-balancer')
+            self.add_node(lb_node)
+            self._connect_load_balancer_to_random_internet(lb_node)
+            return lb_node
+        lb_node = random.choice(candidates)
+        return lb_node
+
+
+    def _connect_load_balancer_to_random_internet(self, lb):
+        for node in self.nodes:
+            if isinstance(node, str) and node.startswith('internet'):
+                self.add_connection(Connection(node, lb))
+                return
 
     def route_by_node_name(self, source_name: str, destination_name: str):
         """

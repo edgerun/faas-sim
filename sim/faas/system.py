@@ -12,7 +12,7 @@ from sim.faas import RoundRobinLoadBalancer, FunctionDeployment, FunctionReplica
 from sim.net import SafeFlow
 from sim.skippy import create_function_pod
 from .core import FaasSystem, FunctionSimulator
-from .scaling import FaasRequestScaler, AverageFaasRequestScaler, AverageQueueFaasRequestScaler
+from .scaling import *
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,8 @@ class DefaultFaasSystem(FaasSystem):
     # TODO probably best to inject scaler via env as backgroundprocess - these scalers need to handle all deployed functions
     # currently a scaler per function deployment is started
     def __init__(self, env: Environment, scale_by_requests: bool = False,
-                 scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False) -> None:
+                 scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
+                 scale_static: bool = False) -> None:
         self.env = env
         self.function_containers = dict()
         # collects all FunctionReplicas under the name of the corresponding FunctionDeployment
@@ -42,9 +43,11 @@ class DefaultFaasSystem(FaasSystem):
         self.functions_definitions = Counter()
 
         self.scale_by_requests = scale_by_requests
+        self.scale_static = scale_static
         self.scale_by_average_requests_per_replica = scale_by_average_requests
         self.scale_by_queue_requests_per_replica = scale_by_queue_requests_per_replica
         self.faas_scalers: Dict[str, FaasRequestScaler] = dict()
+        self.faas_static_scalers: Dict[str, ManualSetScaler] = dict()
         self.avg_faas_scalers: Dict[str, AverageFaasRequestScaler] = dict()
         self.queue_faas_scalers: Dict[str, AverageQueueFaasRequestScaler] = dict()
 
@@ -67,6 +70,7 @@ class DefaultFaasSystem(FaasSystem):
         self.functions_deployments[fd.name] = fd
         # TODO remove specific scaling approaches, it's more extendable to let users start scaling technique that iterates over FDs
         self.faas_scalers[fd.name] = FaasRequestScaler(fd, self.env)
+        self.faas_static_scalers[fd.name] = ManualSetScaler(fd, self.env, 0.33)
         self.avg_faas_scalers[fd.name] = AverageFaasRequestScaler(fd, self.env)
         self.queue_faas_scalers[fd.name] = AverageQueueFaasRequestScaler(fd, self.env)
 
@@ -76,6 +80,8 @@ class DefaultFaasSystem(FaasSystem):
             self.env.process(self.avg_faas_scalers[fd.name].run())
         if self.scale_by_queue_requests_per_replica:
             self.env.process(self.queue_faas_scalers[fd.name].run())
+        if self.scale_static:
+            self.env.process(self.faas_static_scalers[fd.name].run())
 
         for f in fd.fn_containers:
             self.function_containers[f.image] = f
@@ -203,6 +209,7 @@ class DefaultFaasSystem(FaasSystem):
         # check whether request would exceed maximum number of containers for the function and reduce to scale to max
         if self.replica_count[fn_name] + replicas > config.scale_max:
             reduce = self.replica_count[fn_name] + replicas - config.scale_max
+            print('reduced scaling...') #todo remove me
             scale = replicas - reduce
 
         if scale == 0:
@@ -212,7 +219,8 @@ class DefaultFaasSystem(FaasSystem):
             # check whether service has capacity, otherwise continue
             leftover_scale = scale
             max_replicas = int(ranking.function_factor[service.image] * config.scale_max)
-
+            print(f'alterted max replicas for {fn_name} is {max_replicas}') #todo remove me
+            print(f'function_factor was {ranking.function_factor[service.image]} and config.scale_max was {config.scale_max}') #todo remove me
             # check if scaling all new pods would exceed the maximum number of replicas for this function container
             if max_replicas * config.scale_max < leftover_scale + self.functions_definitions[
                 service.image]:

@@ -2,18 +2,19 @@ from ..device import ArchProperties
 from ..generator import GeneratorSettings
 from ..model import *
 
+# todo potentially reset this
 cloudcpu_settings = GeneratorSettings(
     arch={
-        Arch.X86: 0.8,
-        Arch.AARCH64: 0.1,
-        Arch.ARM32: 0.1
+        Arch.X86: 0.5,
+        Arch.AARCH64: 0.35,
+        Arch.ARM32: 0.15
     },
     properties={
         Arch.X86: ArchProperties(
             arch=Arch.X86,
             accelerator={
-                Accelerator.NONE: 0.9,
-                Accelerator.GPU: 0.1,
+                Accelerator.NONE: 0.85,
+                Accelerator.GPU: 0.15,
                 Accelerator.TPU: 0
             },
             cores={
@@ -23,8 +24,8 @@ cloudcpu_settings = GeneratorSettings(
                 Bins.VERY_HIGH: 0.3
             },
             location={
-                Location.CLOUD: 0.95,
-                Location.MEC: 0.05,
+                Location.CLOUD: 0.7,
+                Location.MEC: 0.30,
                 Location.EDGE: 0,
                 Location.MOBILE: 0
             },

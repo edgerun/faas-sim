@@ -9,7 +9,7 @@ import statistics
 
 class LocalizedLeastResponseTimeLoadBalancer(LeastResponseTimeLoadBalancer):
     def __init__(self, env: Environment, node: Node, replicas: Dict[str, List[FunctionReplica]],
-                 lrt_window: float = 30, weight_update_frequency: float = 20) -> None:
+                 lrt_window: float = 60, weight_update_frequency: float = 10) -> None:
         self.node = node
         super().__init__(env, replicas, lrt_window, weight_update_frequency)
 

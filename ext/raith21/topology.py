@@ -13,7 +13,7 @@ from ether.blocks import nodes as ether_block_nodes
 
 from ext.jjnp21.topology import client_label
 from ext.raith21 import storage
-from sim.topology import Topology
+from sim.topology import Topology, supports_central_load_balancer
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +275,9 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
         return self._create_aot_nodes(self.rpi3_nodes, 3)
 
     def create_cloudlet(self) -> XeonCloudlet:
+        # mark xeon nodes as being able to host a central-load-balancer
+        for node in self.xeon_nodes:
+            node.labels[supports_central_load_balancer] = 'True'
         return XeonCloudlet(self.xeon_nodes, self.cloudlet_size[0], backhaul=FiberToExchange(self.internet))
 
     def _get_xeon_nodes(self) -> List[Node]:

@@ -34,7 +34,82 @@ class RaithHeterogeneousUrbanSensingFactory(TopologyFactory):
         ether_nodes = convert_to_ether_nodes(devices)
         topology = Topology()
         storage_index = StorageIndex()
-        HeterogeneousUrbanSensingScenario(ether_nodes, storage_index, client_ratio=self.client_ratio).materialize(topology)
+        city = HeterogeneousUrbanSensingScenario(ether_nodes, storage_index, client_ratio=self.client_ratio)
+        city.materialize(topology)
+        topology.init_docker_registry()
+        return topology
+
+
+class NationDistributedUrbanSensingFactory(TopologyFactory):
+
+    def __init__(self, seed: int = 42, client_ratio=0) -> None:
+        self.seed = seed
+        self.client_ratio = client_ratio
+
+    def _create_city(self, node_count: int, internet: str, storage_index: StorageIndex, generator_settings,
+                     client_ratio: float, city_name: str = 'unknown'):
+        devices = generate_devices(node_count, generator_settings)
+        ether_nodes = convert_to_ether_nodes(devices)
+        for node in ether_nodes:
+            node.labels['city'] = city_name
+        city = HeterogeneousUrbanSensingScenario(ether_nodes, storage_index, client_ratio=client_ratio,
+                                                 internet=internet)
+        for client in city.client_nodes:
+            client.labels['city'] = city_name
+        return city
+
+    def create(self) -> Topology:
+        np.random.seed(self.seed)
+        random.seed(self.seed)
+        topology = Topology()
+        storage_index = StorageIndex()
+        chicago = self._create_city(100, 'internet_chicago', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='chicago')
+        chicago.materialize(topology)
+        new_york = self._create_city(150, 'internet_newyork', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='newyork')
+        new_york.materialize(topology)
+        seattle = self._create_city(100, 'internet_seattle', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='seattle')
+        seattle.materialize(topology)
+
+        topology.add_connection(Connection('internet_chicago', 'internet_newyork', latency=31))
+        topology.add_connection(Connection('internet_chicago', 'internet_seattle', latency=55))
+        topology.add_connection(Connection('internet_seattle', 'internet_newyork', latency=75))
+        topology.init_docker_registry()
+        return topology
+
+
+class GlobalDistributedUrbanSensingFactory(TopologyFactory):
+
+    def __init__(self, seed: int = 42, client_ratio=0) -> None:
+        self.seed = seed
+        self.client_ratio = client_ratio
+
+    def _create_city(self, node_count: int, internet: str, storage_index: StorageIndex, generator_settings,
+                     client_ratio: float, city_name: str = 'unknown'):
+        devices = generate_devices(node_count, generator_settings)
+        ether_nodes = convert_to_ether_nodes(devices)
+        for node in ether_nodes:
+            node.labels['city'] = city_name
+        city = HeterogeneousUrbanSensingScenario(ether_nodes, storage_index, client_ratio=client_ratio,
+                                                 internet=internet)
+        for client in city.client_nodes:
+            client.labels['city'] = city_name
+        return city
+
+    def create(self) -> Topology:
+        np.random.seed(self.seed)
+        random.seed(self.seed)
+        topology = Topology()
+        storage_index = StorageIndex()
+        chicago = self._create_city(100, 'internet_newyork', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='newyork')
+        chicago.materialize(topology)
+        new_york = self._create_city(100, 'internet_london', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='london')
+        new_york.materialize(topology)
+        seattle = self._create_city(150, 'internet_sydney', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='sydney')
+        seattle.materialize(topology)
+
+        topology.add_connection(Connection('internet_london', 'internet_newyork', latency=86))
+        topology.add_connection(Connection('internet_london', 'internet_sydney', latency=253))
+        topology.add_connection(Connection('internet_sydney', 'internet_newyork', latency=204))
         topology.init_docker_registry()
         return topology
 

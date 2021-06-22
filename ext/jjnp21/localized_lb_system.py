@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 
 class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
     def __init__(self, env: Environment, scale_by_requests: bool = False,
-                 scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False) -> None:
-        super().__init__(env, scale_by_requests, scale_by_average_requests, scale_by_queue_requests_per_replica)
+                 scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
+                 scale_static: bool = False) -> None:
+        super().__init__(env, scale_by_requests, scale_by_average_requests, scale_by_queue_requests_per_replica, scale_static=scale_static)
         self.client_nodes = get_client_nodes(self.env.topology)
 
     def set_load_balancer(self, lb: LoadBalancer):
@@ -52,6 +53,12 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
             logger.debug('asking load balancer for replica for request %s:%d', request.name, request.request_id)
             replica = self.next_replica(request)
 
+        if replica is None:
+            # This can occur very infrequently when a replica gets removed while a request is in-flight for that replica.
+            # It is rare enough to simply ignore (once every 30-50k reuests if there's hundreds of replicas)
+            # We just need to address it to make sure we don't crash long experiments
+            logger.warning('got a replica with value None. Ignoring and continuing on')
+            return
         logger.debug('dispatching request %s:%d to %s', request.name, request.request_id, replica.node.name)
 
         lb_client_latency = 0
@@ -68,6 +75,8 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
             lb_fx_start = self.env.now
             yield from simulate_request_transfer(self.env, request.load_balancer.node.name, replica.node.ether_node.name, 250)
             tx_time_lb_fx = self.env.now - lb_fx_start
+            # if request.client_node.labels.get('city') == 'newyork' and replica.node.ether_node.labels.get('city') == 'chicago':
+            #     print('kekker')
 
         # if request.load_balancer is not None and hasattr(request, 'client_node'):
         #     latency = self.env.topology.latency(request.load_balancer.node, request.client_node) * 0.001
@@ -92,16 +101,29 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
         # TODO log info s.t. load-balancer can
         t_wait = t_start - t_received
         t_exec = t_end - t_start
+        client_city = 'N/A'
+        client_node = 'N/A'
+        lb_node = 'N/A'
+        if hasattr(request, 'load_balancer') and request.load_balancer is not None:
+            lb_node = request.load_balancer.node.name
+        if hasattr(request, 'client_node') and request.client_node is not None:
+            client_node = request.client_node.name
+
+        if hasattr(request, 'client_node'):
+            client_city = request.client_node.labels.get('city')
         self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_wait, t_start,
                                         t_exec, id(replica), lb_client_latency=lb_client_latency,
                                         lb_function_latency=lb_function_latency, tx_time_cl_lb=tx_time_cl_lb,
-                                        tx_time_lb_fx=tx_time_cl_lb)
+                                        tx_time_lb_fx=tx_time_lb_fx,
+                                        replica_city=replica.node.ether_node.labels.get('city'),
+                                        client_city=client_city,
+                                        client_node=client_node,
+                                        lb_node=lb_node)
 
 
 def simulate_request_transfer(env: Environment, src_name: str, dest_name: str, size_kb: int) -> float:
     route = env.topology.route_by_node_name(src_name, dest_name)
+    if len(route.hops) == 0:
+        return
     flow = SafeFlow(env, size_kb * 1024, route)
-    start = env.now
     yield flow.start()
-    end = env.now
-    # return end - start
