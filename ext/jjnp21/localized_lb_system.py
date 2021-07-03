@@ -91,6 +91,8 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
         #     lb_function_latency = lb_latency
         #     yield self.env.timeout(lb_latency * 2)
 
+
+        # todo: move code that simulates request transer into that function.
         yield from simulate_function_invocation(self.env, replica, request)
 
         t_end = self.env.now
