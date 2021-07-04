@@ -4,11 +4,14 @@ from sim.faas import FaasSystem
 
 
 class FaaSFactory:
+    constructor_kwargs = {}
+    def set_constructor_args(self, **kwargs):
+        self.constructor_kwargs = kwargs
+
     def create(self, env: Environment) -> FaasSystem:
         raise Exception('Do not use this class directly. Use an actual implementation.')
 
 
 class LocalizedLoadBalancerFaaSFactory(FaaSFactory):
     def create(self, env: Environment) -> FaasSystem:
-        return LocalizedLoadBalancerFaasSystem(env, scale_static=True)
-        # return LocalizedLoadBalancerFaasSystem(env, scale_by_average_requests=True)
+        return LocalizedLoadBalancerFaasSystem(env, **self.constructor_kwargs)

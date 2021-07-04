@@ -25,6 +25,11 @@ class ClientPlacementStrategy(Enum):
     NONE = 1
     UNIFORM_RANDOM = 2
 
+class FunctionScalingStrategy(Enum):
+    CUSTOM_STATIC = 1
+    AVG_REQUEST_RATE = 2
+    AVG_QUEUE_LENGTH = 3
+
 
 @dataclass(init=True)
 class Experiment:
@@ -36,6 +41,7 @@ class Experiment:
     lb_placement_strategy: LoadBalancerPlacementStrategy
     client_lb_resolving_strategy: ClientLoadBalancerResolvingStrategy
     client_placement_strategy: ClientPlacementStrategy
+    function_scaling_strategy: FunctionScalingStrategy = FunctionScalingStrategy.CUSTOM_STATIC
     seed: int = 42
 
 

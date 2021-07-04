@@ -140,8 +140,8 @@ class ConstantBenchmark(BenchmarkBase):
     def set_deployments(self, env):
         deployments = self.deployments_per_name
         for deployment in deployments.values():
-            deployment.scale_min = 5
-            deployment.scaling_config.target_queue_length = 0.5 # see if this does anything
+            deployment.scaling_config.scale_min = 5
+            deployment.scaling_config.target_queue_length = 5 # see if this does anything
             # deployment.scaling_config.target_average_rps_threshold = 1
             deployment.scaling_config.target_average_rps = 10
             deployment.scaling_config.alert_window = 30

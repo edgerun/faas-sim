@@ -61,6 +61,18 @@ def run_experiment(experiment: Experiment) -> Result:
     env.simulator_factory = AIPythonHTTPSimulatorFactory(
         get_raith21_function_characterizations(resource_oracle, fet_oracle))
     env.metrics = Metrics(env, log=RuntimeLogger(SimulatedClock(env)))
+
+
+    # Configure scaling settings based on the experiment parametrization
+    # Todo I could consider moving this part. On one hand it uses quite a few layers, but on the other hand
+    # it keeps the "interpretation" of the experiment settings to one place
+    faas_kwargs = {
+        'scale_by_average_requests': experiment.function_scaling_strategy == FunctionScalingStrategy.AVG_REQUEST_RATE,
+        'scale_by_queue_requests_per_replica': experiment.function_scaling_strategy == FunctionScalingStrategy.AVG_QUEUE_LENGTH,
+        'scale_static': experiment.function_scaling_strategy == FunctionScalingStrategy.CUSTOM_STATIC,
+    }
+    experiment.faas_factory.set_constructor_args(**faas_kwargs)
+
     faas = experiment.faas_factory.create(env)
     env.faas = faas
 

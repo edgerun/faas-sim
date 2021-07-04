@@ -1,6 +1,8 @@
+import logging
 import pickle
 import time
 from ext.jjnp21.automator.analyzer import BasicResultAnalyzer
+from ext.jjnp21.automator.execution import run_experiment
 from ext.jjnp21.automator.experiment import *
 from ext.jjnp21.automator.factories.benchmark import ConstantBenchmarkFactory
 from ext.jjnp21.automator.factories.faas import LocalizedLoadBalancerFaaSFactory
@@ -8,9 +10,10 @@ from ext.jjnp21.automator.factories.topology import RaithHeterogeneousUrbanSensi
     NationDistributedUrbanSensingFactory, GlobalDistributedUrbanSensingFactory
 from ext.jjnp21.automator.main import ExperimentRunAutomator
 
+logging.basicConfig(level=logging.INFO)
 node_count = 100
-rps = 25
-duration = 500
+rps = 500
+duration = 1000
 
 e1 = Experiment('Round Robin centralized',
                 lb_type=LoadBalancerType.ROUND_ROBIN,
@@ -47,25 +50,26 @@ e4 = Experiment('Least Response Time on all nodes',
 
 # experiment_list = [e2]
 experiment_list = [e1, e2, e3, e4]
+result = run_experiment(e1)
 
-automator = ExperimentRunAutomator(experiment_list, worker_count=4)
-print('Running nation benchmark')
-start = time.time()
-results = automator.run()
-end = time.time()
-print(f'Done calculating... E2E runtime: {round(end - start, 2)}s')
-# results.sort('experiment.name')
-for r in results:
-    print(f'Ran "{r.experiment.name}" in {r.run_duration_seconds}s')
-
-analyzer = BasicResultAnalyzer(results)
-analysis_df = analyzer.basic_kpis()
-analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
-print('successfully ran analysis')
-print('dumping results')
-f = open('/home/jp/Documents/tmp/results.dump', 'wb')
-pickle.dump(results, f)
-f.flush()
-f.close()
-print('successfully dumped results')
+# automator = ExperimentRunAutomator(experiment_list, worker_count=4)
+# print('Running nation benchmark')
+# start = time.time()
+# results = automator.run()
+# end = time.time()
+# print(f'Done calculating... E2E runtime: {round(end - start, 2)}s')
+# # results.sort('experiment.name')
+# for r in results:
+#     print(f'Ran "{r.experiment.name}" in {r.run_duration_seconds}s')
+#
+# analyzer = BasicResultAnalyzer(results)
+# analysis_df = analyzer.basic_kpis()
+# analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
+# print('successfully ran analysis')
+# print('dumping results')
+# f = open('/home/jp/Documents/tmp/results.dump', 'wb')
+# pickle.dump(results, f)
+# f.flush()
+# f.close()
+# print('successfully dumped results')
 

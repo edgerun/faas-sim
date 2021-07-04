@@ -75,21 +75,6 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
             lb_fx_start = self.env.now
             yield from simulate_request_transfer(self.env, request.load_balancer.node.name, replica.node.ether_node.name, 250)
             tx_time_lb_fx = self.env.now - lb_fx_start
-            # if request.client_node.labels.get('city') == 'newyork' and replica.node.ether_node.labels.get('city') == 'chicago':
-            #     print('kekker')
-
-        # if request.load_balancer is not None and hasattr(request, 'client_node'):
-        #     latency = self.env.topology.latency(request.load_balancer.node, request.client_node) * 0.001
-        #     lb_client_latency = latency
-        #     yield self.env.timeout(latency * 2)
-        #
-        # if request.load_balancer is not None and \
-        #         (isinstance(request.load_balancer, LocalizedLeastResponseTimeLoadBalancer)
-        #          or isinstance(request.load_balancer, LocalizedRoundRobinLoadBalancer)):
-        #     lb_node = request.load_balancer.node
-        #     lb_latency = self.env.topology.latency(lb_node, replica.node.ether_node) * 0.001
-        #     lb_function_latency = lb_latency
-        #     yield self.env.timeout(lb_latency * 2)
 
 
         # todo: move code that simulates request transer into that function.
