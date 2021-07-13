@@ -5,6 +5,7 @@ from pandas import DataFrame
 from ext.jjnp21.automator.factories.benchmark import BenchmarkFactory
 from ext.jjnp21.automator.factories.faas import FaaSFactory
 from ext.jjnp21.automator.factories.topology import TopologyFactory
+from ext.jjnp21.localized_lb_system import NetworkSimulationMode
 
 
 class LoadBalancerType(Enum):
@@ -42,6 +43,8 @@ class Experiment:
     client_lb_resolving_strategy: ClientLoadBalancerResolvingStrategy
     client_placement_strategy: ClientPlacementStrategy
     function_scaling_strategy: FunctionScalingStrategy = FunctionScalingStrategy.CUSTOM_STATIC
+    friendly_name: str = '-'
+    net_mode: NetworkSimulationMode = NetworkSimulationMode.ACCURATE
     seed: int = 42
 
 

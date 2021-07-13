@@ -17,20 +17,6 @@ def set_e2e_kpis(row: Dict, inv_df: DataFrame):
     set_generic_kpis(row, inv_df, 'E2E', 't_exec')
 
 
-def set_lb_client_latency_kpis(row: Dict, inv_df: DataFrame):
-    # In case we only have dummy values, don't include it
-    if inv_df['lb_client_latency'].mean() == 0:
-        return
-    set_generic_kpis(row, inv_df, 'LB<->CL', 'lb_client_latency')
-
-
-def set_lb_function_latency_kpis(row: Dict, inv_df: DataFrame):
-    # In case we only have dummy values, don't include it
-    if inv_df['lb_function_latency'].mean() == 0:
-        return
-    set_generic_kpis(row, inv_df, 'LB<->FX', 'lb_function_latency')
-
-
 def set_fet_kpis(row: Dict, fet_df: DataFrame):
     set_generic_kpis(row, fet_df, 'FET', 't_fet')
 
@@ -87,8 +73,6 @@ class BasicResultAnalyzer:
             row = {}
             row['name'] = result.experiment.name
             set_e2e_kpis(row, result.invocations)
-            set_lb_client_latency_kpis(row, result.invocations)
-            set_lb_function_latency_kpis(row, result.invocations)
             set_fet_kpis(row, result.fets)
             set_fx_wait_kpis(row, result.fets)
             set_total_reuqest_count(row, result.invocations)

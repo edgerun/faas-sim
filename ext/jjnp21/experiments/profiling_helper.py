@@ -12,8 +12,8 @@ from ext.jjnp21.automator.main import ExperimentRunAutomator
 
 logging.basicConfig(level=logging.INFO)
 node_count = 100
-rps = 500
-duration = 1000
+rps = 75
+duration = 500
 
 e1 = Experiment('Round Robin centralized',
                 lb_type=LoadBalancerType.ROUND_ROBIN,
@@ -22,6 +22,7 @@ e1 = Experiment('Round Robin centralized',
                 client_placement_strategy=ClientPlacementStrategy.NONE,
                 benchmark_factory=ConstantBenchmarkFactory(rps, duration),
                 faas_factory=LocalizedLoadBalancerFaaSFactory(),
+                net_mode=NetworkSimulationMode.FAST,
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 e2 = Experiment('Round Robin on all nodes',
                 lb_type=LoadBalancerType.ROUND_ROBIN,
@@ -30,6 +31,7 @@ e2 = Experiment('Round Robin on all nodes',
                 client_placement_strategy=ClientPlacementStrategy.NONE,
                 benchmark_factory=ConstantBenchmarkFactory(rps, duration),
                 faas_factory=LocalizedLoadBalancerFaaSFactory(),
+                net_mode=NetworkSimulationMode.FAST,
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 e3 = Experiment('Least Response Time centralized',
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
@@ -38,6 +40,7 @@ e3 = Experiment('Least Response Time centralized',
                 client_placement_strategy=ClientPlacementStrategy.NONE,
                 benchmark_factory=ConstantBenchmarkFactory(rps, duration),
                 faas_factory=LocalizedLoadBalancerFaaSFactory(),
+                net_mode=NetworkSimulationMode.FAST,
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 e4 = Experiment('Least Response Time on all nodes',
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
@@ -46,30 +49,30 @@ e4 = Experiment('Least Response Time on all nodes',
                 client_placement_strategy=ClientPlacementStrategy.NONE,
                 benchmark_factory=ConstantBenchmarkFactory(rps, duration),
                 faas_factory=LocalizedLoadBalancerFaaSFactory(),
+                net_mode=NetworkSimulationMode.FAST,
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 
 # experiment_list = [e2]
 experiment_list = [e1, e2, e3, e4]
-result = run_experiment(e1)
+# result = run_experiment(e1)
 
-# automator = ExperimentRunAutomator(experiment_list, worker_count=4)
-# print('Running nation benchmark')
-# start = time.time()
-# results = automator.run()
-# end = time.time()
-# print(f'Done calculating... E2E runtime: {round(end - start, 2)}s')
-# # results.sort('experiment.name')
-# for r in results:
-#     print(f'Ran "{r.experiment.name}" in {r.run_duration_seconds}s')
-#
-# analyzer = BasicResultAnalyzer(results)
-# analysis_df = analyzer.basic_kpis()
-# analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
-# print('successfully ran analysis')
-# print('dumping results')
-# f = open('/home/jp/Documents/tmp/results.dump', 'wb')
-# pickle.dump(results, f)
-# f.flush()
-# f.close()
-# print('successfully dumped results')
+automator = ExperimentRunAutomator(experiment_list, worker_count=4)
+print('Running nation benchmark')
+start = time.time()
+results = automator.run()
+end = time.time()
+print(f'Done calculating... E2E runtime: {round(end - start, 2)}s')
+# results.sort('experiment.name')
+for r in results:
+    print(f'Ran "{r.experiment.name}" in {r.run_duration_seconds}s')
 
+analyzer = BasicResultAnalyzer(results)
+analysis_df = analyzer.basic_kpis()
+analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
+print('successfully ran analysis')
+print('dumping results')
+f = open('/home/jp/Documents/tmp/results.dump', 'wb')
+pickle.dump(results, f)
+f.flush()
+f.close()
+print('successfully dumped results')

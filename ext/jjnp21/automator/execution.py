@@ -70,6 +70,7 @@ def run_experiment(experiment: Experiment) -> Result:
         'scale_by_average_requests': experiment.function_scaling_strategy == FunctionScalingStrategy.AVG_REQUEST_RATE,
         'scale_by_queue_requests_per_replica': experiment.function_scaling_strategy == FunctionScalingStrategy.AVG_QUEUE_LENGTH,
         'scale_static': experiment.function_scaling_strategy == FunctionScalingStrategy.CUSTOM_STATIC,
+        'net_mode': experiment.net_mode,
     }
     experiment.faas_factory.set_constructor_args(**faas_kwargs)
 
