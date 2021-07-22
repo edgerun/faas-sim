@@ -1,4 +1,4 @@
-from ext.jjnp21.schedulers.random_scheduler import RandomScheduler
+from ext.jjnp21.schedulers.function_schedulers.random_scheduler import RandomScheduler
 # from ext.raith21.main import resource_oracle, fet_oracle
 from ext.raith21.fet import ai_execution_time_distributions
 from ext.raith21.oracles import Raith21FetOracle, Raith21ResourceOracle

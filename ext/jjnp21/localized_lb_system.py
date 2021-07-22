@@ -3,23 +3,31 @@ import random
 from enum import Enum
 
 from ext.jjnp21.ether_customization.custom_ether import UninterruptingFlow
-from ext.jjnp21.load_balancers.localized_lrt import LocalizedLeastResponseTimeLoadBalancer
-from ext.jjnp21.load_balancers.localized_rr import LocalizedRoundRobinLoadBalancer
 from ext.jjnp21.load_balancers.lrt import LeastResponseTimeLoadBalancer
-from sim.core import Environment, Node
+from ext.jjnp21.topology import get_client_nodes
+from sim.core import Environment
 from sim.faas import DefaultFaasSystem, FunctionRequest, FunctionState, LoadBalancer, FunctionReplica
 from sim.faas.system import simulate_function_invocation
-from ext.jjnp21.topology import get_client_nodes
 from sim.net import SafeFlow
 
 logger = logging.getLogger(__name__)
+
 
 class NetworkSimulationMode(Enum):
     FAST = 1
     ACCURATE = 2
 
 
-class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
+class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
+
+    def scale_up_lb(self, lb_name: str, add_count: int):
+        pass
+
+    def scale_down_lb(self, lb_name: str, remove_count: int):
+        pass
+
+
+class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
     def __init__(self, env: Environment, scale_by_requests: bool = False,
                  scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
                  scale_static: bool = False, net_mode: NetworkSimulationMode = NetworkSimulationMode.ACCURATE) -> None:
@@ -75,7 +83,6 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
         yield from self.simulate_function_invocation(replica, request)
 
         t_end = self.env.now
-
 
         t_wait = t_start - t_received
         t_exec = t_end - t_start
@@ -150,6 +157,3 @@ class LocalizedLoadBalancerFaasSystem(DefaultFaasSystem):
         elif self.net_mode == NetworkSimulationMode.FAST:
             flow = UninterruptingFlow(self.env, size_kb * 1024, route)
         yield flow.start()
-
-
-

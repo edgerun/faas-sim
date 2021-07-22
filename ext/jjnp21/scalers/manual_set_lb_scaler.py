@@ -1,3 +1,4 @@
+from ext.jjnp21.localized_lb_system import LoadBalancerCapableFaasSystem
 from ext.jjnp21.scalers.lb_scaler import LoadBalancerScaler
 from sim.core import Environment
 from sim.faas import FunctionDeployment, FaasSystem, FunctionState
@@ -17,6 +18,11 @@ class ManualSetScaler(LoadBalancerScaler):
     def run(self):
         env: Environment = self.env
         faas: FaasSystem = env.faas
+        if not isinstance(faas, LoadBalancerCapableFaasSystem):
+            raise Exception(
+                'The FaaS system currently used in the simulator does not support complex load-balancing. Thus you '
+                'also cannot use a separate load balancer scaler. Use an appropriate FaasSystem implementation!')
+
         while self.running:
             yield env.timeout(self.alert_window)
             if self.function_invocations.get(self.fn_name, None) is None:
