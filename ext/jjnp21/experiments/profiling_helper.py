@@ -6,13 +6,14 @@ from ext.jjnp21.automator.execution import run_experiment
 from ext.jjnp21.automator.experiment import *
 from ext.jjnp21.automator.factories.benchmark import ConstantBenchmarkFactory
 from ext.jjnp21.automator.factories.faas import LocalizedLoadBalancerFaaSFactory
+from ext.jjnp21.automator.factories.function_scheduler import RandomFunctionSchedulerFactory
 from ext.jjnp21.automator.factories.topology import RaithHeterogeneousUrbanSensingFactory, GlobalIndustrialIoTScenario, \
     NationDistributedUrbanSensingFactory, GlobalDistributedUrbanSensingFactory
 from ext.jjnp21.automator.main import ExperimentRunAutomator
 
 logging.basicConfig(level=logging.INFO)
 node_count = 100
-rps = 75
+rps = 25
 duration = 500
 
 e1 = Experiment('Round Robin centralized',
@@ -23,6 +24,7 @@ e1 = Experiment('Round Robin centralized',
                 benchmark_factory=ConstantBenchmarkFactory(rps, duration),
                 faas_factory=LocalizedLoadBalancerFaaSFactory(),
                 net_mode=NetworkSimulationMode.FAST,
+                function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 e2 = Experiment('Round Robin on all nodes',
                 lb_type=LoadBalancerType.ROUND_ROBIN,
@@ -32,6 +34,7 @@ e2 = Experiment('Round Robin on all nodes',
                 benchmark_factory=ConstantBenchmarkFactory(rps, duration),
                 faas_factory=LocalizedLoadBalancerFaaSFactory(),
                 net_mode=NetworkSimulationMode.FAST,
+                function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 e3 = Experiment('Least Response Time centralized',
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
@@ -41,6 +44,7 @@ e3 = Experiment('Least Response Time centralized',
                 benchmark_factory=ConstantBenchmarkFactory(rps, duration),
                 faas_factory=LocalizedLoadBalancerFaaSFactory(),
                 net_mode=NetworkSimulationMode.FAST,
+                function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 e4 = Experiment('Least Response Time on all nodes',
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
@@ -50,6 +54,7 @@ e4 = Experiment('Least Response Time on all nodes',
                 benchmark_factory=ConstantBenchmarkFactory(rps, duration),
                 faas_factory=LocalizedLoadBalancerFaaSFactory(),
                 net_mode=NetworkSimulationMode.FAST,
+                function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 
 # experiment_list = [e2]

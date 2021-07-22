@@ -221,7 +221,7 @@ class AverageQueueFaasRequestScaler:
 
 
 class ManualSetScaler:
-    def __init__(self, fn: FunctionDeployment, env: Environment, node_deploymenet_ratio: float = 0.25):
+    def __init__(self, fn: FunctionDeployment, env: Environment, node_deploymenet_ratio: float = 0.1): #changed from 0.25
         self.env = env
         self.function_invocations = dict()
         self.threshold = fn.scaling_config.target_average_rps

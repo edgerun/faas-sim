@@ -119,28 +119,9 @@ def run_experiment(experiment: Experiment) -> Result:
 
     env.container_registry = ContainerRegistry()
 
-    #
-    print(lb_nodes)
-    print(wrapper_lb)
-
-    predicates = []
-    predicates.extend(Scheduler.default_predicates)
-    predicates.extend([
-        CanRunPred(fet_oracle, resource_oracle),
-        NodeHasAcceleratorPred(),
-        NodeHasFreeGpu(),
-        NodeHasFreeTpu()
-    ])
-    priorities = vanilla.get_priorities()
-    sched_params = {
-        'percentage_of_nodes_to_score': 100,
-        'priorities': priorities,
-        'predicates': predicates
-    }
-
     # env.storage_index = storage_index
     env.cluster = SimulationClusterContext(env)
-    env.scheduler = Scheduler(env.cluster, **sched_params)
+    env.scheduler = experiment.function_scheduler_factory.create(env)
 
     sim = Simulation(env.topology, benchmark, env=env)
     start = time.time()

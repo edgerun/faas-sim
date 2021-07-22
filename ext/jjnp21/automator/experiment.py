@@ -4,6 +4,7 @@ from pandas import DataFrame
 
 from ext.jjnp21.automator.factories.benchmark import BenchmarkFactory
 from ext.jjnp21.automator.factories.faas import FaaSFactory
+from ext.jjnp21.automator.factories.function_scheduler import FunctionSchedulerFactory, DefaultFunctionSchedulerFactory
 from ext.jjnp21.automator.factories.topology import TopologyFactory
 from ext.jjnp21.localized_lb_system import NetworkSimulationMode
 
@@ -26,6 +27,7 @@ class ClientPlacementStrategy(Enum):
     NONE = 1
     UNIFORM_RANDOM = 2
 
+
 class FunctionScalingStrategy(Enum):
     CUSTOM_STATIC = 1
     AVG_REQUEST_RATE = 2
@@ -42,6 +44,7 @@ class Experiment:
     lb_placement_strategy: LoadBalancerPlacementStrategy
     client_lb_resolving_strategy: ClientLoadBalancerResolvingStrategy
     client_placement_strategy: ClientPlacementStrategy
+    function_scheduler_factory: FunctionSchedulerFactory = DefaultFunctionSchedulerFactory()
     function_scaling_strategy: FunctionScalingStrategy = FunctionScalingStrategy.CUSTOM_STATIC
     friendly_name: str = '-'
     net_mode: NetworkSimulationMode = NetworkSimulationMode.ACCURATE
@@ -67,5 +70,3 @@ class Result:
 
     def __init__(self):
         pass
-
-

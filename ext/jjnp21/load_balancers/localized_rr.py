@@ -16,6 +16,7 @@ class LocalizedRoundRobinLoadBalancer(RoundRobinLoadBalancer):
         return super().next_replica(request)
 
 
+# TODO: Clean up this wrapper
 class LocalizedRRLBWrapper(LoadBalancer):
     def __init__(self, load_balancers: List[LocalizedRoundRobinLoadBalancer]):
         self.load_balancers = load_balancers

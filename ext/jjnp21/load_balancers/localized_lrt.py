@@ -18,6 +18,7 @@ class LocalizedLeastResponseTimeLoadBalancer(LeastResponseTimeLoadBalancer):
         return super().next_replica(request)
 
 
+# TODO: Clean up this wrapper
 class LocalizedLRTLBWrapper(LoadBalancer):
     def __init__(self, load_balancers: List[LocalizedLeastResponseTimeLoadBalancer], env: Environment):
         self.load_balancers = load_balancers
