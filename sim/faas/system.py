@@ -40,7 +40,7 @@ class DefaultFaasSystem(FaasSystem):
 
         self.functions_deployments: Dict[str, FunctionDeployment] = dict()
         self.replica_count: Dict[str, int] = dict()
-        self.functions_definitions = Counter()
+        self.functions_definitions = Counter() # I'm not sure what this does. To the best of my knowledge it tracks the number of intstances of an IMAGE, not a function
 
         self.scale_by_requests = scale_by_requests
         self.scale_static = scale_static

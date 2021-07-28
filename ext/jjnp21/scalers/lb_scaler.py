@@ -1,5 +1,7 @@
 import abc
 
+from sim.core import Environment
+
 
 class LoadBalancerScaler(abc.ABC):
 

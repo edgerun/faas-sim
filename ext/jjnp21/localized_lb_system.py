@@ -1,14 +1,22 @@
+import abc
 import logging
 import random
+from collections import defaultdict, Counter
 from enum import Enum
+from typing import List, Dict
 
+from ext.jjnp21.automator.factories.lb_scaler import LoadBalancerScalerFactory
+from ext.jjnp21.core import LoadBalancerDeployment, LoadBalancerReplica
 from ext.jjnp21.ether_customization.custom_ether import UninterruptingFlow
 from ext.jjnp21.load_balancers.lrt import LeastResponseTimeLoadBalancer
+from ext.jjnp21.scalers.lb_scaler import LoadBalancerScaler
 from ext.jjnp21.topology import get_client_nodes
 from sim.core import Environment
-from sim.faas import DefaultFaasSystem, FunctionRequest, FunctionState, LoadBalancer, FunctionReplica
+from sim.faas import DefaultFaasSystem, FunctionRequest, FunctionState, LoadBalancer, FunctionReplica, \
+    FunctionDeployment, FunctionContainer
 from sim.faas.system import simulate_function_invocation
 from sim.net import SafeFlow
+import simpy
 
 logger = logging.getLogger(__name__)
 
@@ -20,12 +28,127 @@ class NetworkSimulationMode(Enum):
 
 class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
 
-    def scale_up_lb(self, lb_name: str, add_count: int):
+    def __init__(self, env: Environment, lb_scaler_factory: LoadBalancerScalerFactory,
+                 scale_by_requests: bool = False,
+                 scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
+                 scale_static: bool = False):
+        super().__init__(env, scale_by_requests, scale_by_average_requests, scale_by_queue_requests_per_replica, scale_static=scale_static)
+        self.lb_deployments: Dict[str, LoadBalancerDeployment] = {}
+        # todo get LB scaler factory
+        self.lb_scaler_factory: LoadBalancerScalerFactory = lb_scaler_factory
+        self.lb_scalers: Dict[str, LoadBalancerScaler] = {}
+        self.lb_replicas: Dict[str, List[LoadBalancerReplica]] = defaultdict(list)
+        self.lb_scheduler_queue = simpy.Store(env)
+        self.lb_replica_count = Counter()
+        self.lb_replica_per_image_count = Counter()
+
+    def get_load_balancer(self, request: FunctionRequest) -> LoadBalancer:
+        """
+        Returns a load-balancer instance to be used for handling the passed reuqest
+        @param request: the request for which you want to get a lb-instance
+        @return: a valid LB instance for the request
+        """
         pass
+
+    def get_lb_replicas(self, lb_name: str, state=None) -> List[LoadBalancerReplica]:
+        """
+        Returns replicas for a given function, optionally filtered by state
+        @param lb_name: the load-balancer name for which a replica should be retrieved
+        @param state: optional. The state by which should be filtered (e.g. only running replicas)
+        @return: A list of load balancer replicas, optionally matching the passed state
+        """
+        if state is None:
+            return self.lb_replicas[lb_name]
+        return [r for r in self.lb_replicas[lb_name] if r.state == state]
+
+    def get_lb_deployments(self) -> List[FunctionDeployment]:
+        return list(self.lb_deployments.values())
+
+    def deploy_lb(self, ld: LoadBalancerDeployment):
+        if ld.name in self.lb_deployments:
+            raise ValueError('LB function already present')
+        self.lb_deployments[ld.name] = ld
+        # set up scaler
+        scaler = self.lb_scaler_factory.create(ld, self.env)
+        self.lb_scalers[ld.name] = scaler
+        self.env.process(self.lb_scalers[ld.name].run())
+        # not using yet, since I don't know what it does at all.
+        # for f in ld.fn_containers:
+            # self.function_containers[f.image] = f
+        self.env.metrics.log_function_deployment(ld)
+        self.env.metrics.log_function_deployment_lifecycle(ld, 'deploy')
+        logger.info('deploying function %s with scale_min=%d', ld.name, ld.scaling_config.scale_min)
+        yield from self.scale_up_lb(ld.name, ld.scaling_config.scale_min)
+
+    def deploy_lb_replica(self, fd: FunctionDeployment, fn: FunctionContainer):
+        replica = self.create_lb_replica(fd, fn)
+        self.lb_replicas[fd.name].append(replica)
+        self.env.metrics.log_queue_schedule(replica)
+        self.env.metrics.log_function_replica(replica)
+        yield self.lb_scheduler_queue.put(replica)
+
+    def scale_up_lb(self, lb_name: str, add_count: int):
+        ld = self.lb_deployments[lb_name]
+        scaling_config = ld.scaling_config
+        ranking = ld.ranking
+        corrected_add_count = add_count
+
+        if self.lb_replica_count.get(lb_name, None) is None:
+            self.lb_replica_count[lb_name] = 0
+        if self.replica_count[lb_name] >= scaling_config.scale_max:
+            logger.debug('Load balancer %s wanted to scale up, but maximum number of replicas reached', lb_name)
+            return
+        if self.replica_count[lb_name] + add_count > scaling_config.scale_max:
+            corrected_add_count = scaling_config.scale_max - self.replica_count[lb_name]
+            logger.debug('Load balancer %s wanted to scale by %d replicas. To not exceed the configured maximum it will'
+                         'only scale up by %d replicas instead.' % (lb_name, add_count, corrected_add_count))
+
+        added_replica_count = 0
+        for index, service in enumerate(ld.get_services()):
+            # the different "services" here are all the same function just different images for the different
+            # architectures and accelerators, e.g. TPU, GPU, x86, aarch64, etc.
+            remaining_add_count = corrected_add_count - added_replica_count
+            # If we added the required number of replicas, return
+            if remaining_add_count + added_replica_count > corrected_add_count:
+                print('test-statement') # todo remove this if block. If all works correctly it should be unreachable
+                return
+            max_allowed_replicas = int(ranking.function_factor[service.image] * scaling_config.scale_max)
+            # Check if this would spawn more instances than allowed for that image according to the function_factor
+            if max_allowed_replicas < remaining_add_count + self.lb_replica_per_image_count[service.image]:
+                remaining_add_count = max_allowed_replicas - self.lb_replica_per_image_count[service.image]
+            for _ in range(remaining_add_count):
+                yield from self.deploy_replica(ld, ld.get_container(service.image), ld.get_containers()[index:])
+                added_replica_count += 1
 
     def scale_down_lb(self, lb_name: str, remove_count: int):
+        current_replica_count = len(self.get_lb_replicas(lb_name, state=FunctionState.RUNNING))
+        scale_min = self.lb_deployments[lb_name].scaling_config.scale_min
+        # if remove_count > current_replica_count -> remove_count = current_replica_count
+        if current_replica_count - remove_count < scale_min:
+            remove_count = current_replica_count - scale_min
+        logger.info(f'scale down {lb_name} by {remove_count}')
+        self.env.metrics.log_scaling(lb_name, -remove_count)
+        replicas_to_remove = self.choose_lb_replicas_to_remove(lb_name, remove_count)
+        for r in replicas_to_remove:
+            self.remove_lb_replica(r)
+
+    def choose_lb_replicas_to_remove(self, lb_name: str, cnt: int):
+        running_replicas = self.get_lb_replicas(lb_name, FunctionState.RUNNING)
+        return running_replicas[len(running_replicas) - cnt:]
+
+    def create_lb_replica(self, fd: FunctionDeployment, fn: FunctionContainer) -> FunctionReplica:
+        replica = FunctionReplica()
+        # todo use the LB specific stuff here. Not added yet.
+        replica.function = fd
+        replica.container = fn
+        replica.pod = self.create_pod(fd, fn)
+        return replica
+
+    def remove_lb_replica(self, replica: LoadBalancerReplica):
         pass
 
+    def run_lb_scheduler_worker(self):
+        pass
 
 class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
     def __init__(self, env: Environment, scale_by_requests: bool = False,
