@@ -72,9 +72,9 @@ def run_experiment(experiment: Experiment) -> Result:
         'scale_static': experiment.function_scaling_strategy == FunctionScalingStrategy.CUSTOM_STATIC,
         'net_mode': experiment.net_mode,
     }
-    experiment.faas_factory.set_constructor_args(**faas_kwargs)
+    experiment.faas_system_factory.set_constructor_args(**faas_kwargs)
 
-    faas = experiment.faas_factory.create(env)
+    faas = experiment.faas_system_factory.create(env)
     env.faas = faas
 
     # Load balancer shenanigans

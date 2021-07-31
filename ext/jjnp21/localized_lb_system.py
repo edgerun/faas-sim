@@ -1,9 +1,12 @@
-import abc
+import itertools
+import itertools
 import logging
 import random
 from collections import defaultdict, Counter
 from enum import Enum
 from typing import List, Dict
+
+import simpy
 
 from ext.jjnp21.automator.factories.lb_scaler import LoadBalancerScalerFactory
 from ext.jjnp21.core import LoadBalancerDeployment, LoadBalancerReplica
@@ -16,7 +19,6 @@ from sim.faas import DefaultFaasSystem, FunctionRequest, FunctionState, LoadBala
     FunctionDeployment, FunctionContainer
 from sim.faas.system import simulate_function_invocation
 from sim.net import SafeFlow
-import simpy
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +34,8 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
                  scale_by_requests: bool = False,
                  scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
                  scale_static: bool = False):
-        super().__init__(env, scale_by_requests, scale_by_average_requests, scale_by_queue_requests_per_replica, scale_static=scale_static)
+        super().__init__(env, scale_by_requests, scale_by_average_requests, scale_by_queue_requests_per_replica,
+                         scale_static=scale_static)
         self.lb_deployments: Dict[str, LoadBalancerDeployment] = {}
         # todo get LB scaler factory
         self.lb_scaler_factory: LoadBalancerScalerFactory = lb_scaler_factory
@@ -42,13 +45,33 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         self.lb_replica_count = Counter()
         self.lb_replica_per_image_count = Counter()
 
+    def poll_available_faas_replica(self, fn: str = None, interval=0.5):
+        if fn is not None:
+            while not self.get_lb_replicas(fn, FunctionState.RUNNING):
+                yield self.env.timeout(interval)
+        else:
+            while not self.get_all_lb_replicas(state=FunctionState.RUNNING):
+                yield self.env.timeout(interval)
+
     def get_load_balancer(self, request: FunctionRequest) -> LoadBalancer:
         """
-        Returns a load-balancer instance to be used for handling the passed reuqest
+        Returns a load-balancer instance to be used for handling the passed request
         @param request: the request for which you want to get a lb-instance
         @return: a valid LB instance for the request
         """
-        pass
+        # this is currently simply a random choice between all replicas
+        all_replicas = self.get_all_lb_replicas(state=FunctionState.RUNNING)
+        return random.choice(all_replicas).load_balancer
+
+    def get_all_lb_replicas(self, state: FunctionState = None) -> List[LoadBalancerReplica]:
+        """
+        returns all load-balancer replicas, optionally filtered to match a statte
+        @param state: optional. the state the returned replicas should have
+        @return: a list of lb replicas
+        """
+        if state is None:
+            return list(itertools.chain.from_iterable(self.lb_replicas.values()))
+        return list(filter(lambda r: r.state == state, itertools.chain.from_iterable(self.lb_replicas.values())))
 
     def get_lb_replicas(self, lb_name: str, state=None) -> List[LoadBalancerReplica]:
         """
@@ -74,7 +97,7 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         self.env.process(self.lb_scalers[ld.name].run())
         # not using yet, since I don't know what it does at all.
         # for f in ld.fn_containers:
-            # self.function_containers[f.image] = f
+        # self.function_containers[f.image] = f
         self.env.metrics.log_function_deployment(ld)
         self.env.metrics.log_function_deployment_lifecycle(ld, 'deploy')
         logger.info('deploying function %s with scale_min=%d', ld.name, ld.scaling_config.scale_min)
@@ -110,7 +133,7 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
             remaining_add_count = corrected_add_count - added_replica_count
             # If we added the required number of replicas, return
             if remaining_add_count + added_replica_count > corrected_add_count:
-                print('test-statement') # todo remove this if block. If all works correctly it should be unreachable
+                print('test-statement')  # todo remove this if block. If all works correctly it should be unreachable
                 return
             max_allowed_replicas = int(ranking.function_factor[service.image] * scaling_config.scale_max)
             # Check if this would spawn more instances than allowed for that image according to the function_factor
@@ -133,22 +156,39 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
             self.remove_lb_replica(r)
 
     def choose_lb_replicas_to_remove(self, lb_name: str, cnt: int):
+        # currently the most recently added ones are being removed. This will be replaced with proper implementations
         running_replicas = self.get_lb_replicas(lb_name, FunctionState.RUNNING)
         return running_replicas[len(running_replicas) - cnt:]
 
-    def create_lb_replica(self, fd: FunctionDeployment, fn: FunctionContainer) -> FunctionReplica:
-        replica = FunctionReplica()
+    def create_lb_replica(self, ld: LoadBalancerDeployment, fn: FunctionContainer) -> LoadBalancerReplica:
+        replica = LoadBalancerReplica()
         # todo use the LB specific stuff here. Not added yet.
-        replica.function = fd
+        replica.function = ld
         replica.container = fn
-        replica.pod = self.create_pod(fd, fn)
+        replica.load_balancer = ld.create_load_balancer(self.env)
+        replica.pod = self.create_pod(ld, fn)
         return replica
 
     def remove_lb_replica(self, replica: LoadBalancerReplica):
-        pass
+        node = replica.node.skippy_node
+        self.env.metrics.log_teardown(replica)
+        # simulates time it takes for the container to stop -> should be max 10 seconds before kube kills it
+        yield from replica.simulator.teardown(self.env, replica)
+
+        self.env.cluster.remove_pod_from_node(replica.pod, node)
+        replica.state = FunctionState.SUSPENDED
+        self.lb_replicas[replica.function.name].remove(replica)
+        self.env.metrics.log('allocation', {
+            'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+            'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+        }, node=node.name)
+
+        self.lb_replica_count[replica.fn_name] -= 1
+        self.lb_replica_per_image_count[replica.image] -= 1
 
     def run_lb_scheduler_worker(self):
         pass
+
 
 class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
     def __init__(self, env: Environment, scale_by_requests: bool = False,

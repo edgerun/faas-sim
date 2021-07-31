@@ -5,6 +5,8 @@ from pandas import DataFrame
 from ext.jjnp21.automator.factories.benchmark import BenchmarkFactory
 from ext.jjnp21.automator.factories.faas import FaaSFactory
 from ext.jjnp21.automator.factories.function_scheduler import FunctionSchedulerFactory, DefaultFunctionSchedulerFactory
+from ext.jjnp21.automator.factories.lb_scaler import LoadBalancerScalerFactory
+from ext.jjnp21.automator.factories.lb_scheduler import LoadBalancerSchedulerFactory
 from ext.jjnp21.automator.factories.topology import TopologyFactory
 from ext.jjnp21.localized_lb_system import NetworkSimulationMode
 
@@ -39,13 +41,16 @@ class Experiment:
     name: str
     topology_factory: TopologyFactory
     benchmark_factory: BenchmarkFactory
-    faas_factory: FaaSFactory
+    faas_system_factory: FaaSFactory
     lb_type: LoadBalancerType
     lb_placement_strategy: LoadBalancerPlacementStrategy
     client_lb_resolving_strategy: ClientLoadBalancerResolvingStrategy
     client_placement_strategy: ClientPlacementStrategy
+    lb_scheduler_factory: LoadBalancerSchedulerFactory
+    lb_scaler_facotry: LoadBalancerScalerFactory
     function_scheduler_factory: FunctionSchedulerFactory = DefaultFunctionSchedulerFactory()
     function_scaling_strategy: FunctionScalingStrategy = FunctionScalingStrategy.CUSTOM_STATIC
+
     friendly_name: str = '-'
     net_mode: NetworkSimulationMode = NetworkSimulationMode.ACCURATE
     seed: int = 42
