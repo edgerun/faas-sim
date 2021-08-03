@@ -5,6 +5,7 @@ from ext.jjnp21.deployments.lrt_lb import LRTLoadBalancerDeployment, RRLoadBalan
 from ext.jjnp21.localized_lb_system import LoadBalancerCapableFaasSystem
 from ext.raith21.benchmark.constant import ConstantBenchmark
 from ext.jjnp21.misc.images import all_lb_images
+from sim.benchmark import BenchmarkBase
 from sim.core import Environment
 
 class LoadBalancerConstant(ConstantBenchmark):
@@ -30,7 +31,9 @@ class LoadBalancerConstant(ConstantBenchmark):
         # wait until one replica of each load balancer deployment is running
         for ld in self.lb_deployments:
             yield env.process(env.faas.poll_available_lb_replica(ld.name))
-        return super().run(env)
+        # call the supercall run() method to also start the function replicas. note that you MUST use yield from
+        # figuring that out took an hour out of my life...
+        yield from super().run(env)
 
 
     def create_lb_deployments_for_profile(self, profile: str) -> List[LoadBalancerDeployment]:
