@@ -71,6 +71,7 @@ def run_experiment(experiment: Experiment) -> Result:
         'scale_by_queue_requests_per_replica': experiment.function_scaling_strategy == FunctionScalingStrategy.AVG_QUEUE_LENGTH,
         'scale_static': experiment.function_scaling_strategy == FunctionScalingStrategy.CUSTOM_STATIC,
         'net_mode': experiment.net_mode,
+        'lb_scaler_factory': experiment.lb_scaler_factory
     }
     experiment.faas_system_factory.set_constructor_args(**faas_kwargs)
 
@@ -122,6 +123,9 @@ def run_experiment(experiment: Experiment) -> Result:
     # env.storage_index = storage_index
     env.cluster = SimulationClusterContext(env)
     env.scheduler = experiment.function_scheduler_factory.create(env)
+
+    # lb-scheduler things
+    env.lb_scheduler = experiment.lb_scheduler_factory.create(env)
 
     sim = Simulation(env.topology, benchmark, env=env)
     start = time.time()

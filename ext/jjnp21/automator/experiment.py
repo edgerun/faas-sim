@@ -47,7 +47,7 @@ class Experiment:
     client_lb_resolving_strategy: ClientLoadBalancerResolvingStrategy
     client_placement_strategy: ClientPlacementStrategy
     lb_scheduler_factory: LoadBalancerSchedulerFactory
-    lb_scaler_facotry: LoadBalancerScalerFactory
+    lb_scaler_factory: LoadBalancerScalerFactory
     function_scheduler_factory: FunctionSchedulerFactory = DefaultFunctionSchedulerFactory()
     function_scaling_strategy: FunctionScalingStrategy = FunctionScalingStrategy.CUSTOM_STATIC
 

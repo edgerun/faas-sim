@@ -2,7 +2,7 @@ import logging
 
 from ext.jjnp21.automator.execution import run_experiment
 from ext.jjnp21.automator.experiment import *
-from ext.jjnp21.automator.factories.benchmark import ConstantBenchmarkFactory
+from ext.jjnp21.automator.factories.benchmark import ConstantBenchmarkFactory, LBConstantBenchmarkFactory
 from ext.jjnp21.automator.factories.faas import LocalizedLoadBalancerFaaSFactory
 from ext.jjnp21.automator.factories.function_scheduler import RandomFunctionSchedulerFactory
 from ext.jjnp21.automator.factories.lb_scaler import FractionLoadBalancerScalerFactory
@@ -11,20 +11,19 @@ from ext.jjnp21.debugging.tiny_topology_factory import TinyUrbanSensingTopologyF
 from ext.jjnp21.scalers.fraction_lb_scaler import FractionScaler
 
 logging.basicConfig(level=logging.DEBUG)
-node_count = 100
-rps = 25
-duration = 500
+rps = 10
+duration = 300
 experiment = Experiment('Least Response Time on all nodes',
                         lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
                         lb_placement_strategy=LoadBalancerPlacementStrategy.ALL_NODES,
                         client_lb_resolving_strategy=ClientLoadBalancerResolvingStrategy.LOWEST_PING,
                         client_placement_strategy=ClientPlacementStrategy.NONE,
-                        benchmark_factory=ConstantBenchmarkFactory(rps, duration),
+                        benchmark_factory=LBConstantBenchmarkFactory(rps, duration, 'LRT'),
                         faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
                         net_mode=NetworkSimulationMode.FAST,
                         function_scheduler_factory=RandomFunctionSchedulerFactory(),
                         topology_factory=TinyUrbanSensingTopologyFactory(client_ratio=1, node_count=20),
-                        lb_scaler_facotry=FractionLoadBalancerScalerFactory(target_fraction=1.0),
+                        lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1.0),
                         lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory())
 
 

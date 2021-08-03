@@ -1,6 +1,6 @@
 from typing import Dict, List, Generator, Tuple
 
-from ext.jjnp21.localized_lb_system import LoadBalancerCapableFaasSystem
+# from ext.jjnp21.localized_lb_system import LoadBalancerCapableFaasSystem
 from sim.benchmark import BenchmarkBase
 from sim.core import Environment
 from sim.faas import FunctionDeployment, FunctionReplica, LoadBalancer
@@ -15,6 +15,7 @@ class LoadBalancerReplica(FunctionReplica):
     load_balancer: LoadBalancer = None
 
 
+# todo: remove, as this implementation is incomplete, and barely useful
 class LBBenchmark(BenchmarkBase):
     def __init__(self, images: List[Tuple[str, str, str]], deployments: List[FunctionDeployment],
                  arrival_profiles: Dict[str, Generator], lb_deployments: List[LoadBalancerDeployment]):
@@ -29,15 +30,16 @@ class LBBenchmark(BenchmarkBase):
         return lb_deployments_per_name
 
     def run(self, env: Environment):
-        if not isinstance(env.faas, LoadBalancerCapableFaasSystem):
-            raise Exception(
-                'Used a load-balancer enabled benchmark with a faas-system, that does not support load-balancing. '
-                'Please use a load balancer capable faas-system instead.')
-        faas: LoadBalancerCapableFaasSystem = env.faas
+        # todo see if we can't re-add this
+        # if not isinstance(env.faas, LoadBalancerCapableFaasSystem):
+        #     raise Exception(
+        #         'Used a load-balancer enabled benchmark with a faas-system, that does not support load-balancing. '
+        #         'Please use a load balancer capable faas-system instead.')
+        faas = env.faas
         # deploy all load-balancers
         for ld in self.lb_deployments:
             yield from faas.deploy_lb(ld)
         # wait until one replica of each load balancer deployment is running
         for ld in self.lb_deployments:
-            yield env.process(faas.poll_available_faas_replica(ld.name))
+            yield env.process(faas.poll_available_lb_replica(ld.name))
         super().run(env)

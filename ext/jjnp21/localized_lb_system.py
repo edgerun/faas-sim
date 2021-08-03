@@ -1,7 +1,7 @@
 import itertools
-import itertools
 import logging
 import random
+import time
 from collections import defaultdict, Counter
 from enum import Enum
 from typing import List, Dict
@@ -16,8 +16,8 @@ from ext.jjnp21.scalers.lb_scaler import LoadBalancerScaler
 from ext.jjnp21.topology import get_client_nodes
 from sim.core import Environment
 from sim.faas import DefaultFaasSystem, FunctionRequest, FunctionState, LoadBalancer, FunctionReplica, \
-    FunctionDeployment, FunctionContainer
-from sim.faas.system import simulate_function_invocation
+    FunctionDeployment, FunctionContainer, FunctionSimulator
+from sim.faas.system import simulate_function_invocation, simulate_function_start
 from sim.net import SafeFlow
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,11 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         self.lb_replica_count = Counter()
         self.lb_replica_per_image_count = Counter()
 
-    def poll_available_faas_replica(self, fn: str = None, interval=0.5):
+    def start(self):
+        self.env.process(self.run_lb_scheduler_worker())
+        super().start()
+
+    def poll_available_lb_replica(self, fn: str = None, interval=0.5):
         if fn is not None:
             while not self.get_lb_replicas(fn, FunctionState.RUNNING):
                 yield self.env.timeout(interval)
@@ -103,12 +107,12 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         logger.info('deploying function %s with scale_min=%d', ld.name, ld.scaling_config.scale_min)
         yield from self.scale_up_lb(ld.name, ld.scaling_config.scale_min)
 
-    def deploy_lb_replica(self, fd: FunctionDeployment, fn: FunctionContainer):
+    def deploy_lb_replica(self, fd: FunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer]):
         replica = self.create_lb_replica(fd, fn)
         self.lb_replicas[fd.name].append(replica)
         self.env.metrics.log_queue_schedule(replica)
         self.env.metrics.log_function_replica(replica)
-        yield self.lb_scheduler_queue.put(replica)
+        yield self.lb_scheduler_queue.put((replica, services))
 
     def scale_up_lb(self, lb_name: str, add_count: int):
         ld = self.lb_deployments[lb_name]
@@ -118,11 +122,11 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
 
         if self.lb_replica_count.get(lb_name, None) is None:
             self.lb_replica_count[lb_name] = 0
-        if self.replica_count[lb_name] >= scaling_config.scale_max:
+        if self.lb_replica_count[lb_name] >= scaling_config.scale_max:
             logger.debug('Load balancer %s wanted to scale up, but maximum number of replicas reached', lb_name)
             return
-        if self.replica_count[lb_name] + add_count > scaling_config.scale_max:
-            corrected_add_count = scaling_config.scale_max - self.replica_count[lb_name]
+        if self.lb_replica_count[lb_name] + add_count > scaling_config.scale_max:
+            corrected_add_count = scaling_config.scale_max - self.lb_replica_count[lb_name]
             logger.debug('Load balancer %s wanted to scale by %d replicas. To not exceed the configured maximum it will'
                          'only scale up by %d replicas instead.' % (lb_name, add_count, corrected_add_count))
 
@@ -140,7 +144,8 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
             if max_allowed_replicas < remaining_add_count + self.lb_replica_per_image_count[service.image]:
                 remaining_add_count = max_allowed_replicas - self.lb_replica_per_image_count[service.image]
             for _ in range(remaining_add_count):
-                yield from self.deploy_replica(ld, ld.get_container(service.image), ld.get_containers()[index:])
+                # yield from self.deploy_lb_replica(ld, ld.get_container(service.image))
+                yield from self.deploy_lb_replica(ld, ld.get_container(service.image), ld.get_containers()[index:])
                 added_replica_count += 1
 
     def scale_down_lb(self, lb_name: str, remove_count: int):
@@ -165,7 +170,10 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         # todo use the LB specific stuff here. Not added yet.
         replica.function = ld
         replica.container = fn
-        replica.load_balancer = ld.create_load_balancer(self.env)
+        replica.load_balancer = ld.create_load_balancer(self.env, self.replicas)
+        # todo: replace this simulator with one that uses proper values
+        # Think about potentially moving the simulator creation somewhere else. The current way is kind of messy imo
+        replica.simulator = FunctionSimulator()
         replica.pod = self.create_pod(ld, fn)
         return replica
 
@@ -187,15 +195,57 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         self.lb_replica_per_image_count[replica.image] -= 1
 
     def run_lb_scheduler_worker(self):
-        pass
+        while True:
+            replica: LoadBalancerReplica
+            replica, services = yield self.lb_scheduler_queue.get()
+            logger.debug(f'scheduling next lb replica: {replica.function.name}')
+
+            self.env.metrics.log_start_schedule(replica)
+            pod = replica.pod
+            then = time.time()
+            result = self.env.lb_scheduler.schedule(pod)
+            duration = time.time() - then
+            self.env.metrics.log_finish_schedule(replica, result)
+
+            yield self.env.timeout(duration)
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
+
+            if not result.suggested_host:
+                self.replicas[replica.fn_name].remove(replica)
+                if len(services) > 0:
+                    logger.warning('retry scheduling pod %s', pod.name)
+                    yield from self.deploy_replica(replica.function, services[0], services[1:])
+                else:
+                    logger.error('pod %s cannot be scheduled', pod.name)
+
+                continue
+
+            logger.info('pod %s was scheduled to %s', pod.name, result.suggested_host)
+
+            replica.node = self.env.get_node_state(result.suggested_host.name)
+            node = replica.node.skippy_node
+
+            self.env.metrics.log('allocation', {
+                'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+                'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+            }, node=node.name)
+
+            self.lb_replica_per_image_count[replica.image] += 1
+            self.lb_replica_count[replica.fn_name] += 1
+
+            self.env.metrics.log_function_deploy(replica)
+            # start a new process to simulate starting of pod
+            self.env.process(simulate_function_start(self.env, replica))
 
 
 class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
-    def __init__(self, env: Environment, scale_by_requests: bool = False,
+    def __init__(self, env: Environment, lb_scaler_factory: LoadBalancerScalerFactory = None, scale_by_requests: bool = False,
                  scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
                  scale_static: bool = False, net_mode: NetworkSimulationMode = NetworkSimulationMode.ACCURATE) -> None:
-        super().__init__(env, scale_by_requests, scale_by_average_requests, scale_by_queue_requests_per_replica,
-                         scale_static=scale_static)
+        super().__init__(env, lb_scaler_factory, scale_by_requests, scale_by_average_requests,
+                         scale_by_queue_requests_per_replica, scale_static=scale_static)
         self.client_nodes = get_client_nodes(self.env.topology)
         self.net_mode = net_mode
 
