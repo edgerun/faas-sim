@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 class CentralLoadBalancerScheduler(RandomLoadBalancerScheduler):
-    pass
 
     @staticmethod
     def create(env: Environment, predicates: List[Predicate]) -> LoadBalancerScheduler:

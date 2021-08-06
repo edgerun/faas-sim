@@ -1,6 +1,7 @@
 from typing import Dict, List
 
 from ext.jjnp21.core import LoadBalancerDeployment
+from ext.jjnp21.load_balancers.localized import LocalizedLRT, LocalizedRR
 from ext.jjnp21.load_balancers.lrt import LeastResponseTimeLoadBalancer
 from ext.jjnp21.misc import images
 from sim.core import Environment
@@ -28,8 +29,8 @@ class LRTLoadBalancerDeployment(LoadBalancerDeployment):
         super().__init__(function, [function_container], scaling_config)
 
     def create_load_balancer(self, env: Environment, replicas: Dict[str, List[FunctionReplica]]) -> LoadBalancer:
-        return LeastResponseTimeLoadBalancer(env, replicas, lrt_window=self.lrt_window,
-                                             weight_update_frequency=self.weight_update_frequency)
+        return LocalizedLRT(env, replicas, lrt_window=self.lrt_window,
+                            weight_update_frequency=self.weight_update_frequency)
 
 
 class RRLoadBalancerDeployment(LoadBalancerDeployment):
@@ -46,6 +47,4 @@ class RRLoadBalancerDeployment(LoadBalancerDeployment):
         super().__init__(function, [function_container], scaling_config)
 
     def create_load_balancer(self, env: Environment, replicas: Dict[str, List[FunctionReplica]]) -> LoadBalancer:
-        return RoundRobinLoadBalancer(env, replicas)
-
-
+        return LocalizedRR(env, replicas)

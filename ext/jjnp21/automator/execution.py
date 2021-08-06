@@ -87,36 +87,36 @@ def run_experiment(experiment: Experiment) -> Result:
 
     # topology.connect_load_balancer(central_lb_node)
 
-
-    all_lb_nodes = [node for node in get_non_client_nodes(topology) if isinstance(node, Node) and node.name != 'registry' and not node.name.startswith('internet')]
-
-    lb_nodes = []
-    if experiment.lb_placement_strategy == LoadBalancerPlacementStrategy.ALL_NODES:
-        lb_nodes = all_lb_nodes
-    elif experiment.lb_placement_strategy == LoadBalancerPlacementStrategy.CENTRAL:
-        lb_nodes = [central_lb_node]
-    else:
-        raise Exception('Invalid load balancer placement strategy')
-
-    load_balancers = []
-    if experiment.lb_type == LoadBalancerType.LEAST_RESPONSE_TIME:
-        for node in lb_nodes:
-            load_balancers.append(LocalizedLeastResponseTimeLoadBalancer(env, node, env.faas.replicas))
-    elif experiment.lb_type == LoadBalancerType.ROUND_ROBIN:
-        for node in lb_nodes:
-            load_balancers.append(LocalizedRoundRobinLoadBalancer(env, node, env.faas.replicas))
-    else:
-        raise Exception('Invalid load balancer type')
-
-    wrapper_lb = None
-    if experiment.client_lb_resolving_strategy == ClientLoadBalancerResolvingStrategy.LOWEST_PING:
-        wrapper_lb = LocalizedLRTLBWrapper(load_balancers, env)
-    else:
-        raise Exception('Invalid client load balancer resolution strategy')
-
-    # in case we use a faas-system that allows for custom load balancers
-    if isinstance(env.faas, LocalizedLoadBalancerFaasSystem):
-        env.faas.set_load_balancer(wrapper_lb)
+    # todo: remove this once we are sure that the new system works properly
+    # all_lb_nodes = [node for node in get_non_client_nodes(topology) if isinstance(node, Node) and node.name != 'registry' and not node.name.startswith('internet')]
+    #
+    # lb_nodes = []
+    # if experiment.lb_placement_strategy == LoadBalancerPlacementStrategy.ALL_NODES:
+    #     lb_nodes = all_lb_nodes
+    # elif experiment.lb_placement_strategy == LoadBalancerPlacementStrategy.CENTRAL:
+    #     lb_nodes = [central_lb_node]
+    # else:
+    #     raise Exception('Invalid load balancer placement strategy')
+    #
+    # load_balancers = []
+    # if experiment.lb_type == LoadBalancerType.LEAST_RESPONSE_TIME:
+    #     for node in lb_nodes:
+    #         load_balancers.append(LocalizedLeastResponseTimeLoadBalancer(env, node, env.faas.replicas))
+    # elif experiment.lb_type == LoadBalancerType.ROUND_ROBIN:
+    #     for node in lb_nodes:
+    #         load_balancers.append(LocalizedRoundRobinLoadBalancer(env, node, env.faas.replicas))
+    # else:
+    #     raise Exception('Invalid load balancer type')
+    #
+    # wrapper_lb = None
+    # if experiment.client_lb_resolving_strategy == ClientLoadBalancerResolvingStrategy.LOWEST_PING:
+    #     wrapper_lb = LocalizedLRTLBWrapper(load_balancers, env)
+    # else:
+    #     raise Exception('Invalid client load balancer resolution strategy')
+    #
+    # # in case we use a faas-system that allows for custom load balancers
+    # if isinstance(env.faas, LocalizedLoadBalancerFaasSystem):
+    #     env.faas.set_load_balancer(wrapper_lb)
 
     env.container_registry = ContainerRegistry()
 

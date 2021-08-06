@@ -48,7 +48,7 @@ class LoadBalancerConstant(ConstantBenchmark):
         return [LRTLoadBalancerDeployment()]
 
     def __create_rr_deployments(self) -> List[LoadBalancerDeployment]:
-        raise [RRLoadBalancerDeployment()]
+        return [RRLoadBalancerDeployment()]
 
 
 

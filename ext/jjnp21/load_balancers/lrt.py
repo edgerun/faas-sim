@@ -1,6 +1,7 @@
 import random
 from collections import Counter
 from typing import Dict, List, Optional
+
 from sim.core import Environment, NodeState
 from sim.faas import LoadBalancer, FunctionReplica, FunctionState
 # from osmotic.system.faas import FunctionRequest
@@ -76,6 +77,7 @@ class WeightedRoundRobinProvider:
         w = int(round(statistics.median(list(self.weights.values()))))
         self.weights[replica_id] = w
         self.replicas.append(replica_id)
+        self.n += 1
         self.gcd = self._calculate_gcd()
         self.hit_list[replica_id] = False
 
@@ -89,6 +91,8 @@ class WeightedRoundRobinProvider:
         self.gcd = self._calculate_gcd()
 
     def _set_weights(self, response_times: Dict[int, float]):
+        if len(response_times) < 1:
+            return
         min_weight = min(response_times.values())
         for r_id, rt in response_times.items():
             w = int(round(max(1.0, pow(10 / (rt / min_weight), self.scaling))))

@@ -16,9 +16,10 @@ class FractionScaler(LoadBalancerScaler):
         self.fn_name = fn.name
         self.fn = fn
 
+    # TODO: Check this. there are obviously still errors present
     def run(self):
         env: Environment = self.env
-        faas: FaasSystem = env.faas
+        faas = env.faas
 
         # todo: see if we might not be able to add this anyways
         # if not isinstance(faas, LoadBalancerCapableFaasSystem):
@@ -27,19 +28,20 @@ class FractionScaler(LoadBalancerScaler):
         #         'also cannot use a separate load balancer scaler. Use an appropriate FaasSystem implementation!')
         while self.running:
             yield env.timeout(self.alert_window)
+            print('working...')
             if self.function_invocations.get(self.fn_name, None) is None:
                 self.function_invocations[self.fn_name] = 0
-            running_replicas = faas.get_replicas(self.fn.name, FunctionState.RUNNING)
+            running_replicas = faas.get_lb_replicas(self.fn.name, FunctionState.RUNNING)
             running = len(running_replicas)
             if running == 0:
                 continue
 
-            conceived_replicas = faas.get_replicas(self.fn.name, FunctionState.CONCEIVED)
-            starting_replicas = faas.get_replicas(self.fn.name, FunctionState.STARTING)
+            conceived_replicas = faas.get_lb_replicas(self.fn.name, FunctionState.CONCEIVED)
+            starting_replicas = faas.get_lb_replicas(self.fn.name, FunctionState.STARTING)
 
             node_count = len(get_non_client_nodes(self.env.topology))
             desired_replicas = min(round(node_count * self.target_fraction), self.fn.scaling_config.scale_max)
-
+            print(f'desired scale: {desired_replicas}')
             updated_desired_replicas = desired_replicas
             if len(conceived_replicas) > 0 or len(starting_replicas) > 0:
                 if desired_replicas > len(running_replicas):

@@ -37,6 +37,7 @@ class RaithHeterogeneousUrbanSensingFactory(TopologyFactory):
         city = HeterogeneousUrbanSensingScenario(ether_nodes, storage_index, client_ratio=self.client_ratio)
         city.materialize(topology)
         topology.init_docker_registry()
+        topology.get_load_balancer_node()
         return topology
 
 
@@ -74,6 +75,7 @@ class NationDistributedUrbanSensingFactory(TopologyFactory):
         topology.add_connection(Connection('internet_chicago', 'internet_seattle', latency=55))
         topology.add_connection(Connection('internet_seattle', 'internet_newyork', latency=75))
         topology.init_docker_registry()
+        topology.get_load_balancer_node()
         return topology
 
 
@@ -111,6 +113,7 @@ class GlobalDistributedUrbanSensingFactory(TopologyFactory):
         topology.add_connection(Connection('internet_london', 'internet_sydney', latency=253))
         topology.add_connection(Connection('internet_sydney', 'internet_newyork', latency=204))
         topology.init_docker_registry()
+        topology.get_load_balancer_node()
         return topology
 
 
@@ -138,5 +141,6 @@ class GlobalIndustrialIoTScenario(TopologyFactory):
         topology.add_connection(Connection('internet_nyc', 'internet_stuttgart', latency_dist=latency.business_isp))
         topology.add_connection(Connection('internet_sydney', 'internet_stuttgart', latency_dist=latency.business_isp))
         topology.init_docker_registry()
+        topology.get_load_balancer_node()
 
         return topology
