@@ -1,10 +1,11 @@
+from ext.jjnp21.core import LoadBalancerDeployment
 from ext.jjnp21.scalers.lb_scaler import LoadBalancerScaler
 from sim.core import Environment
 from sim.faas import FunctionDeployment, FaasSystem, FunctionState
 
 
 class ManualSetScaler(LoadBalancerScaler):
-    def __init__(self, fn: FunctionDeployment, env: Environment, target_count: int = 5):
+    def __init__(self, fn: LoadBalancerDeployment, env: Environment, target_count: int = 5):
         self.env = env
         self.function_invocations = dict()
         self.threshold = fn.scaling_config.target_average_rps
@@ -26,13 +27,13 @@ class ManualSetScaler(LoadBalancerScaler):
             yield env.timeout(self.alert_window)
             if self.function_invocations.get(self.fn_name, None) is None:
                 self.function_invocations[self.fn_name] = 0
-            running_replicas = faas.get_replicas(self.fn.name, FunctionState.RUNNING)
+            running_replicas = faas.get_lb_replicas(self.fn.name, FunctionState.RUNNING)
             running = len(running_replicas)
             if running == 0:
                 continue
 
-            conceived_replicas = faas.get_replicas(self.fn.name, FunctionState.CONCEIVED)
-            starting_replicas = faas.get_replicas(self.fn.name, FunctionState.STARTING)
+            conceived_replicas = faas.get_lb_replicas(self.fn.name, FunctionState.CONCEIVED)
+            starting_replicas = faas.get_lb_replicas(self.fn.name, FunctionState.STARTING)
 
             desired_replicas = min(self.target_count, self.fn.scaling_config.scale_max)
 
@@ -49,11 +50,11 @@ class ManualSetScaler(LoadBalancerScaler):
             if desired_replicas < len(running_replicas):
                 # scale down
                 scale = len(running_replicas) - desired_replicas
-                yield from faas.scale_down(self.fn.name, scale)
+                yield from faas.scale_down_lb(self.fn.name, scale)
             else:
                 # scale up
-                scale = desired_replicas - len(running_replicas)
-                yield from faas.scale_up(self.fn.name, scale)
+                scale = updated_desired_replicas - len(running_replicas)
+                yield from faas.scale_up_lb(self.fn.name, scale)
 
     def stop(self):
         self.running = False

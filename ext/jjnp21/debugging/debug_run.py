@@ -18,7 +18,7 @@ from ext.jjnp21.scalers.fraction_lb_scaler import FractionScaler
 import time
 
 logging.basicConfig(level=logging.INFO)
-rps = 2
+rps = 25
 duration = 500
 experiment = Experiment('Least Response Time on all nodes',
                         lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
@@ -97,6 +97,14 @@ e2 = Experiment('Round Robin on all nodes',
 # md = analysis_df.to_markdown()
 # print(md)
 
+start = time.time()
+result = run_experiment(e3)
+end = time.time()
+print(f'Done calculating... E2E runtime: {round(end - start, 2)}s')
+analyzer = BasicResultAnalyzer([result])
+analysis_df = analyzer.basic_kpis()
+md = analysis_df.to_markdown()
+print(md)
 
 experiment_list = [e1, e2, e3, e4]
 automator = ExperimentRunAutomator(experiment_list, worker_count=4)

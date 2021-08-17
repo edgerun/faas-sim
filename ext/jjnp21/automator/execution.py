@@ -3,6 +3,7 @@ import random
 import time
 
 import numpy as np
+import matplotlib.pyplot as plt
 from ext.jjnp21.automator.experiment import *
 from ext.jjnp21.experiments.net_vis import draw_custom
 from ext.jjnp21.load_balancers.localized_lrt import LocalizedLeastResponseTimeLoadBalancer, LocalizedLRTLBWrapper
@@ -51,6 +52,10 @@ def run_experiment(experiment: Experiment) -> Result:
     np.random.seed(experiment.seed)
     logging.basicConfig(level=logging.INFO)
     topology = experiment.topology_factory.create()
+    print('drawing...')
+    draw_custom(topology)
+    plt.show()
+    print('done drawing')
     benchmark = experiment.benchmark_factory.create()
     env = Environment()
     env.topology = topology

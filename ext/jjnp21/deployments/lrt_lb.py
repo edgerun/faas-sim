@@ -9,7 +9,7 @@ from sim.faas import LoadBalancer, FunctionReplica, FunctionImage, Function, Kub
     FunctionContainer, ScalingConfiguration, RoundRobinLoadBalancer
 
 default_scaling_config = ScalingConfiguration()
-default_scaling_config.scale_max = 100
+default_scaling_config.scale_max = 1000
 
 
 class LRTLoadBalancerDeployment(LoadBalancerDeployment):

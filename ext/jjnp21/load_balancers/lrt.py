@@ -22,7 +22,10 @@ class LeastResponseTimeMetricProvider:
     def add_replica(self, replica_id: int):
         self.replicas.append(replica_id)
         self.last_record_timestamps[replica_id] = -1
-        self.rts[replica_id] = float(statistics.median(list(self.rts.values())))
+        if len(self.rts.values()) > 0:
+            self.rts[replica_id] = float(statistics.median(list(self.rts.values())))
+        else:
+            self.rts[replica_id] = 25
 
     def remove_replica(self, replica_id: int):
         self.replicas.remove(replica_id)
@@ -73,8 +76,12 @@ class WeightedRoundRobinProvider:
         return str(self.weights)
 
     def add_replica(self, replica_id: int):
+
         # use the median weight for the added replica. no special reason
-        w = int(round(statistics.median(list(self.weights.values()))))
+        if len(self.weights.values()) > 0:
+            w = int(round(statistics.median(list(self.weights.values()))))
+        else:
+            w = 10
         self.weights[replica_id] = w
         self.replicas.append(replica_id)
         self.n += 1

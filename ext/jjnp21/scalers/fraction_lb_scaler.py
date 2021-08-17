@@ -1,4 +1,5 @@
 # from ext.jjnp21.localized_lb_system import LoadBalancerCapableFaasSystem
+from ext.jjnp21.core import LoadBalancerDeployment
 from ext.jjnp21.scalers.lb_scaler import LoadBalancerScaler
 from ext.jjnp21.topology import get_non_client_nodes
 from sim.core import Environment
@@ -6,10 +7,10 @@ from sim.faas import FunctionDeployment, FaasSystem, FunctionState
 
 
 class FractionScaler(LoadBalancerScaler):
-    def __init__(self, fn: FunctionDeployment, env: Environment, target_fraction: float = 0.1):
+    def __init__(self, fn: LoadBalancerDeployment, env: Environment, target_fraction: float = 0.1):
         self.env = env
-        self.function_invocations = dict()
-        self.threshold = fn.scaling_config.target_average_rps
+        # self.function_invocations = dict()
+        # self.threshold = fn.scaling_config.target_average_rps
         self.alert_window = fn.scaling_config.alert_window
         self.target_fraction = target_fraction
         self.running = True
@@ -29,8 +30,8 @@ class FractionScaler(LoadBalancerScaler):
         while self.running:
             yield env.timeout(self.alert_window)
             print('working...')
-            if self.function_invocations.get(self.fn_name, None) is None:
-                self.function_invocations[self.fn_name] = 0
+            # if self.function_invocations.get(self.fn_name, None) is None:
+            #     self.function_invocations[self.fn_name] = 0
             running_replicas = faas.get_lb_replicas(self.fn.name, FunctionState.RUNNING)
             running = len(running_replicas)
             if running == 0:
@@ -55,11 +56,11 @@ class FractionScaler(LoadBalancerScaler):
             if desired_replicas < len(running_replicas):
                 # scale down
                 scale = len(running_replicas) - desired_replicas
-                yield from faas.scale_down(self.fn.name, scale)
+                yield from faas.scale_down_lb(self.fn.name, scale)
             else:
                 # scale up
-                scale = desired_replicas - len(running_replicas)
-                yield from faas.scale_up(self.fn.name, scale)
+                scale = updated_desired_replicas - len(running_replicas)
+                yield from faas.scale_up_lb(self.fn.name, scale)
 
     def stop(self):
         self.running = False
