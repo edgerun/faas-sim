@@ -29,6 +29,13 @@ class Simulation:
         self.timeout = timeout
         self.name = name
 
+    def interval_logger(self, env: Environment, interval: int = 5):
+        while env.now < self.benchmark.duration:
+            start = time.time()
+            yield env.timeout(interval)
+            dur = time.time() - start
+            logger.info(f'Simulation time: {env.now}. Last interval took {dur} seconds')
+
     def run(self):
         logger.info('initializing simulation, benchmark: %s, topology nodes: %d',
                     type(self.benchmark).__name__, len(self.topology.nodes))
@@ -54,6 +61,10 @@ class Simulation:
 
         logger.info('starting faas system')
         env.faas.start()
+
+        logger.info('starting logger')
+        env.process(self.interval_logger(env))
+
 
         logger.info('starting benchmark process')
         p = env.process(self.benchmark.run(env))

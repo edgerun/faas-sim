@@ -36,6 +36,7 @@ class Topology(ether.topology.Topology):
                 candidates.append(node)
         if len(candidates) == 0:
             lb_node = Node('load-balancer')
+            # lb_node.labels[supports_central_load_balancer] = 'True'
             self.add_node(lb_node)
             self._connect_load_balancer_to_random_internet(lb_node)
             return lb_node

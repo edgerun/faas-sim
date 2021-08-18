@@ -22,4 +22,4 @@ class CentralLoadBalancerScheduler(RandomLoadBalancerScheduler):
         changed_predicates = predicates.copy()
         changed_predicates.append(NoLoadBalancerRunningYet())
         changed_predicates.append(CanHostCentralLoadBalancer())
-        return CentralLoadBalancerScheduler(env.cluster, predicates)
+        return CentralLoadBalancerScheduler(env.cluster, changed_predicates)

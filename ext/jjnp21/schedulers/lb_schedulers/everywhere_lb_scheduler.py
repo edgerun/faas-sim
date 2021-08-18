@@ -29,4 +29,4 @@ class EverywhereLoadBalancerScheduler(RandomLoadBalancerScheduler):
         logger.info('creating "everywhere" load balancer scheduler')
         changed_predicates = predicates.copy()
         changed_predicates.append(NoLoadBalancerRunningYet())
-        return EverywhereLoadBalancerScheduler(env.cluster, predicates)
+        return EverywhereLoadBalancerScheduler(env.cluster, changed_predicates)

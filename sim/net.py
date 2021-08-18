@@ -20,10 +20,7 @@ def SafeFlow(*args, bw_threshold=0.1, **kwargs):
     :return: a flow
     """
     flow = Flow(*args, **kwargs)
-    try:
-        bottleneck = min(flow.route.hops, key=lambda l: l.max_allocatable)
-    except:
-        print('lol')
+    bottleneck = min(flow.route.hops, key=lambda l: l.max_allocatable)
     if bottleneck.max_allocatable <= bw_threshold:
         logger.error('potential for flow %s: %.4f', flow.route, bottleneck.max_allocatable)
         raise LowBandwidthException()
