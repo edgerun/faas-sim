@@ -38,7 +38,6 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         super().__init__(env, scale_by_requests, scale_by_average_requests, scale_by_queue_requests_per_replica,
                          scale_static=scale_static)
         self.lb_deployments: Dict[str, LoadBalancerDeployment] = {}
-        # todo get LB scaler factory
         self.lb_scaler_factory: LoadBalancerScalerFactory = lb_scaler_factory
         self.lb_scalers: Dict[str, LoadBalancerScaler] = {}
         self.lb_replicas: Dict[str, List[LoadBalancerReplica]] = defaultdict(list)
@@ -50,9 +49,6 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
     def start(self):
         self.env.process(self.run_lb_scheduler_worker())
         super().start()
-
-    def _reset_finder(self):
-        self.lb_finder.reset(self.get_all_lb_replicas())
 
     def poll_available_lb_replica(self, fn: str = None, interval=0.5):
         if fn is not None:
@@ -68,12 +64,11 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         @param request: the request for which you want to get a lb-instance
         @return: a valid LB instance for the request
         """
-        # if hasattr(request, 'client_node'):
-        #     return self.lb_finder.get_closest_lb(request.client_node)
+        if hasattr(request, 'client_node'):
+            return self.lb_finder.get_closest_lb(request.client_node).load_balancer
         # this is currently simply a random choice between all replicas
         all_replicas = self.get_all_lb_replicas(state=FunctionState.RUNNING)
         return random.choice(all_replicas).load_balancer
-
 
     def get_all_lb_replicas(self, state: FunctionState = None) -> List[LoadBalancerReplica]:
         """
@@ -167,16 +162,16 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         replicas_to_remove = self.choose_lb_replicas_to_remove(lb_name, remove_count)
         for r in replicas_to_remove:
             self.remove_lb_replica(r)
-        self._reset_finder()
+            self.lb_finder.remove(r)
+        # self._reset_finder()
 
-    def choose_lb_replicas_to_remove(self, lb_name: str, cnt: int):
+    def choose_lb_replicas_to_remove(self, lb_name: str, cnt: int) -> List[LoadBalancerReplica]:
         # currently the most recently added ones are being removed. This will be replaced with proper implementations
         running_replicas = self.get_lb_replicas(lb_name, FunctionState.RUNNING)
         return running_replicas[len(running_replicas) - cnt:]
 
     def create_lb_replica(self, ld: LoadBalancerDeployment, fn: FunctionContainer) -> LoadBalancerReplica:
         replica = LoadBalancerReplica()
-        # todo use the LB specific stuff here. Not added yet.
         replica.function = ld
         replica.container = fn
         replica.load_balancer = ld.create_load_balancer(self.env, self.replicas)
@@ -249,14 +244,21 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
 
             self.env.metrics.log_function_deploy(replica)
             # start a new process to simulate starting of pod
-            self.env.process(simulate_function_start(self.env, replica))
-            self._reset_finder()
+            starting_proc = self.env.process(simulate_function_start(self.env, replica))
 
+            # this notify function is effectively a callback
+            # once the replica is deployed and it's state is RUNNING, it registers the replica with the lb-finder
+            def notify(proc, replica: LoadBalancerReplica):
+                yield proc
+                if replica.state == FunctionState.RUNNING:
+                    self.lb_finder.add(replica)
 
+            self.env.process(notify(starting_proc, replica))
 
 
 class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
-    def __init__(self, env: Environment, lb_scaler_factory: LoadBalancerScalerFactory = None, scale_by_requests: bool = False,
+    def __init__(self, env: Environment, lb_scaler_factory: LoadBalancerScalerFactory = None,
+                 scale_by_requests: bool = False,
                  scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
                  scale_static: bool = False, net_mode: NetworkSimulationMode = NetworkSimulationMode.ACCURATE) -> None:
         super().__init__(env, lb_scaler_factory, scale_by_requests, scale_by_average_requests,
@@ -271,7 +273,6 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
         lb: LoadBalancer = self.get_load_balancer(request)
         request.load_balancer = lb
         return lb.next_replica(request)
-        # return super().next_replica(request)
 
     def invoke(self, request: FunctionRequest):
         # TODO: how to return a FunctionResponse?
@@ -325,7 +326,8 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
         lb_node = 'N/A'
         tx_time_cl_lb = 0
         tx_time_lb_fx = 0
-        if hasattr(request, 'load_balancer') and request.load_balancer is not None and isinstance(request.load_balancer, LocalizedLoadBalancer):
+        if hasattr(request, 'load_balancer') and request.load_balancer is not None and isinstance(request.load_balancer,
+                                                                                                  LocalizedLoadBalancer):
             lb_node = request.load_balancer.ether_node.name
         if hasattr(request, 'client_node') and request.client_node is not None:
             client_node = request.client_node.name
@@ -358,13 +360,16 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
         tx_time_lb_fx = 0
         t_start = self.env.now
 
-        if request.load_balancer is not None and hasattr(request, 'client_node') and isinstance(request.load_balancer, LocalizedLoadBalancer):
+        if request.load_balancer is not None and hasattr(request, 'client_node') and isinstance(request.load_balancer,
+                                                                                                LocalizedLoadBalancer):
             # right now I used 250kb request payload, which should be a small JPG with the added HTTP overhead
             cl_lb_start = self.env.now
-            yield from self.simulate_request_transfer(request.load_balancer.ether_node.name, request.client_node.name, 250)
+            yield from self.simulate_request_transfer(request.load_balancer.ether_node.name, request.client_node.name,
+                                                      250)
             tx_time_cl_lb = self.env.now - cl_lb_start
             lb_fx_start = self.env.now
-            yield from self.simulate_request_transfer(request.load_balancer.ether_node.name, replica.node.ether_node.name,
+            yield from self.simulate_request_transfer(request.load_balancer.ether_node.name,
+                                                      replica.node.ether_node.name,
                                                       250)
             tx_time_lb_fx = self.env.now - lb_fx_start
 

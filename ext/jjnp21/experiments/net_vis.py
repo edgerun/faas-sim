@@ -10,8 +10,8 @@ from ext.jjnp21.topology import client_label
 
 
 def draw_custom(topology):
-    pos = nx.spring_layout(topology, seed=42, iterations=150, k=0.05)  # positions for all nodes
-
+    # pos = nx.spring_layout(topology, seed=42, iterations=150, k=0.05)  # positions for all nodes
+    pos = nx.kamada_kawai_layout(topology)
     # nodes
 
     hosts = [node for node in topology.nodes if isinstance(node, Node) and node.labels.get(client_label, None) is None]
@@ -50,7 +50,7 @@ def draw_custom(topology):
     nx.draw_networkx_nodes(topology, pos,
                            nodelist=clients,
                            node_color='pink',
-                           node_size=800,
+                           node_size=200,
                            alpha=0.8)
 
     nx.draw_networkx_edges(topology, pos, width=1.0, alpha=0.5)

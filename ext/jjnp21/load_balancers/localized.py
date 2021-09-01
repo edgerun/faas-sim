@@ -1,5 +1,6 @@
 import abc
 import statistics
+from collections import defaultdict
 from typing import List, Dict
 
 from ether.core import Node
@@ -18,36 +19,49 @@ class LocalizedLoadBalancer(LoadBalancer, abc.ABC):
 
 
 class ClosestLoadBalancerFinder:
-    def __init__(self, env: Environment, lbs: List[LoadBalancerReplica]):
-        self.lbs = lbs
+    def __init__(self, env: Environment, replicas: List[LoadBalancerReplica]):
+        self.replicas = replicas
         self.env = env
-        self.client_map: Dict[int, LocalizedLoadBalancer] = dict()
+        self.client_map: Dict[Node, (LoadBalancerReplica, float)] = dict()
+        self.count = 0
+        self.ctr = defaultdict(lambda: 0)
 
-    def reset(self, lbs: List[LoadBalancerReplica]):
-        self.lbs = lbs
-        self.client_map = dict()
+    def add(self, new_replica: LoadBalancerReplica):
+        self.replicas.append(new_replica)
+        for node, (_, dist) in self.client_map.items():
+            new_dist = self._distance(node, new_replica)
+            if new_dist < dist:
+                self.client_map[node] = (new_replica, new_dist)
 
-    def _distance(self, client: Node, lb: LocalizedLoadBalancer):
+    def remove(self, del_replica: LoadBalancerReplica):
+        for node, (replica, _) in self.client_map.items():
+            if replica == del_replica:
+                del self.client_map[node]
+        self.replicas.remove(del_replica)
+
+    def _distance(self, client: Node, replica: LoadBalancerReplica):
         samples = []
         for _ in range(10):
-            samples.append(self.env.topology.latency(client, lb.ether_node))
+            samples.append(self.env.topology.latency(client, replica.node.ether_node))
         return statistics.mean(samples)
 
-    def _find_closest_lb(self, client: Node) -> LocalizedLoadBalancer:
+    def _find_closest_lb(self, client: Node) -> (LoadBalancerReplica, float):
         min_dist_lb = None
         min_dist = 100000000000
-        for lb in self.lbs:
-            if not isinstance(lb.load_balancer, LocalizedLoadBalancer):
+        for replica in self.replicas:
+            if not isinstance(replica, LoadBalancerReplica):
                 continue
-            if min_dist_lb is None or self._distance(client, lb.load_balancer) < min_dist:
-                min_dist = self._distance(client, lb.load_balancer)
-                min_dist_lb = lb.load_balancer
-        return min_dist_lb
+            if min_dist_lb is None or self._distance(client, replica) < min_dist:
+                min_dist = self._distance(client, replica)
+                min_dist_lb = replica
+        return min_dist_lb, min_dist
 
-    def get_closest_lb(self, client_node: Node):
-        if self.client_map.get(id(client_node)) is None:
-            self.client_map[id(client_node)] = self._find_closest_lb(client_node)
-        return self.client_map[id(client_node)]
+    def get_closest_lb(self, client_node: Node) -> LoadBalancerReplica:
+        self.count += 1
+        if self.client_map.get(client_node) is None:
+            self.client_map[client_node] = self._find_closest_lb(client_node)
+        self.ctr[self.client_map[client_node][0]] += 1
+        return self.client_map[client_node][0]
 
 
 class LocalizedLRT(LeastResponseTimeLoadBalancer, LocalizedLoadBalancer):

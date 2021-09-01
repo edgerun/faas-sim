@@ -1,10 +1,12 @@
 import os
+import logging
 from typing import List
-
+import time
 from ext.jjnp21.automator.execution import run_experiment
 from ext.jjnp21.automator.experiment import Experiment, Result
 from multiprocessing import Queue, Process, JoinableQueue
 
+logger = logging.getLogger(__name__)
 
 class ExperimentWorker(Process):
     def __init__(self, task_queue: JoinableQueue, result_queue: Queue):
@@ -18,7 +20,11 @@ class ExperimentWorker(Process):
             if next_task is None:
                 self.task_queue.task_done()
                 break
+            logger.warning(f'Starting task: {next_task.experiment.name}')
+            start = time.time()
             result = next_task()
+            end = time.time()
+            logger.warning(f'Completed task {next_task.experiment.name} in {end - start} seconds')
             self.task_queue.task_done()
             self.result_queue.put(result)
 

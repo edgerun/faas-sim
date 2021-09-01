@@ -44,6 +44,7 @@ def extract_result_from_sim(sim: Simulation, exp: Experiment, run_duration_secon
     result.network = sim.env.metrics.extract_dataframe('network')
     result.utilization = sim.env.metrics.extract_dataframe('utilization')
     result.fets = sim.env.metrics.extract_dataframe('fets')
+    result.lb_hits = sim.env.metrics.extract_dataframe('lb_hits')
     return result
 
 

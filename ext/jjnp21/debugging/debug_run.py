@@ -27,7 +27,7 @@ experiment = Experiment('Least Response Time on all nodes',
                         client_placement_strategy=ClientPlacementStrategy.NONE,
                         benchmark_factory=LBConstantBenchmarkFactory(rps, duration, 'LRT'),
                         faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
-                        net_mode=NetworkSimulationMode.FAST,
+                        net_mode=NetworkSimulationMode.ACCURATE,
                         function_scheduler_factory=RandomFunctionSchedulerFactory(),
                         topology_factory=TinyUrbanSensingTopologyFactory(client_ratio=1, node_count=20),
                         lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1.0),
@@ -54,9 +54,9 @@ e4 = Experiment('Least Response Time on all nodes',
                 client_placement_strategy=ClientPlacementStrategy.NONE,
                 benchmark_factory=LBConstantBenchmarkFactory(rps, duration, 'LRT'),
                 faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
-                net_mode=NetworkSimulationMode.FAST,
+                net_mode=NetworkSimulationMode.ACCURATE,
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1.0),
+                lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1),
                 lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 
@@ -67,22 +67,23 @@ e1 = Experiment('Round Robin centralized',
                 client_placement_strategy=ClientPlacementStrategy.NONE,
                 benchmark_factory=LBConstantBenchmarkFactory(rps, duration, 'RR'),
                 faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
-                net_mode=NetworkSimulationMode.FAST,
+                net_mode=NetworkSimulationMode.ACCURATE,
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 lb_scaler_factory=ManualSetLoadBalancerScalerFactory(target_count=1),
                 lb_scheduler_factory=CentralLoadBalancerSchedulerFactory(),
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 
 e2 = Experiment('Round Robin on all nodes',
+                seed=42,
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
                 lb_placement_strategy=LoadBalancerPlacementStrategy.ALL_NODES,
                 client_lb_resolving_strategy=ClientLoadBalancerResolvingStrategy.LOWEST_PING,
                 client_placement_strategy=ClientPlacementStrategy.NONE,
                 benchmark_factory=LBConstantBenchmarkFactory(rps, duration, 'RR'),
                 faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
-                net_mode=NetworkSimulationMode.FAST,
+                net_mode=NetworkSimulationMode.ACCURATE,
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1.0),
+                lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1),
                 lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
                 topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 
@@ -98,7 +99,7 @@ e2 = Experiment('Round Robin on all nodes',
 # print(md)
 
 # start = time.time()
-# result = run_experiment(e3)
+# result = run_experiment(e4)
 # end = time.time()
 # print(f'Done calculating... E2E runtime: {round(end - start, 2)}s')
 # analyzer = BasicResultAnalyzer([result])
@@ -124,11 +125,11 @@ md = analysis_df.to_markdown()
 print(md)
 
 
-# analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
-# print('successfully ran analysis')
-# print('dumping results')
-# f = open('/home/jp/Documents/tmp/results.dump', 'wb')
-# pickle.dump(results, f)
-# f.flush()
-# f.close()
-# print('successfully dumped results')
+analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
+print('successfully ran analysis')
+print('dumping results')
+f = open('/home/jp/Documents/tmp/results.dump', 'wb')
+pickle.dump(results, f)
+f.flush()
+f.close()
+print('successfully dumped results')

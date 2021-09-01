@@ -72,6 +72,7 @@ class Result:
     network: DataFrame
     utilization: DataFrame
     fets: DataFrame
+    lb_hits: DataFrame
 
     def __init__(self):
         pass

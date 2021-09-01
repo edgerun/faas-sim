@@ -32,6 +32,10 @@ class Metrics:
     def log(self, metric, value, **tags):
         return self.logger.log(metric, value, **tags)
 
+    def log_load_balancer_hit_fraction(self, lb: str, fraction: float):
+        record = {'lb': lb, 'fraction': fraction}
+        self.log('lb_hits', record)
+
     def log_function_deployment(self, fn: FunctionDeployment):
         """
         Logs the functions name, related container images and their metadata
