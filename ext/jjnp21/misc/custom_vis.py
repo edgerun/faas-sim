@@ -37,4 +37,4 @@ def draw_basic(topology):
     nx.draw_networkx_edges(topology, pos, width=1.0, alpha=0.5)
     nx.draw_networkx_labels(topology, pos, dict(zip(hosts, hosts)), font_size=10)
     nx.draw_networkx_labels(topology, pos, dict(zip(links, [l.tags['type'] for l in links])), font_size=8)
-    # nx.draw_networkx_labels(topology, pos, dict(zip(links, links)), font_size=8)
+    nx.draw_networkx_labels(topology, pos, dict(zip(links, links)), font_size=8)

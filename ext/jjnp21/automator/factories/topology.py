@@ -1,16 +1,17 @@
 import random
-import numpy as np
 
+import numpy as np
+from ether.core import Connection
+from ether.qos import latency
+from skippy.core.storage import StorageIndex
+
+from ext.jjnp21.topologies.accurate_urban import City, create_city
 from ext.jjnp21.topology import IndustrialIoTScenario
 from ext.raith21.etherdevices import convert_to_ether_nodes
 from ext.raith21.generator import generate_devices
 from ext.raith21.generators.cloudcpu import cloudcpu_settings
 from ext.raith21.topology import HeterogeneousUrbanSensingScenario
 from sim.topology import Topology
-from skippy.core.storage import StorageIndex
-from ether.core import Connection, Node
-from ether.cell import LANCell
-from ether.qos import latency
 
 
 class TopologyFactory:
@@ -64,11 +65,14 @@ class NationDistributedUrbanSensingFactory(TopologyFactory):
         random.seed(self.seed)
         topology = Topology()
         storage_index = StorageIndex()
-        chicago = self._create_city(100, 'internet_chicago', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='chicago')
+        chicago = self._create_city(100, 'internet_chicago', storage_index, cloudcpu_settings,
+                                    client_ratio=self.client_ratio, city_name='chicago')
         chicago.materialize(topology)
-        new_york = self._create_city(150, 'internet_newyork', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='newyork')
+        new_york = self._create_city(150, 'internet_newyork', storage_index, cloudcpu_settings,
+                                     client_ratio=self.client_ratio, city_name='newyork')
         new_york.materialize(topology)
-        seattle = self._create_city(100, 'internet_seattle', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='seattle')
+        seattle = self._create_city(100, 'internet_seattle', storage_index, cloudcpu_settings,
+                                    client_ratio=self.client_ratio, city_name='seattle')
         seattle.materialize(topology)
 
         topology.add_connection(Connection('internet_chicago', 'internet_newyork', latency=31))
@@ -102,11 +106,14 @@ class GlobalDistributedUrbanSensingFactory(TopologyFactory):
         random.seed(self.seed)
         topology = Topology()
         storage_index = StorageIndex()
-        chicago = self._create_city(100, 'internet_newyork', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='newyork')
+        chicago = self._create_city(100, 'internet_newyork', storage_index, cloudcpu_settings,
+                                    client_ratio=self.client_ratio, city_name='newyork')
         chicago.materialize(topology)
-        new_york = self._create_city(100, 'internet_london', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='london')
+        new_york = self._create_city(100, 'internet_london', storage_index, cloudcpu_settings,
+                                     client_ratio=self.client_ratio, city_name='london')
         new_york.materialize(topology)
-        seattle = self._create_city(150, 'internet_sydney', storage_index, cloudcpu_settings, client_ratio=self.client_ratio, city_name='sydney')
+        seattle = self._create_city(150, 'internet_sydney', storage_index, cloudcpu_settings,
+                                    client_ratio=self.client_ratio, city_name='sydney')
         seattle.materialize(topology)
 
         topology.add_connection(Connection('internet_london', 'internet_newyork', latency=86))
@@ -144,3 +151,59 @@ class GlobalIndustrialIoTScenario(TopologyFactory):
         topology.get_load_balancer_node()
 
         return topology
+
+
+class SingleRealisticCityFactory(TopologyFactory):
+    def __init__(self, client_ratio: float = 0.6, seed: int = 42):
+        self.client_ratio = client_ratio
+        self.seed = seed
+
+    def create(self) -> Topology:
+        topology = Topology()
+        city = create_city(150, True, self.client_ratio, 'internet', self.seed)
+        city.materialize(topology)
+        return topology
+
+
+class NationDistributedRealisticCityFactory(TopologyFactory):
+    def __init__(self, client_ratio: float = 0.6, seed: int = 42):
+        self.client_ratio = client_ratio
+        self.seed = seed
+
+    def create(self) -> Topology:
+        topology = Topology()
+        chicago = create_city(150, True, self.client_ratio, 'internet_chicago', self.seed)
+        new_york = create_city(150, True, self.client_ratio, 'internet_newyork', self.seed)
+        seattle = create_city(100, False, self.client_ratio, 'internet_seattle', self.seed)
+        chicago.materialize(topology)
+        new_york.materialize(topology)
+        seattle.materialize(topology)
+        topology.add_connection(Connection('internet_chicago', 'internet_newyork', latency=31))
+        topology.add_connection(Connection('internet_chicago', 'internet_seattle', latency=55))
+        topology.add_connection(Connection('internet_seattle', 'internet_newyork', latency=75))
+        topology.init_docker_registry()
+        topology.get_load_balancer_node()
+        return topology
+
+
+class GlobalDistributedRealisticCityFactory(TopologyFactory):
+    def __init__(self, client_ratio: float = 0.6, seed: int = 42):
+        self.client_ratio = client_ratio
+        self.seed = seed
+
+    def create(self) -> Topology:
+        topology = Topology()
+        london = create_city(150, True, self.client_ratio, 'internet_london', self.seed)
+        new_york = create_city(150, True, self.client_ratio, 'internet_newyork', self.seed)
+        sydney = create_city(100, False, self.client_ratio, 'internet_sydney', self.seed)
+        london.materialize(topology)
+        new_york.materialize(topology)
+        sydney.materialize(topology)
+        topology.add_connection(Connection('internet_london', 'internet_newyork', latency=86))
+        topology.add_connection(Connection('internet_london', 'internet_sydney', latency=253))
+        topology.add_connection(Connection('internet_sydney', 'internet_newyork', latency=204))
+        topology.init_docker_registry()
+        topology.get_load_balancer_node()
+        return topology
+
+

@@ -198,6 +198,14 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
                     shared_bandwidth=10000,
                     backhaul=FasterMobileConnection(self.internet)
                 )
+                # neighborhood = LANCell(
+                #     nodes=[
+                #         selected_nuc_nodes,
+                #         selected_aot_nodes,
+                #         box
+                #     ],
+                #     backhaul=FasterMobileConnection(self.internet)
+                # )
             else:
                 neighborhood = SharedLinkCell(
                     nodes=[
@@ -207,6 +215,13 @@ class HeterogeneousUrbanSensingScenario(UrbanSensingScenario):
                     shared_bandwidth=10000,
                     backhaul=FasterMobileConnection(self.internet)
                 )
+                # neighborhood = LANCell(
+                #     nodes=[
+                #         selected_nuc_nodes,
+                #         selected_aot_nodes
+                #     ],
+                #     backhaul=FasterMobileConnection(self.internet)
+                # )
 
             neighborhoods.append(neighborhood)
 

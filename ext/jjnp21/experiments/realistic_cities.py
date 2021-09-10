@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import List
 
 from ext.jjnp21.automator.analyzer import BasicResultAnalyzer
 from ext.jjnp21.automator.execution import run_experiment
@@ -11,7 +12,8 @@ from ext.jjnp21.automator.factories.lb_scaler import FractionLoadBalancerScalerF
     ManualSetLoadBalancerScalerFactory
 from ext.jjnp21.automator.factories.lb_scheduler import EverywhereLoadBalancerSchedulerFactory, \
     CentralLoadBalancerSchedulerFactory
-from ext.jjnp21.automator.factories.topology import GlobalDistributedUrbanSensingFactory
+from ext.jjnp21.automator.factories.topology import GlobalDistributedUrbanSensingFactory, SingleRealisticCityFactory, \
+    NationDistributedRealisticCityFactory
 from ext.jjnp21.automator.main import ExperimentRunAutomator
 from ext.jjnp21.debugging.tiny_topology_factory import TinyUrbanSensingTopologyFactory
 from ext.jjnp21.topologies.accurate_urban import City
@@ -20,63 +22,23 @@ from sim.topology import Topology
 logging.basicConfig(level=logging.INFO)
 rps = 75
 duration = 1000
+client_ratio = 1
 
+class TopologyType(Enum):
+    CITY = 1
+    NATION = 2
+    GLOBAL = 3
 
-class AccurateCityTopologyFactory(TopologyFactory):
-    def create(self) -> Topology:
-        topology = Topology()
-        city = City(cloud_node_count=1,
-                    client_count=100,
-                    smart_pole_count=15,
-                    cell_tower_count=20,
-                    five_g_share=0.1,
-                    cell_tower_compute_share=1,
-                    internet='internet',
-                    seed=42)
-        city.materialize(topology)
-        topology.init_docker_registry()
-        return topology
+def get_experiment_set(topo_type: TopologyType, seed: int) -> List[Experiment]:
+    def get_topo():
+        if topo_type == TopologyType.CITY:
+            return SingleRealisticCityFactory(client_ratio=client_ratio, seed=seed)
+        elif topo_type == TopologyType.NATION:
+            return NationDistributedRealisticCityFactory(client_ratio=client_ratio, seed=seed)
+        elif topo_type == TopologyType.GLOBAL:
+            return GlobalDistributedUrbanSensingFactory(client_ratio=client_ratio, seed=seed)
 
-nc_lrtd = Experiment('Least Response Time on all nodes',
-                        lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
-                        lb_placement_strategy=LoadBalancerPlacementStrategy.ALL_NODES,
-                        client_lb_resolving_strategy=ClientLoadBalancerResolvingStrategy.LOWEST_PING,
-                        client_placement_strategy=ClientPlacementStrategy.NONE,
-                        benchmark_factory=LBConstantBenchmarkFactory(rps, duration, 'LRT'),
-                        faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
-                        net_mode=NetworkSimulationMode.ACCURATE,
-                        function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                        topology_factory=AccurateCityTopologyFactory(),
-                        lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1.0),
-                        lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory())
-nc_rrc = Experiment('Round Robin Centralized',
-                        lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
-                        lb_placement_strategy=LoadBalancerPlacementStrategy.ALL_NODES,
-                        client_lb_resolving_strategy=ClientLoadBalancerResolvingStrategy.LOWEST_PING,
-                        client_placement_strategy=ClientPlacementStrategy.NONE,
-                        benchmark_factory=LBConstantBenchmarkFactory(rps, duration, 'RR'),
-                        faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
-                        net_mode=NetworkSimulationMode.ACCURATE,
-                        function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                        topology_factory=AccurateCityTopologyFactory(),
-                        lb_scaler_factory=ManualSetLoadBalancerScalerFactory(target_count=1),
-                        lb_scheduler_factory=CentralLoadBalancerSchedulerFactory())
-
-experiment = Experiment('Least Response Time on all nodes',
-                        lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
-                        lb_placement_strategy=LoadBalancerPlacementStrategy.ALL_NODES,
-                        client_lb_resolving_strategy=ClientLoadBalancerResolvingStrategy.LOWEST_PING,
-                        client_placement_strategy=ClientPlacementStrategy.NONE,
-                        benchmark_factory=LBConstantBenchmarkFactory(rps, duration, 'LRT'),
-                        faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
-                        net_mode=NetworkSimulationMode.ACCURATE,
-                        function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                        topology_factory=TinyUrbanSensingTopologyFactory(client_ratio=1, node_count=20),
-                        lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1.0),
-                        lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory())
-
-# beginning of experiments
-e3 = Experiment('Least Response Time centralized',
+    lrtc = Experiment('Least Response Time centralized',
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
                 lb_placement_strategy=LoadBalancerPlacementStrategy.CENTRAL,
                 client_lb_resolving_strategy=ClientLoadBalancerResolvingStrategy.LOWEST_PING,
@@ -87,9 +49,9 @@ e3 = Experiment('Least Response Time centralized',
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 lb_scaler_factory=ManualSetLoadBalancerScalerFactory(target_count=1),
                 lb_scheduler_factory=CentralLoadBalancerSchedulerFactory(),
-                topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
+                topology_factory=get_topo())
 
-e4 = Experiment('Least Response Time on all nodes',
+    lrtd = Experiment('Least Response Time on all nodes',
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
                 lb_placement_strategy=LoadBalancerPlacementStrategy.ALL_NODES,
                 client_lb_resolving_strategy=ClientLoadBalancerResolvingStrategy.LOWEST_PING,
@@ -100,9 +62,9 @@ e4 = Experiment('Least Response Time on all nodes',
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1),
                 lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
-                topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
+                topology_factory=get_topo())
 
-e1 = Experiment('Round Robin centralized',
+    rrc = Experiment('Round Robin centralized',
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
                 lb_placement_strategy=LoadBalancerPlacementStrategy.CENTRAL,
                 client_lb_resolving_strategy=ClientLoadBalancerResolvingStrategy.LOWEST_PING,
@@ -113,9 +75,9 @@ e1 = Experiment('Round Robin centralized',
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 lb_scaler_factory=ManualSetLoadBalancerScalerFactory(target_count=1),
                 lb_scheduler_factory=CentralLoadBalancerSchedulerFactory(),
-                topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
+                topology_factory=get_topo())
 
-e2 = Experiment('Round Robin on all nodes',
+    rrd = Experiment('Round Robin on all nodes',
                 seed=42,
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
                 lb_placement_strategy=LoadBalancerPlacementStrategy.ALL_NODES,
@@ -127,30 +89,12 @@ e2 = Experiment('Round Robin on all nodes',
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
                 lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1),
                 lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
-                topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
+                topology_factory=get_topo())
 
-# end of experiments
-#
-# start = time.time()
-# result = run_experiment(new_city_experiment)
-# end = time.time()
-# print(f'Done calculating... E2E runtime: {round(end - start, 2)}s')
-# analyzer = BasicResultAnalyzer([result])
-# analysis_df = analyzer.basic_kpis()
-# md = analysis_df.to_markdown()
-# print(md)
+    return [lrtc, lrtd, rrc, rrd]
 
-# start = time.time()
-# result = run_experiment(e4)
-# end = time.time()
-# print(f'Done calculating... E2E runtime: {round(end - start, 2)}s')
-# analyzer = BasicResultAnalyzer([result])
-# analysis_df = analyzer.basic_kpis()
-# md = analysis_df.to_markdown()
-# print(md)
-# exit(0)
 
-experiment_list = [nc_lrtd, nc_rrc]
+experiment_list = get_experiment_set(TopologyType.GLOBAL, 42)
 automator = ExperimentRunAutomator(experiment_list, worker_count=4)
 print('Running nation benchmark')
 start = time.time()
@@ -166,7 +110,6 @@ analysis_df = analyzer.basic_kpis()
 md = analysis_df.to_markdown()
 print(md)
 
-#
 # analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
 # print('successfully ran analysis')
 # print('dumping results')

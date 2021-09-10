@@ -60,6 +60,7 @@ class WeightedRoundRobinProvider:
         self.gcd = 1
         self.scaling = scaling
         self.replicas = list(response_times.keys())
+        random.shuffle(self.replicas)
         self.weights = dict()
         self.cw = 0
         self.last = -1
@@ -222,7 +223,8 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
         # print('removing replica')
         self.lrt_providers[function_name].remove_replica(replica_id)
         self.wrr_providers[function_name].remove_replica(replica_id)
-        del self.hit_list[replica_id]
+        if replica_id in self.hit_list.keys():
+            del self.hit_list[replica_id]
 
     def _replica_by_id(self, replica_id: int):
         for replicas in self.replicas.values():

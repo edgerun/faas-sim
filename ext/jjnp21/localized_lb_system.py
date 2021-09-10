@@ -217,7 +217,7 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
                 logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
 
             if not result.suggested_host:
-                self.replicas[replica.fn_name].remove(replica)
+                self.lb_replicas[replica.fn_name].remove(replica)
                 if len(services) > 0:
                     logger.warning('retry scheduling pod %s', pod.name)
                     yield from self.deploy_replica(replica.function, services[0], services[1:])
