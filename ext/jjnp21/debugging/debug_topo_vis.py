@@ -31,6 +31,7 @@ city = City(cloud_node_count=20,
             cell_tower_compute_share=0.25,
             internet='internet',
             seed=42)
+
 topo = Topology()
 city.materialize(topo)
 draw_custom(topo)

@@ -13,15 +13,15 @@ from ext.jjnp21.automator.factories.lb_scaler import FractionLoadBalancerScalerF
 from ext.jjnp21.automator.factories.lb_scheduler import EverywhereLoadBalancerSchedulerFactory, \
     CentralLoadBalancerSchedulerFactory
 from ext.jjnp21.automator.factories.topology import GlobalDistributedUrbanSensingFactory, SingleRealisticCityFactory, \
-    NationDistributedRealisticCityFactory
+    NationDistributedRealisticCityFactory, GlobalDistributedRealisticCityFactory
 from ext.jjnp21.automator.main import ExperimentRunAutomator
 from ext.jjnp21.debugging.tiny_topology_factory import TinyUrbanSensingTopologyFactory
 from ext.jjnp21.topologies.accurate_urban import City
 from sim.topology import Topology
 
 logging.basicConfig(level=logging.INFO)
-rps = 75
-duration = 1000
+rps = 25
+duration = 1500
 client_ratio = 1
 
 class TopologyType(Enum):
@@ -36,7 +36,7 @@ def get_experiment_set(topo_type: TopologyType, seed: int) -> List[Experiment]:
         elif topo_type == TopologyType.NATION:
             return NationDistributedRealisticCityFactory(client_ratio=client_ratio, seed=seed)
         elif topo_type == TopologyType.GLOBAL:
-            return GlobalDistributedUrbanSensingFactory(client_ratio=client_ratio, seed=seed)
+            return GlobalDistributedRealisticCityFactory(client_ratio=client_ratio, seed=seed)
 
     lrtc = Experiment('Least Response Time centralized',
                 lb_type=LoadBalancerType.LEAST_RESPONSE_TIME,
@@ -60,7 +60,7 @@ def get_experiment_set(topo_type: TopologyType, seed: int) -> List[Experiment]:
                 faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
                 net_mode=NetworkSimulationMode.ACCURATE,
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1),
+                lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=0.05),
                 lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
                 topology_factory=get_topo())
 
@@ -94,7 +94,7 @@ def get_experiment_set(topo_type: TopologyType, seed: int) -> List[Experiment]:
     return [lrtc, lrtd, rrc, rrd]
 
 
-experiment_list = get_experiment_set(TopologyType.GLOBAL, 42)
+experiment_list = get_experiment_set(TopologyType.NATION, 42)
 automator = ExperimentRunAutomator(experiment_list, worker_count=4)
 print('Running nation benchmark')
 start = time.time()

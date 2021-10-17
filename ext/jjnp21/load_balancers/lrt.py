@@ -1,6 +1,7 @@
+import abc
 import random
-from collections import Counter
-from typing import Dict, List, Optional
+from collections import Counter, defaultdict
+from typing import Dict, List, Optional, Callable
 
 from sim.core import Environment, NodeState
 from sim.faas import LoadBalancer, FunctionReplica, FunctionState
@@ -8,6 +9,28 @@ from sim.faas import LoadBalancer, FunctionReplica, FunctionState
 # from osmotic.system.scheduler.predicate import location_label
 import math
 import statistics
+import numpy as np
+
+
+class WRRProvider(abc.ABC):
+    replicas: List[int]
+
+    @abc.abstractmethod
+    def next_id(self) -> int:
+        pass
+
+    @abc.abstractmethod
+    def add_replica(self, replica_id: int):
+        pass
+
+    @abc.abstractmethod
+    def remove_replica(self, replica_id: int):
+        pass
+
+    @staticmethod
+    @abc.abstractmethod
+    def update_weights(instance: 'WRRProvider', response_times: Dict[int, float]) -> 'WRRProvider':
+        pass
 
 
 class LeastResponseTimeMetricProvider:
@@ -25,7 +48,7 @@ class LeastResponseTimeMetricProvider:
         if len(self.rts.values()) > 0:
             self.rts[replica_id] = float(statistics.median(list(self.rts.values())))
         else:
-            self.rts[replica_id] = 25
+            self.rts[replica_id] = 0.05
 
     def remove_replica(self, replica_id: int):
         self.replicas.remove(replica_id)
@@ -34,7 +57,7 @@ class LeastResponseTimeMetricProvider:
 
     def _init_values(self):
         for r in self.replicas:
-            self.rts[r] = 25
+            self.rts[r] = 0.05
             self.last_record_timestamps[r] = -1
 
     def record_response_time(self, replica_id: int, response_time: float):
@@ -55,7 +78,61 @@ class LeastResponseTimeMetricProvider:
         return self.rts
 
 
-class WeightedRoundRobinProvider:
+class SmoothWeightedRoundRobinProvider(WRRProvider):
+    def __init__(self, response_times: Dict[int, float], scaling: float = 2.5, max_weight: float = 100):
+        self.current_values: Dict[int, float] = defaultdict(lambda: 0)
+        self.weights: Dict[int, float] = defaultdict(lambda: 1)
+        self.scaling = scaling
+        self.max_weight = max_weight
+        self.response_times = response_times
+        self.weight_sum = 0
+        self.replicas = list(response_times.keys())
+        if len(response_times) > 0:
+            for node_id in response_times.keys():
+                self.current_values[node_id] = 0
+                self.weights[node_id] = 0
+            self.update_weights(self, response_times)
+
+    def add_replica(self, replica_id: int):
+        if len(self.current_values) < 1:
+            self.current_values[replica_id] = 0
+            self.weights[replica_id] = 10.0
+            self.weight_sum = 10
+            self.replicas.append(replica_id)
+            return
+        self.current_values[replica_id] = 0
+        # self.current_values[replica_id] = float(np.mean(list(self.current_values.values())))
+        self.weights[replica_id] = float(np.mean(list(self.weights.values())))
+        self.weight_sum += self.weights[replica_id]
+        self.replicas.append(replica_id)
+
+    def remove_replica(self, replica_id: int):
+        self.weight_sum -= self.weights[replica_id]
+        del self.current_values[replica_id]
+        del self.weights[replica_id]
+        self.replicas = list(self.weights.keys())
+
+    @staticmethod
+    def update_weights(instance: 'SmoothWeightedRoundRobinProvider', response_times: Dict[int, float]):
+        instance.response_times = response_times
+        min_response_time = float(np.min(list(instance.response_times.values())))
+        instance.weight_sum = 0
+        for node_id, rt in instance.response_times.items():
+            weight = float(np.max([1, instance.max_weight / math.pow((rt / min_response_time), instance.scaling)]))
+            instance.weights[node_id] = weight
+            instance.weight_sum += weight
+            instance.current_values[node_id] = 0
+        return instance
+
+    def next_id(self) -> int:
+        for node_id, weight in self.weights.items():
+            self.current_values[node_id] += weight
+        chosen_id = max(self.current_values, key=self.current_values.get)
+        self.current_values[chosen_id] -= self.weight_sum
+        return chosen_id
+
+
+class DefaultWRRProvider(WRRProvider):
     def __init__(self, response_times: Dict[int, float], scaling: float = 1.0):
         self.gcd = 1
         self.scaling = scaling
@@ -70,8 +147,7 @@ class WeightedRoundRobinProvider:
         self._set_weights(response_times)
         # if len(self.replicas) > 1:
         #     print(f'WRR count: {len(self.replicas)}')
-        #for debugging only
-
+        # for debugging only
 
     def __str__(self):
         return str(self.weights)
@@ -134,8 +210,12 @@ class WeightedRoundRobinProvider:
                 if self.cw <= 0:
                     self.cw = self.max_weight
             if self.weights[self.replicas[self.last]] >= self.cw:
-                self.hit_list[self.replicas[self.last]] = True # for debugging only
+                self.hit_list[self.replicas[self.last]] = True  # for debugging only
                 return self.replicas[self.last]
+
+    @staticmethod
+    def update_weights(instance: 'DefaultWRRProvider', response_times: Dict[int, float]):
+        return DefaultWRRProvider(response_times)
 
 
 class LeastResponseTimeLoadBalancer(LoadBalancer):
@@ -148,12 +228,12 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
                  lrt_window: float = 30, weight_update_frequency: float = 15) -> None:
         super().__init__(env, replicas)
         self.count = Counter()
-
+        self.create_wrr: Callable[[Dict[int, float]], WRRProvider] = lambda rts: SmoothWeightedRoundRobinProvider(rts)
         # lrt things
         self.window = lrt_window
         self.weight_update_frequency = weight_update_frequency
         self.last_weight_update = -1
-        self.wrr_providers: Dict[str, WeightedRoundRobinProvider] = dict()
+        self.wrr_providers: Dict[str, WRRProvider] = dict()
         self.lrt_providers: Dict[str, LeastResponseTimeMetricProvider] = dict()
         self.hit_list: Dict[int, float] = {}
         self._init_lrt_components()
@@ -195,7 +275,7 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
                 self.lrt_providers[function_name] = \
                     LeastResponseTimeMetricProvider(self.env, replica_ids, window=self.window)
                 initial_response_times = self.lrt_providers[function_name].get_response_times()
-                self.wrr_providers[function_name] = WeightedRoundRobinProvider(initial_response_times)
+                self.wrr_providers[function_name] = self.create_wrr(initial_response_times)
             current_replica_ids = self.get_running_replica_ids(replicas)
             # replica set of existing function changed
             if not set(current_replica_ids) == set(self.wrr_providers[function_name].replicas):
@@ -207,7 +287,6 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
                     # A replica was removed
                     if r_id not in current_replica_ids:
                         self._remove_replica(function_name, r_id)
-
 
     def get_running_replica_ids(self, replicas: List[FunctionReplica]):
         replica_ids = [id(r) for r in replicas if r.state == FunctionState.RUNNING]
@@ -248,7 +327,8 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
             self.lrt_providers[function_name] = \
                 LeastResponseTimeMetricProvider(self.env, replica_ids, window=self.window)
             initial_response_times = self.lrt_providers[function_name].get_response_times()
-            self.wrr_providers[function_name] = WeightedRoundRobinProvider(initial_response_times)
+            self.wrr_providers[function_name] = self.create_wrr(initial_response_times)
+            # self.wrr_providers[function_name] = WeightedRoundRobinProvider(initial_response_times)
 
     def _should_update_weights(self):
         return self.env.now - self.last_weight_update >= self.weight_update_frequency
@@ -273,14 +353,13 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
             #         print('------------------')
             # print(f'{function_name}: {str(non_hit)}')
 
-
-            for r_id, hit in self.wrr_providers[function_name].hit_list.items():
-                if hit:
-                    self.hit_list[r_id] = True
-
+            # for r_id, hit in self.wrr_providers[function_name].hit_list.items():
+            #     if hit:
+            #         self.hit_list[r_id] = True
 
             response_times = self.lrt_providers[function_name].get_response_times()
-            self.wrr_providers[function_name] = WeightedRoundRobinProvider(response_times)
+            current_wrr = self.wrr_providers[function_name]
+            self.wrr_providers[function_name] = current_wrr.update_weights(current_wrr, response_times)
 
             # w_dict = dict()
             # for r_id, w in self.wrr_providers[function_name].weights.items():
@@ -289,8 +368,8 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
             # print(w_dict)
             # print('--------------------------------------')
         self.last_weight_update = self.env.now
-        frac = len([x for x in self.hit_list.values() if x]) / len(self.hit_list)
-        self.env.metrics.log_load_balancer_hit_fraction(str(id(self)), frac)
+        # frac = len([x for x in self.hit_list.values() if x]) / len(self.hit_list)
+        # self.env.metrics.log_load_balancer_hit_fraction(str(id(self)), frac)
         # print('*********************************************')
 
     def report_response_time(self, request, replica: FunctionReplica, response_time: float):
