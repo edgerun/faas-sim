@@ -58,7 +58,7 @@ def get_experiment_for_fraction(fraction: float) -> Experiment:
 
 
 # experiment_list = [get_experiment_for_fraction(f) for f in [0.1, 0.2]]
-experiment_list = [get_experiment_for_fraction(f) for f in [0.01, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]
+experiment_list = [get_experiment_for_fraction(f) for f in [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]
 automator = ExperimentRunAutomator(experiment_list, worker_count=4)
 print('Running nation benchmark')
 start = time.time()

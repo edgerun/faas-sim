@@ -225,7 +225,7 @@ class LeastResponseTimeLoadBalancer(LoadBalancer):
     # [x] pay attention to node state (running, etc.)
 
     def __init__(self, env: Environment, replicas: Dict[str, List[FunctionReplica]],
-                 lrt_window: float = 30, weight_update_frequency: float = 15) -> None:
+                 lrt_window: float = 30, weight_update_frequency: float = 200) -> None:
         super().__init__(env, replicas)
         self.count = Counter()
         self.create_wrr: Callable[[Dict[int, float]], WRRProvider] = lambda rts: SmoothWeightedRoundRobinProvider(rts)

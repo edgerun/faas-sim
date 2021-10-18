@@ -274,6 +274,10 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
         request.load_balancer = lb
         return lb.next_replica(request)
 
+    def set_request_client(self, request: FunctionRequest):
+        if len(self.client_nodes) > 0:
+            request.client_node = random.choice(self.client_nodes)
+
     def invoke(self, request: FunctionRequest):
         # TODO: how to return a FunctionResponse?
         logger.debug('invoking function %s', request.name)
@@ -282,8 +286,7 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
             logger.warning('invoking non-existing function %s', request.name)
             return
 
-        if len(self.client_nodes) > 0:
-            request.client_node = random.choice(self.client_nodes)
+        self.set_request_client(request)
 
         t_received = self.env.now
 
