@@ -23,6 +23,7 @@ class WLANCell(Cell):
             # We manually create a host here, since this allows us to set the latency distribution.
             # Also, the Host uses a default bandwidth of 1000MBps which is a reasonable estimate for 802.11ac
             h = Host(node, backhaul=self.switch)
+            # h.materialize(topology, self, latency.lan)
             h.materialize(topology, self, latency.wlan)
 
         if self.backhaul:

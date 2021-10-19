@@ -350,14 +350,11 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
                                         client_node=client_node,
                                         lb_node=lb_node)
 
-    def simulate_function_invocation(self, replica: FunctionReplica, request: FunctionRequest) -> (float, float):
+    def simulate_function_invocation(self, replica: FunctionReplica, request: FunctionRequest):
         """
         Adapted version of "simulate function invocation" that also includes network simulation
         @param replica: The function replica
         @param request: The request to be processed
-        @return: A tuple of two floats denoting
-        (transfer time client<->load balancer, transfer time load balancer<->function replica)
-        or None if there's no load balancer or client to be found
         """
         tx_time_cl_lb = 0
         tx_time_lb_fx = 0

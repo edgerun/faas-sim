@@ -270,6 +270,7 @@ class FunctionRequest:
     name: str
     size: float = None
     load_balancer = None
+    client_node: EtherNode = None
 
     id_generator = counter()
 

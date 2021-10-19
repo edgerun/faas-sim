@@ -122,6 +122,11 @@ class AIPythonHTTPSimulator(FunctionSimulator):
         t_wait_start = env.now
         yield token  # wait for access
         t_wait_end = env.now
+        if t_wait_end - t_wait_start > 0.1:
+            self.queue.release(token)
+            return
+            # todo this needs to be changed to a full blown error handler. This 'return' is just to see if it fixed performance issues
+
         t_fet_start = env.now
         # because of GIL and Threads, we can easily estimate the additional time caused by concurrent requests to the
         # same Function

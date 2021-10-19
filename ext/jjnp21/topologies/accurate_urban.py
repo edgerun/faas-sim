@@ -62,6 +62,8 @@ class City:
 
     def _attach_clients(self):
         # TODO look if a more sophisticated attachment than flat random would make sense
+        # tower_candidates = [tower for tower in self.cell_towers if isinstance(tower, RANTower) and len(tower.local_nodes) > 0]
+        # candidates = self.smart_poles
         candidates = self.cell_towers + self.smart_poles
         for client in self.clients:
             choice = random.choice(candidates)
