@@ -21,7 +21,7 @@ class LRTLoadBalancerDeployment(LoadBalancerDeployment):
         function_image = FunctionImage(image=images.traefik_lrt_manifest)
         function = Function(images.traefik_lrt_function, fn_images=[function_image])
         # todo: enter resource values from experiments for LB instead
-        kube_resource_config = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="500Mi")
+        kube_resource_config = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="256Mi")
         function_container = FunctionContainer(
             function_image,
             resource_config=kube_resource_config
@@ -39,7 +39,7 @@ class RRLoadBalancerDeployment(LoadBalancerDeployment):
         function_image = FunctionImage(image=images.traefik_rr_manifest)
         function = Function(images.traefik_rr_function, fn_images=[function_image])
         # todo: enter resource values from experiments for LB instead
-        kube_resource_config = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="500Mi")
+        kube_resource_config = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="256Mi")
         function_container = FunctionContainer(
             function_image,
             resource_config=kube_resource_config

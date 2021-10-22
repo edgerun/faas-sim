@@ -135,6 +135,7 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
 
         added_replica_count = 0
         for index, service in enumerate(ld.get_services()):
+            # .get_services() returns List[FunctionImage]
             # the different "services" here are all the same function just different images for the different
             # architectures and accelerators, e.g. TPU, GPU, x86, aarch64, etc.
             remaining_add_count = corrected_add_count - added_replica_count

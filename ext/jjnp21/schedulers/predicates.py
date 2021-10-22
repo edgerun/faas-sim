@@ -19,3 +19,15 @@ class NoLoadBalancerRunningYet(Predicate):
                 if 'load_balancer' in c.image:
                     return False
         return True
+
+
+class OsmoticTargetPredicate(Predicate):
+    def passes_predicate(self, context: ClusterContext, pod: Pod, node: Node) -> bool:
+        # Returns true if the pod has an osmotic scheduling target and the node is that target
+        # If the pod is the "seed" load balancer then the node has to support the central load balancer
+        if 'osmotic-seed' in pod.spec.labels.keys():
+            return node.labels.get(supports_central_load_balancer) is not None
+        if 'osmotic-scheduling-target' in pod.spec.labels.keys() and \
+                pod.spec.labels['osmotic-scheduling-target'] == node.name:
+            return True
+        return False

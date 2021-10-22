@@ -1,12 +1,18 @@
+import logging
 from collections import defaultdict
-from typing import Dict, List, Set
+from typing import Dict, List
+
+import numpy as np
 
 from ext.jjnp21.automator.factories.lb_scaler import LoadBalancerScalerFactory
+from ext.jjnp21.core import LoadBalancerDeployment, LoadBalancerReplica
 from ext.jjnp21.localized_lb_system import LocalizedLoadBalancerFaasSystem
 from sim.core import Environment
 from sim.faas import FunctionRequest
-from sim.faas.core import Node
-import numpy as np
+from sim.faas.core import Node, FunctionContainer, FunctionSimulator, FunctionState
+
+logger = logging.getLogger(__name__)
+
 
 class PingCache:
     def __init__(self, env: Environment):
@@ -24,6 +30,7 @@ class PingCache:
         self.cache[(first_node_name, second_node_name)] = self.env.topology.latency(first_node_name, second_node_name)
         return self.cache[(first_node_name, second_node_name)]
 
+
 class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
     def __init__(self, env: Environment, lb_scaler_factory: LoadBalancerScalerFactory,
                  scale_by_requests: bool = False,
@@ -33,7 +40,7 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
                  lb_osmotic_pressure_window_size: float = 60):
         super().__init__(env, lb_scaler_factory, scale_by_requests, scale_by_average_requests,
                          scale_by_queue_requests_per_replica, scale_static)
-        self.lb_osmotic_pressure_threshold = lb_osmotic_pressure_hysteresis #todo shouldn't this go to the scaler?
+        self.lb_osmotic_pressure_threshold = lb_osmotic_pressure_hysteresis  # todo shouldn't this go to the scaler?
         self.lb_osmotic_pressure_hysteresis = lb_osmotic_pressure_hysteresis
         self.lb_osmotic_pressure_window_size = lb_osmotic_pressure_window_size
 
@@ -76,10 +83,8 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
             pressures[node] = self._calc_p(node, rq_log_in_interval, fn_totals)
         return pressures
 
-
-
     def _calc_p(self, node: Node, rq_log: Dict[str, Dict[Node, List[float]]], fn_totals: Dict[str, int]):
-        function_replica_closeness_impact_factor = 0.1 #todo IMPORTANT! re-evaluate that one!
+        function_replica_closeness_impact_factor = 0.1  # todo IMPORTANT! re-evaluate that one!
 
         clients = self._get_potential_clients(node)
         request_shares = self._calc_request_shares(clients, rq_log)
@@ -102,10 +107,9 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
             # todo: check if latencies are measured in seconds or milliseconds
 
             # idea: <how important is the function> * <how much load would the lb get> + <function closeness> * <how important is function closeness>
-            fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] + (1 / fn_distance) * function_replica_closeness_impact_factor
+            fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] + (
+                    1 / fn_distance) * function_replica_closeness_impact_factor
         return sum(fn_pressures.values())
-
-
 
     def _get_fx_distances_sorted(self, node: Node) -> Dict[str, List[float]]:
         distances: Dict[str, List[float]] = defaultdict(lambda: [])
@@ -124,7 +128,6 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
             shares[fn_name] = client_sum / total
         return shares
 
-
     def _get_potential_clients(self, node: Node) -> List[Node]:
         clients = []
         for c in self.client_nodes:
@@ -133,24 +136,62 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
                 clients.append(c)
         return clients
 
-
     def set_request_client(self, request: FunctionRequest):
         # Note: request.name denotes the FUNCTION the request wants. Yes this is not intuitive, but it was so when I started
         # and I'm not touching it
         super().set_request_client(request)
         self.request_log[request.name][request.client_node].append(self.env.now)
 
-
-    def osmotic_scale_up_lb(self, lb_name: str, target_node: Node):
+    def osmotic_scale_up_lb(self, lb_name: str, target_nodes: List[Node]):
         # todo: create pod and everything with labels according to the params
-        pass
+        ld = self.lb_deployments[lb_name]
 
-    def osmotic_scale_down_lb(self, lb_name: str, target_node: str):
+        svc = ld.get_services()[0]
+
+        for target_node in target_nodes:
+            yield from self.osmotic_deploy_lb_replica(ld, ld.get_container(svc.image), ld.get_containers(), target_node)
+
+    def osmotic_deploy_lb_replica(self, ld: LoadBalancerDeployment, fn: FunctionContainer,
+                                  services: List[FunctionContainer], target_node: Node):
+        replica = self.osmotic_create_lb_replica(ld, fn, target_node)
+        self.lb_replicas[ld.name].append(replica)
+        self.env.metrics.log_queue_schedule(replica)
+        self.env.metrics.log_function_replica(replica)
+        yield self.lb_scheduler_queue.put((replica, services))
+
+    def osmotic_create_lb_replica(self, ld: LoadBalancerDeployment, fn: FunctionContainer,
+                                  target_node: Node) -> LoadBalancerReplica:
+        replica = LoadBalancerReplica()
+        replica.function = ld
+        replica.container = fn
+        replica.load_balancer = ld.create_load_balancer(self.env, self.replicas)
+        # todo: replace this simulator with one that uses proper values
+        # Think about potentially moving the simulator creation somewhere else. The current way is kind of messy imo
+        replica.simulator = FunctionSimulator()
+        replica.pod = self.create_pod(ld, fn)
+        if target_node is not None:
+            replica.pod.spec.labels['osmotic-scheduling-target'] = target_node.name
+        else:
+            # if no node is specified, there is a seed node
+            replica.pod.spec.labels['osmotic-seed'] = 'True'
+        return replica
+
+    def _find_replicas_by_node_name(self, lb_name: str, nodes_names: List[str]) -> List[LoadBalancerReplica]:
+        replicas = []
+        for replica in self.lb_replicas[lb_name]:
+            if replica.node.ether_node.name in nodes_names:
+                replicas.append(replica)
+        return replicas
+
+    def osmotic_scale_down_lb(self, lb_name: str, target_nodes: List[Node]):
         # todo work out how to scale down on low enough pressures
-        pass
+        current_replica_count = len(self.get_lb_replicas(lb_name, state=FunctionState.RUNNING))
+        if len(target_nodes) >= current_replica_count:
+            # make sure we don't stop all load balancers by accident. At least one has to keep running
+            target_nodes = target_nodes[:current_replica_count - 1]
+        replicas_to_remove = self._find_replicas_by_node_name(lb_name, list(map(lambda n: n.name, target_nodes)))
+        for r in replicas_to_remove:
+            logger.info(f'Removing lb replica from node {r.node.name}')
+            self.remove_lb_replica(r)
+            self.lb_finder.remove(r)
 
-    def scale_up_lb(self, lb_name: str, add_count: int):
-        return super().scale_up_lb(lb_name, add_count)
-
-    def scale_down_lb(self, lb_name: str, remove_count: int):
-        super().scale_down_lb(lb_name, remove_count)
