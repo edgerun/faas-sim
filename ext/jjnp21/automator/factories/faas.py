@@ -1,4 +1,5 @@
 from ext.jjnp21.localized_lb_system import LocalizedLoadBalancerFaasSystem
+from ext.jjnp21.localized_osmotic_lb_system import OsmoticLoadBalancerCapableFaasSystem
 from sim.core import Environment
 from sim.faas import FaasSystem
 
@@ -15,3 +16,8 @@ class FaaSFactory:
 class LocalizedLoadBalancerFaaSFactory(FaaSFactory):
     def create(self, env: Environment) -> FaasSystem:
         return LocalizedLoadBalancerFaasSystem(env, **self.constructor_kwargs)
+
+
+class OsmoticLoadBalancerCapableFaasSystemFactory(FaaSFactory):
+    def create(self, env: Environment) -> FaasSystem:
+        return OsmoticLoadBalancerCapableFaasSystem(env, **self.constructor_kwargs)

@@ -6,7 +6,7 @@ import numpy as np
 
 from ext.jjnp21.automator.factories.lb_scaler import LoadBalancerScalerFactory
 from ext.jjnp21.core import LoadBalancerDeployment, LoadBalancerReplica
-from ext.jjnp21.localized_lb_system import LocalizedLoadBalancerFaasSystem
+from ext.jjnp21.localized_lb_system import LocalizedLoadBalancerFaasSystem, NetworkSimulationMode
 from sim.core import Environment
 from sim.faas import FunctionRequest
 from sim.faas.core import Node, FunctionContainer, FunctionSimulator, FunctionState
@@ -35,13 +35,11 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
     def __init__(self, env: Environment, lb_scaler_factory: LoadBalancerScalerFactory,
                  scale_by_requests: bool = False,
                  scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
-                 scale_static: bool = False, lb_osmotic_pressure_threshold: float = 0.3,
-                 lb_osmotic_pressure_hysteresis: float = 0.1,
+                 scale_static: bool = False,
+                 net_mode: NetworkSimulationMode = NetworkSimulationMode.ACCURATE,
                  lb_osmotic_pressure_window_size: float = 60):
         super().__init__(env, lb_scaler_factory, scale_by_requests, scale_by_average_requests,
-                         scale_by_queue_requests_per_replica, scale_static)
-        self.lb_osmotic_pressure_threshold = lb_osmotic_pressure_hysteresis  # todo shouldn't this go to the scaler?
-        self.lb_osmotic_pressure_hysteresis = lb_osmotic_pressure_hysteresis
+                         scale_by_queue_requests_per_replica, scale_static, net_mode=net_mode)
         self.lb_osmotic_pressure_window_size = lb_osmotic_pressure_window_size
 
         self.distance_cache = PingCache(self.env)

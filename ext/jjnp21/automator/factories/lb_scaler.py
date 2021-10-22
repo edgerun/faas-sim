@@ -6,6 +6,8 @@ from simpy.core import Environment
 from ext.jjnp21.scalers.fraction_lb_scaler import FractionScaler
 from ext.jjnp21.scalers.lb_scaler import LoadBalancerScaler
 from ext.jjnp21.scalers.manual_set_lb_scaler import ManualSetScaler
+from ext.jjnp21.scalers.osmotic_lb_scaler import OsmoticLoadBalancerScaler
+
 
 class LoadBalancerScalerFactory(abc.ABC):
     kwargs = {}
@@ -32,5 +34,14 @@ class ManualSetLoadBalancerScalerFactory(LoadBalancerScalerFactory):
 
     def create(self, ld: 'LoadBalancerDeployment', env: Environment) -> LoadBalancerScaler:
         return ManualSetScaler(ld, env, **self.kwargs)
+
+
+class OsmoticLoadBalancerScalerFactory(LoadBalancerScalerFactory):
+    def __init__(self, pressure_threshold: float, hysteresis: float):
+        super().__init__(pressure_threshold=pressure_threshold, hysteresis=hysteresis)
+
+    def create(self, ld: 'LoadBalancerDeployment', env: Environment) -> LoadBalancerScaler:
+        return OsmoticLoadBalancerScaler(ld, env, **self.kwargs)
+
 
 

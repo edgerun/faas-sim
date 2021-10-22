@@ -1,7 +1,7 @@
 import logging
 
 from ext.jjnp21.core import LoadBalancerDeployment
-from ext.jjnp21.localized_osmotic_lb_system import OsmoticLoadBalancerCapableFaasSystem
+# from ext.jjnp21.localized_osmotic_lb_system import OsmoticLoadBalancerCapableFaasSystem
 from ext.jjnp21.scalers.lb_scaler import LoadBalancerScaler
 from sim.core import Environment
 
@@ -21,15 +21,11 @@ class OsmoticLoadBalancerScaler(LoadBalancerScaler):
     def run(self):
         logger.info('Running osmotic scaling round')
         env = self.env
-        faas: OsmoticLoadBalancerCapableFaasSystem = None
-        if isinstance(env.faas, OsmoticLoadBalancerCapableFaasSystem):
-            faas = env.faas
-        else:
-            raise ValueError(
-                'FaaS system is not osmotic load balancer capable, although osmotic load balancer scaler is used')
+        faas = env.faas
+
 
         while self.running:
-            yield env.timeout
+            yield env.timeout(self.alert_window)
             pressures = faas.calculate_pressures()
             active_lb_node_names = []
             for replica in faas.get_lb_replicas(self.fn.name):
