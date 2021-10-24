@@ -14,7 +14,7 @@ from ext.jjnp21.automator.factories.topology import GlobalDistributedUrbanSensin
 from ext.jjnp21.automator.main import ExperimentRunAutomator
 
 logging.basicConfig(level=logging.INFO)
-rps = 75
+rps = 25
 duration = 750
 
 
@@ -31,8 +31,8 @@ def get_experiment_for_fraction(fraction: float) -> Experiment:
                       function_scheduler_factory=RandomFunctionSchedulerFactory(),
                       lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=fraction),
                       lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
-                      topology_factory=GlobalDistributedRealisticCityFactory(seed=45, client_ratio=0.6))
-                      # topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
+                      # topology_factory=GlobalDistributedRealisticCityFactory(seed=45, client_ratio=0.6))
+                      topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 
 
 # end of experiments

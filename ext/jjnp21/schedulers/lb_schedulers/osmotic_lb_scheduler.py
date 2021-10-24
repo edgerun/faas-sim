@@ -32,7 +32,7 @@ class OsmoticLoadBalancerScheduler(LoadBalancerScheduler):
 
         # pick a node at random
         suggested_host = None
-        if len(filtered) != 1:
+        if len(filtered) < 1:
             raise ValueError('No fitting node found for load balancer! This should not be able to happen!' +
                              ' Please check there is a valid topology with all the needed labels')
         suggested_host = filtered[0]

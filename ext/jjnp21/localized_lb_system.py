@@ -326,6 +326,7 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
         t_wait = t_start - t_received
         t_exec = t_end - t_start
         client_city = 'N/A'
+        lb_city = 'N/A'
         client_node = 'N/A'
         lb_node = 'N/A'
         tx_time_cl_lb = 0
@@ -341,6 +342,9 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
             tx_time_lb_fx = request.tx_time_lb_fx
         if hasattr(request, 'client_node'):
             client_city = request.client_node.labels.get('city')
+        if hasattr(request, 'load_balancer') and request.load_balancer is not None and isinstance(request.load_balancer,
+                                                                                                  LocalizedLoadBalancer):
+            lb_city = request.load_balancer.ether_node.labels.get('city')
 
         self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_wait, t_start,
                                         t_exec, id(replica),
@@ -349,6 +353,7 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
                                         replica_city=replica.node.ether_node.labels.get('city'),
                                         client_city=client_city,
                                         client_node=client_node,
+                                        lb_city=lb_city,
                                         lb_node=lb_node)
 
     def simulate_function_invocation(self, replica: FunctionReplica, request: FunctionRequest):

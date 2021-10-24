@@ -10,12 +10,16 @@ from ext.jjnp21.automator.factories.function_scheduler import RandomFunctionSche
 from ext.jjnp21.automator.factories.lb_scaler import OsmoticLoadBalancerScalerFactory
 from ext.jjnp21.automator.factories.lb_scheduler import OsmoticLoadBalancerSchedulerFactory
 from ext.jjnp21.automator.factories.topology import GlobalDistributedUrbanSensingFactory
+from ext.jjnp21.debugging.tiny_topology_factory import TinyUrbanSensingTopologyFactory
+from ext.jjnp21.experiments.net_vis import draw_custom
 from ext.jjnp21.topologies.accurate_urban import City
 from sim.topology import Topology
+import matplotlib.pyplot as plt
+import pickle
 
 logging.basicConfig(level=logging.INFO)
-rps = 15
-duration = 1000
+rps = 25
+duration = 2500
 
 
 class AccurateCityTopologyFactory(TopologyFactory):
@@ -43,9 +47,12 @@ exp = Experiment('Least Response Time on all nodes',
                  faas_system_factory=OsmoticLoadBalancerCapableFaasSystemFactory(),
                  net_mode=NetworkSimulationMode.ACCURATE,
                  function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                 lb_scaler_factory=OsmoticLoadBalancerScalerFactory(pressure_threshold=0.4, hysteresis=0.1),
+                 lb_scaler_factory=OsmoticLoadBalancerScalerFactory(pressure_threshold=0.2, hysteresis=0.01),
                  lb_scheduler_factory=OsmoticLoadBalancerSchedulerFactory(),
                  topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
+# topo = TinyUrbanSensingTopologyFactory(client_ratio=0.6).create()
+# draw_custom(topo)
+# plt.show()
 
 start = time.time()
 result = run_experiment(exp)
@@ -60,9 +67,10 @@ print(md)
 #
 # analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
 # print('successfully ran analysis')
-# print('dumping results')
-# f = open('/home/jp/Documents/tmp/results.dump', 'wb')
-# pickle.dump(results, f)
+print('dumping results')
+f = open('/home/jp/Documents/tmp/debug_results.dump', 'wb')
+pickle.dump(result, f)
+print('successfully dumped results')
 # f.flush()
 # f.close()
 # print('successfully dumped results')

@@ -7,9 +7,11 @@ import numpy as np
 from ext.jjnp21.automator.factories.lb_scaler import LoadBalancerScalerFactory
 from ext.jjnp21.core import LoadBalancerDeployment, LoadBalancerReplica
 from ext.jjnp21.localized_lb_system import LocalizedLoadBalancerFaasSystem, NetworkSimulationMode
+from ext.jjnp21.topology import client_label
 from sim.core import Environment
 from sim.faas import FunctionRequest
 from sim.faas.core import Node, FunctionContainer, FunctionSimulator, FunctionState
+from sim.topology import DockerRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +22,7 @@ class PingCache:
         self.cache: Dict[(Node, Node), float] = {}
 
     def get_distance(self, first_node_name: Node, second_node_name: Node) -> float:
+        # Note: returns response time in ms. i.e. 5ms = 5.0 (and NOT 0.005 like it would be in full seconds)
         if first_node_name == second_node_name:
             return 0
         if (first_node_name, second_node_name) in self.cache:
@@ -58,13 +61,15 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
          - calculate the distance from the replicas and weigh it appropriately
         """
         # all nodes. client nodes are not included, docker registry is not included
-        all_nodes = self.env.cluster.list_nodes()
+        # all_nodes = self.env.cluster.list_nodes()
+        all_nodes = [node for node in self.env.topology.get_nodes() if node.labels.get(client_label, None) is None and node != DockerRegistry]
         pressures: Dict[Node, float] = {}
         # nodes with currently running load balancers
         lb_nodes = set()
         for replica_list in self.lb_replicas.values():
             for replica in replica_list:
-                lb_nodes.add(replica.node.ether_node)
+                if replica.state == FunctionState.RUNNING:
+                    lb_nodes.add(replica.node.ether_node)
 
         interval_start = max([0, self.env.now - self.lb_osmotic_pressure_window_size])
 
@@ -74,7 +79,7 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
                 requests_in_interval = [r for r in requests if r >= interval_start]
                 rq_log_in_interval[fn_name][node] = requests_in_interval
 
-        fn_totals: Dict[str, int] = {}
+        fn_totals: Dict[str, int] = defaultdict(lambda: 0)
         for fn_name, logs in rq_log_in_interval.items():
             fn_totals[fn_name] = sum([len(rqs) for rqs in logs.values()])
         for node in all_nodes:
@@ -103,11 +108,20 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
             # also: 1 / fn_distance has no upper limit since 1 / 0.00000001 is very large etc.
             # also: there is a division by 0 error waiting to happen on co-located nodes.
             # todo: check if latencies are measured in seconds or milliseconds
+            if fn_distance == 0:
+                fn_distance = 100000000000
+            if total_request_count == 0:
+                fn_pressures[fn_name] = 0
+                continue
 
             # idea: <how important is the function> * <how much load would the lb get> + <function closeness> * <how important is function closeness>
-            fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] + (
-                    1 / fn_distance) * function_replica_closeness_impact_factor
-        return sum(fn_pressures.values())
+            # fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] + (
+            #         1 / fn_distance) * function_replica_closeness_impact_factor
+            # fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] * (
+            #         1 / fn_distance)
+            # fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] + request_shares[fn_name] * (1 / fn_distance) * 0.1
+            fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name]
+        return float(np.nansum(list(fn_pressures.values())))
 
     def _get_fx_distances_sorted(self, node: Node) -> Dict[str, List[float]]:
         distances: Dict[str, List[float]] = defaultdict(lambda: [])
@@ -123,6 +137,9 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
         for fn_name in self.replicas.keys():
             total = sum([len(rqs) for rqs in rq_log[fn_name].values()])
             client_sum = sum([len(rq_log[fn_name][c]) for c in clients])
+            if total == 0 or client_sum == 0:
+                shares[fn_name] = 0
+                continue
             shares[fn_name] = client_sum / total
         return shares
 
@@ -170,13 +187,13 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
         if target_node is not None:
             replica.pod.spec.labels['osmotic-scheduling-target'] = target_node.name
         else:
-            # if no node is specified, there is a seed node
             replica.pod.spec.labels['osmotic-seed'] = 'True'
+            # if no node is specified, there is a seed node
         return replica
 
     def _find_replicas_by_node_name(self, lb_name: str, nodes_names: List[str]) -> List[LoadBalancerReplica]:
         replicas = []
-        for replica in self.lb_replicas[lb_name]:
+        for replica in self.get_lb_replicas(lb_name, state=FunctionState.RUNNING):
             if replica.node.ether_node.name in nodes_names:
                 replicas.append(replica)
         return replicas
@@ -190,6 +207,21 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
         replicas_to_remove = self._find_replicas_by_node_name(lb_name, list(map(lambda n: n.name, target_nodes)))
         for r in replicas_to_remove:
             logger.info(f'Removing lb replica from node {r.node.name}')
-            self.remove_lb_replica(r)
             self.lb_finder.remove(r)
+            yield from self.remove_lb_replica(r)
+
+    def deploy_lb(self, ld: LoadBalancerDeployment):
+        if ld.name in self.lb_deployments:
+            raise ValueError('LB function already present')
+        self.lb_deployments[ld.name] = ld
+        # set up scaler
+        scaler = self.lb_scaler_factory.create(ld, self.env)
+        self.lb_scalers[ld.name] = scaler
+        self.env.process(self.lb_scalers[ld.name].run())
+        self.env.metrics.log_function_deployment(ld)
+        self.env.metrics.log_function_deployment_lifecycle(ld, 'deploy')
+        logger.info(f'deploying seed load balancer {ld.name}')
+        yield from self.osmotic_scale_up_lb(ld.name, [None])
+
+
 

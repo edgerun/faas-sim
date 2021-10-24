@@ -34,9 +34,12 @@ class ClosestLoadBalancerFinder:
                 self.client_map[node] = (new_replica, new_dist)
 
     def remove(self, del_replica: LoadBalancerReplica):
+        deletion_key = None
         for node, (replica, _) in self.client_map.items():
             if replica == del_replica:
-                del self.client_map[node]
+                deletion_key = node
+        if deletion_key is not None:
+            del self.client_map[deletion_key]
         self.replicas.remove(del_replica)
 
     def _distance(self, client: Node, replica: LoadBalancerReplica):
