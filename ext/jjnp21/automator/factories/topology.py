@@ -160,7 +160,7 @@ class SingleRealisticCityFactory(TopologyFactory):
 
     def create(self) -> Topology:
         topology = Topology()
-        city = create_city(150, True, self.client_ratio, 'internet', self.seed)
+        city = create_city(150, True, self.client_ratio, 'internet', self.seed, name='newyork')
         city.materialize(topology)
         return topology
 
@@ -172,9 +172,9 @@ class NationDistributedRealisticCityFactory(TopologyFactory):
 
     def create(self) -> Topology:
         topology = Topology()
-        chicago = create_city(150, True, self.client_ratio, 'internet_chicago', self.seed)
-        new_york = create_city(150, True, self.client_ratio, 'internet_newyork', self.seed)
-        seattle = create_city(100, False, self.client_ratio, 'internet_seattle', self.seed)
+        chicago = create_city(150, True, self.client_ratio, 'internet_chicago', self.seed, name='chicago')
+        new_york = create_city(150, True, self.client_ratio, 'internet_newyork', self.seed, name='newyork')
+        seattle = create_city(100, False, self.client_ratio, 'internet_seattle', self.seed, name='seattle')
         chicago.materialize(topology)
         new_york.materialize(topology)
         seattle.materialize(topology)
@@ -193,9 +193,9 @@ class GlobalDistributedRealisticCityFactory(TopologyFactory):
 
     def create(self) -> Topology:
         topology = Topology()
-        london = create_city(150, True, self.client_ratio, 'internet_london', self.seed)
-        new_york = create_city(150, True, self.client_ratio, 'internet_newyork', self.seed)
-        sydney = create_city(100, False, self.client_ratio, 'internet_sydney', self.seed)
+        london = create_city(150, True, self.client_ratio, 'internet_london', self.seed, name='london')
+        new_york = create_city(150, True, self.client_ratio, 'internet_newyork', self.seed, name='newyork')
+        sydney = create_city(100, False, self.client_ratio, 'internet_sydney', self.seed, name='sydney')
         london.materialize(topology)
         new_york.materialize(topology)
         sydney.materialize(topology)

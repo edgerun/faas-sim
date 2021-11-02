@@ -1,4 +1,5 @@
 import logging
+import random
 from collections import defaultdict
 
 from ext.jjnp21.core import LoadBalancerDeployment
@@ -27,7 +28,8 @@ class OsmoticLoadBalancerScaler(LoadBalancerScaler):
 
 
         while self.running:
-            yield env.timeout(self.alert_window)
+            yield env.timeout(15)
+            # yield env.timeout(self.alert_window)
             pressures = faas.calculate_pressures()
             active_lb_node_names = []
 
@@ -60,14 +62,25 @@ class OsmoticLoadBalancerScaler(LoadBalancerScaler):
             scale_up_list = []
             scale_down_list = []
             for node, pressure in pressures.items():
-                if pressure >= self.pressure_threshold + self.hysteresis and node.name not in active_lb_node_names:
+                if pressure >= self.pressure_threshold and node.name not in active_lb_node_names:
                     scale_up_list.append(node)
-                elif pressure <= self.pressure_threshold - self.hysteresis and node.name in active_lb_node_names:
+                # elif pressure < -self.hysteresis and node.name in active_lb_node_names:
+                elif pressure <= -self.hysteresis and node.name in active_lb_node_names:
                     scale_down_list.append(node)
 
             # If no node is running yet and there is no pressure suggesting that it needs to run: start a seed load balancer
             if len(active_lb_node_names) == 0 and len(scale_up_list) == 0:
                 scale_up_list.append(None)
+
+            # Throttle. This artificially reduces the amount of change per iteration. Prevents oscillation and helps with faster convergence
+            if len(scale_up_list) > 1:
+                scale_up_list = sorted(scale_up_list, key=lambda n: pressures[n], reverse=True)[:1]
+                # scale_up_list = random.sample(scale_up_list, 10)
+
+            if len(scale_down_list) > 1:
+                scale_down_list = sorted(scale_down_list, key=lambda n: pressures[n])[:1]
+            # if len(scale_up_list) > 0:
+            #     scale_down_list = []
 
             if len(scale_up_list) > 0:
                 logger.info(f'Adding load balancers on the following nodes based on osmotic pressure: {scale_up_list}')

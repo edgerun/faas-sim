@@ -26,7 +26,7 @@ from sim.topology import Topology, supports_central_load_balancer
 
 class City:
     def __init__(self, cloud_node_count: int, client_count: int, smart_pole_count: int, cell_tower_count: int,
-                 five_g_share: float = 0.1, cell_tower_compute_share: float = 0.4, internet='internet', seed: int = 42):
+                 five_g_share: float = 0.1, cell_tower_compute_share: float = 0.4, internet='internet', seed: int = 42, name: str = 'unnamed city'):
         self.cloud_node_count = cloud_node_count
         self.client_count = client_count
         self.smart_pole_count = smart_pole_count
@@ -38,6 +38,7 @@ class City:
         self.smart_poles: List[Cell] = []
         self.cell_towers: List[Cell] = []
         self.clients: List[Node] = []
+        self.name = name
         self._generate()
 
     def materialize(self, topology: Topology):
@@ -59,12 +60,13 @@ class City:
         self.clients = [ether_block_nodes.rpi3() for _ in range(self.client_count)]
         for c in self.clients:
             c.labels[client_label] = 'True'
+            c.labels['city'] = self.name
 
     def _attach_clients(self):
         # TODO look if a more sophisticated attachment than flat random would make sense
         # tower_candidates = [tower for tower in self.cell_towers if isinstance(tower, RANTower) and len(tower.local_nodes) > 0]
-        # candidates = self.smart_poles
-        candidates = self.cell_towers + self.smart_poles
+        candidates = self.smart_poles
+        # candidates = self.cell_towers + self.smart_poles
         for client in self.clients:
             choice = random.choice(candidates)
             if isinstance(choice, RANTower):
@@ -80,6 +82,7 @@ class City:
         nodes = convert_to_ether_nodes(generate_devices(self.cloud_node_count, cloud_settings))
         for node in nodes:
             node.labels[supports_central_load_balancer] = 'True'
+            node.labels['city'] = self.name
         self.cloud = XeonCloudlet(nodes, backhaul=self.internet)
 
     def _generate_cell_towers(self):
@@ -103,17 +106,23 @@ class City:
             else:
                 # TODO replace latency with actual LTE latency values
                 tower = RANTower([], compute_nodes, self.internet, 100, latency.mobile_isp)
+            for node in tower.radio_nodes:
+                node.labels['city'] = self.name
+            for node in tower.local_nodes:
+                node.labels['city'] = self.name
             self.cell_towers.append(tower)
 
     def _generate_smart_poles(self):
         for _ in range(self.smart_pole_count):
             compute_nodes = convert_to_ether_nodes(generate_devices(2, edge_intelligence_settings))
             pole = SmartCityPole(nodes=compute_nodes, backhaul=self.internet)
+            for node in pole.nodes:
+                node.labels['city'] = self.name
             self.smart_poles.append(pole)
 
 
 def create_city(node_count: int, has_datacenter: bool, client_ratio: float, internet: str,
-                 seed: int) -> City:
+                 seed: int, name: str = 'unnamed city') -> City:
     # Note that some assumptions about cities are hardcoded here. If you wish to change those you
     # have to change the method signature, or modify them directly
     nc = node_count
@@ -132,12 +141,7 @@ def create_city(node_count: int, has_datacenter: bool, client_ratio: float, inte
         five_g_share=0.2,
         cell_tower_compute_share=0.25,
         internet=internet,
-        seed=seed
+        seed=seed,
+        name=name
     )
 
-def create_smart_pole():
-    pass
-
-
-def create_datacenter():
-    pass
