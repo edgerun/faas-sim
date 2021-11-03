@@ -126,6 +126,7 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
         # status quo performance Dict[fn_name, fn_performance]
         status_quo_performance: Dict[str, float] = defaultdict(lambda: 0)
         status_quo_performances: Dict[str, List[float]] = defaultdict(list)
+        status_quo_performances_weights: Dict[str, List[float]] = defaultdict(list)
         fn_debug_sums: Dict[str, float] = defaultdict(lambda: 0)
         for lb_node in lb_nodes:
             lb_node_perf = self._calculate_projected_performance(request_shares[lb_node], fn_distances[lb_node],
@@ -133,6 +134,7 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
             for fn_name, fn_perf in lb_node_perf.items():
                 if not np.isnan(fn_perf):
                     status_quo_performances[fn_name].append(fn_perf)
+                    status_quo_performances_weights[fn_name].append(request_shares[lb_node][fn_name])
                     status_quo_performance[fn_name] += fn_perf * request_shares[lb_node][fn_name]
                 else:
                     pass
@@ -141,11 +143,16 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
         #start of test
         test_status_quo: Dict[str, float] = defaultdict(lambda: 0.0000001)
         for function, pfs in status_quo_performances.items():
-            relevant = list(filter(lambda x: x != 0, pfs))
-            if len(relevant) == 0:
-                test_status_quo[function] = 0.00001
-                continue
-            test_status_quo[function] = float(np.median(relevant))
+            # relevant = list(filter(lambda x: x != 0, pfs))
+            # if len(relevant) == 0:
+            #     test_status_quo[function] = 0.00001
+            #     continue
+            # test_status_quo[function] = float(np.median(relevant))
+            # test_status_quo[function] = float(np.median(relevant))
+            a = float(weighted_quantile(pfs, [0.5], status_quo_performances_weights[function])[0])
+            if a < 0:
+                print('kek')
+            test_status_quo[function] = a
             # if test_status_quo[function] == 0:
             #     test_status_quo[function] = 0.000001
 
@@ -435,3 +442,40 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
         self.env.metrics.log_function_deployment_lifecycle(ld, 'deploy')
         logger.info(f'deploying seed load balancer {ld.name}')
         yield from self.osmotic_scale_up_lb(ld.name, [None])
+
+
+
+def weighted_quantile(values, quantiles, sample_weight=None,
+                      values_sorted=False, old_style=False):
+    """ Very close to numpy.percentile, but supports weights.
+    NOTE: quantiles should be in [0, 1]!
+    :param values: numpy.array with data
+    :param quantiles: array-like with many quantiles needed
+    :param sample_weight: array-like of the same length as `array`
+    :param values_sorted: bool, if True, then will avoid sorting of
+        initial array
+    :param old_style: if True, will correct output to be consistent
+        with numpy.percentile.
+    :return: numpy.array with computed quantiles.
+    """
+    values = np.array(values)
+    quantiles = np.array(quantiles)
+    if sample_weight is None:
+        sample_weight = np.ones(len(values))
+    sample_weight = np.array(sample_weight)
+    assert np.all(quantiles >= 0) and np.all(quantiles <= 1), \
+        'quantiles should be in [0, 1]'
+
+    if not values_sorted:
+        sorter = np.argsort(values)
+        values = values[sorter]
+        sample_weight = sample_weight[sorter]
+
+    weighted_quantiles = np.cumsum(sample_weight) - 0.5 * sample_weight
+    if old_style:
+        # To be convenient with numpy.percentile
+        weighted_quantiles -= weighted_quantiles[0]
+        weighted_quantiles /= weighted_quantiles[-1]
+    else:
+        weighted_quantiles /= np.sum(sample_weight)
+    return np.interp(quantiles, weighted_quantiles, values)

@@ -61,7 +61,7 @@ exp = Experiment('Least Response Time on all nodes',
                  faas_system_factory=OsmoticLoadBalancerCapableFaasSystemFactory(),
                  net_mode=NetworkSimulationMode.ACCURATE,
                  function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                 lb_scaler_factory=OsmoticLoadBalancerScalerFactory(pressure_threshold=0.02, hysteresis=0.05),
+                 lb_scaler_factory=OsmoticLoadBalancerScalerFactory(pressure_threshold=0.05, hysteresis=0.02),
                  lb_scheduler_factory=OsmoticLoadBalancerSchedulerFactory(),
                  topology_factory=GlobalDistributedRealisticCityFactory(seed=45, client_ratio=0.6))
                  # topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
