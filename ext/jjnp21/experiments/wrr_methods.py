@@ -285,20 +285,37 @@ t4.run()
 
 results = [('Random', t1), ('Classic', t2), ('Adapted Classic', t4), ('Smooth', t3)]
 
-# for name, test in results:
-#     dfs = test.logger.extract_dfs()
-#     df = dfs['hits']
-#     plt.plot(df['request'], df['hit'])
-# plt.title('Time until full node coverage')
-# plt.xlabel('Request #')
-# plt.ylabel('% of nodes that received at least 1 request')
+def name_to_filename(name):
+    if name == 'Random':
+        return 'random'
+    elif name == 'Classic':
+        return 'classic'
+    elif name == 'Adapted Classic':
+        return 'adapted_classic'
+    elif name == 'Smooth':
+        return 'smooth'
 
-
-
+output_path = '/home/jp/Documents/tmp/implementation_experiments/'
 for name, test in results:
+    path = output_path + name_to_filename(name) + '_hits.csv'
+    dfs = test.logger.extract_dfs()
+    df = dfs['hits']
+    plt.plot(df['request'], df['hit'])
+    df.to_csv(path)
+plt.legend(['Random', 'Classic', 'Adapted Classic', 'Smooth'])
+plt.title('Time until full node coverage')
+plt.xlabel('Request #')
+plt.ylabel('share of nodes that received at least 1 request')
+plt.savefig(output_path + 'hits.png', dpi=1200)
+plt.clf()
+
+# plt.figure(dpi=1200)
+for name, test in results:
+    path = output_path + name_to_filename(name) + '_requests.csv'
     dfs = test.logger.extract_dfs()
     df = dfs['requests'].rolling(200).mean()
     plt.plot(df.index, df['rt'])
+    dfs['requests'].to_csv(path)
 plt.title('Response Time Convergence')
 plt.xlabel('Request #')
 plt.ylabel('Rolling response time average')
@@ -306,4 +323,4 @@ plt.ylabel('Rolling response time average')
 
 plt.legend(['Random', 'Classic', 'Adapted Classic', 'Smooth'])
 
-plt.show()
+plt.savefig(output_path + 'convergence.png', dpi=1200)

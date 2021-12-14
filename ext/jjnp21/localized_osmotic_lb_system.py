@@ -48,7 +48,7 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
                  scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False,
                  scale_static: bool = False,
                  net_mode: NetworkSimulationMode = NetworkSimulationMode.ACCURATE,
-                 lb_osmotic_pressure_window_size: float = 30):
+                 lb_osmotic_pressure_window_size: float = 60):
         super().__init__(env, lb_scaler_factory, scale_by_requests, scale_by_average_requests,
                          scale_by_queue_requests_per_replica, scale_static, net_mode=net_mode)
         self.lb_osmotic_pressure_window_size = lb_osmotic_pressure_window_size

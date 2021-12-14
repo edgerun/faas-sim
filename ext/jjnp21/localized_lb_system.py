@@ -195,7 +195,7 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
             'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
             'mem': 1 - (node.allocatable.memory / node.capacity.memory)
         }, node=node.name)
-
+        self.env.metrics.log_load_balancer_replica_remove(replica)
         self.lb_replica_count[replica.fn_name] -= 1
         self.lb_replica_per_image_count[replica.image] -= 1
 
@@ -246,7 +246,7 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
             self.env.metrics.log_function_deploy(replica)
             # start a new process to simulate starting of pod
             starting_proc = self.env.process(simulate_function_start(self.env, replica))
-
+            self.env.metrics.log_load_balancer_replica_add(replica)
             # this notify function is effectively a callback
             # once the replica is deployed and it's state is RUNNING, it registers the replica with the lb-finder
             def notify(proc, replica: LoadBalancerReplica):

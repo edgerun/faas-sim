@@ -68,6 +68,9 @@ class Result:
     function_deployments: DataFrame
     function_deployment_lifecycle: DataFrame
     functions: DataFrame
+    lb_replica_deploy: DataFrame
+    lb_replica_remove: DataFrame
+    lb_replica_count: DataFrame
     flow: DataFrame
     network: DataFrame
     utilization: DataFrame

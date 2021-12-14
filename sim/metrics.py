@@ -5,6 +5,7 @@ import pandas as pd
 from ether.core import Capacity
 from skippy.core.model import SchedulingResult
 
+from ext.jjnp21.core import LoadBalancerReplica
 from sim.core import Environment
 from sim.faas import FunctionContainer, FunctionRequest, FunctionReplica, FunctionDeployment
 from sim.logging import RuntimeLogger, NullLogger
@@ -25,12 +26,35 @@ class Metrics:
         self.env: Environment = env
         self.logger: RuntimeLogger = log or NullLogger()
         self.total_invocations = 0
+        self.running_lb_replicas = 0
         self.invocations = defaultdict(int)
         self.last_invocation = defaultdict(int)
         self.utilization = defaultdict(lambda: defaultdict(float))
 
     def log(self, metric, value, **tags):
         return self.logger.log(metric, value, **tags)
+
+    def log_load_balancer_replica_add(self, replica: LoadBalancerReplica):
+        node_topo_type = 'undefined'
+        if replica.node.ether_node.labels['topo_type'] is not None:
+            node_topo_type = replica.node.ether_node.labels['topo_type']
+        record = {'lb': replica.function.fn.name, 'node': replica.node.ether_node.name, 'topology_type': node_topo_type}
+        self.log('lb_replica_deploy', record)
+
+        # we also log the lb replica count separately, for easier analysis
+        self.running_lb_replicas += 1
+        self.log('lb_replica_count', {'running_lb_replicas': self.running_lb_replicas})
+
+    def log_load_balancer_replica_remove(self, replica: LoadBalancerReplica):
+        node_topo_type = 'undefined'
+        if replica.node.ether_node.labels['topo_type'] is not None:
+            node_topo_type = replica.node.ether_node.labels['topo_type']
+        record = {'lb': replica.function.fn.name, 'node': replica.node.ether_node.name, 'topology_type': node_topo_type}
+        self.log('lb_replica_remove', record)
+
+        # we also log the lb replica count separately, for easier analysis
+        self.running_lb_replicas -= 1
+        self.log('lb_replica_count', {'running_lb_replicas': self.running_lb_replicas})
 
     def log_load_balancer_hit_fraction(self, lb: str, fraction: float):
         record = {'lb': lb, 'fraction': fraction}

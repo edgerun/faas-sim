@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import List, Dict
 
 from pandas import DataFrame
@@ -62,6 +63,24 @@ def set_node_type_distribution(row: Dict, inv_df: DataFrame):
     row['total_rq_by_type'] = str(typed_results)
     row['avg_rq_by_type'] = str(avg_typed_results)
 
+def set_cross_city_traffic(row: Dict, inv_df: DataFrame):
+    inv_count = len(inv_df.index)
+    cl_fx_cross = inv_df[inv_df['replica_city'] != inv_df['client_city']]
+    cl_fx_counts = len(cl_fx_cross.index)
+    total_cross = inv_df[(inv_df['replica_city'] != inv_df['lb_city']) & (inv_df['replica_city'] != inv_df['client_city'])]
+    total_counts = len(total_cross.index)
+    row['cl_fx_cross_city'] = cl_fx_counts / inv_count
+    row['cl_lb_fx_cross_city'] = total_counts / inv_count
+
+def set_lb_topo_types(row: Dict, lb_adds: DataFrame, lb_removals: DataFrame, lb_counts: DataFrame):
+    by_type = defaultdict(lambda: 0)
+    for r in lb_adds.iterrows():
+        by_type[str(r[1]['topology_type'])] += 1
+    for r in lb_removals.iterrows():
+        by_type[str(r[1]['topology_type'])] -= 1
+    for type, count in by_type.items():
+        row[type] = count
+
 
 class BasicResultAnalyzer:
     def __init__(self, results: List[Result]):
@@ -77,7 +96,20 @@ class BasicResultAnalyzer:
             set_fx_wait_kpis(row, result.fets)
             set_total_reuqest_count(row, result.invocations)
             set_request_tx_kpis(row, result.invocations)
+            set_cross_city_traffic(row, result.invocations)
             if include_node_type_distribution:
                 set_node_type_distribution(row, result.invocations)
             rows.append(row)
         return DataFrame(rows)
+
+    def lb_placement(self) -> DataFrame:
+        rows = []
+        for result in self.results:
+            row = {}
+            row['name'] = result.experiment.name
+            set_lb_topo_types(row, result.lb_replica_deploy, result.lb_replica_remove, result.lb_replica_count)
+            rows.append(row)
+        return DataFrame(rows)
+
+
+

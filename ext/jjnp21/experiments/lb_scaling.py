@@ -9,8 +9,7 @@ from ext.jjnp21.automator.factories.faas import LocalizedLoadBalancerFaaSFactory
 from ext.jjnp21.automator.factories.function_scheduler import RandomFunctionSchedulerFactory
 from ext.jjnp21.automator.factories.lb_scaler import FractionLoadBalancerScalerFactory
 from ext.jjnp21.automator.factories.lb_scheduler import EverywhereLoadBalancerSchedulerFactory
-from ext.jjnp21.automator.factories.topology import GlobalDistributedUrbanSensingFactory, \
-    GlobalDistributedRealisticCityFactory
+from ext.jjnp21.automator.factories.topology import *
 from ext.jjnp21.automator.main import ExperimentRunAutomator
 
 logging.basicConfig(level=logging.INFO)
@@ -31,7 +30,7 @@ def get_experiment_for_fraction(fraction: float) -> Experiment:
                       function_scheduler_factory=RandomFunctionSchedulerFactory(),
                       lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=fraction),
                       lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
-                      topology_factory=GlobalDistributedRealisticCityFactory(seed=45, client_ratio=0.6))
+                      topology_factory=NationDistributedRealisticCityFactory(seed=45, client_ratio=0.6))
                       # topology_factory=GlobalDistributedUrbanSensingFactory(client_ratio=0.6))
 
 
@@ -59,7 +58,7 @@ def get_experiment_for_fraction(fraction: float) -> Experiment:
 
 # experiment_list = [get_experiment_for_fraction(f) for f in [0.1, 0.2]]
 experiment_list = [get_experiment_for_fraction(f) for f in [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]]
-automator = ExperimentRunAutomator(experiment_list, worker_count=4)
+automator = ExperimentRunAutomator(experiment_list, worker_count=8)
 print('Running nation benchmark')
 start = time.time()
 results = automator.run()
@@ -77,7 +76,7 @@ print(md)
 analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
 print('successfully ran analysis')
 print('dumping results')
-f = open('/home/jp/Documents/tmp/results.dump', 'wb')
+f = open('/home/jp/Documents/tmp/lb_scaling_results.dump', 'wb')
 pickle.dump(results, f)
 f.flush()
 f.close()

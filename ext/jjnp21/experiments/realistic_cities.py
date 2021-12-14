@@ -21,7 +21,7 @@ from sim.topology import Topology
 
 logging.basicConfig(level=logging.INFO)
 rps = 25
-duration = 1500
+duration = 500
 client_ratio = 1
 
 class TopologyType(Enum):
@@ -60,7 +60,7 @@ def get_experiment_set(topo_type: TopologyType, seed: int) -> List[Experiment]:
                 faas_system_factory=LocalizedLoadBalancerFaaSFactory(),
                 net_mode=NetworkSimulationMode.ACCURATE,
                 function_scheduler_factory=RandomFunctionSchedulerFactory(),
-                lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=0.05),
+                lb_scaler_factory=FractionLoadBalancerScalerFactory(target_fraction=1),
                 lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
                 topology_factory=get_topo())
 
@@ -91,6 +91,7 @@ def get_experiment_set(topo_type: TopologyType, seed: int) -> List[Experiment]:
                 lb_scheduler_factory=EverywhereLoadBalancerSchedulerFactory(),
                 topology_factory=get_topo())
 
+    # return [lrtd]
     return [lrtc, lrtd, rrc, rrd]
 
 
@@ -107,8 +108,11 @@ for r in results:
 
 analyzer = BasicResultAnalyzer(results)
 analysis_df = analyzer.basic_kpis()
+lb_analysis_df = analyzer.lb_placement()
 md = analysis_df.to_markdown()
 print(md)
+
+print(lb_analysis_df.to_markdown())
 
 # analysis_df.to_csv('/home/jp/Documents/tmp/analysis.csv', sep=';')
 # print('successfully ran analysis')

@@ -64,9 +64,9 @@ class City:
 
     def _attach_clients(self):
         # TODO look if a more sophisticated attachment than flat random would make sense
-        # tower_candidates = [tower for tower in self.cell_towers if isinstance(tower, RANTower) and len(tower.local_nodes) > 0]
+        tower_candidates = [tower for tower in self.cell_towers if isinstance(tower, RANTower) and len(tower.local_nodes) > 0]
         candidates = self.smart_poles
-        # candidates = self.cell_towers + self.smart_poles
+        candidates = self.cell_towers + self.smart_poles
         for client in self.clients:
             choice = random.choice(candidates)
             if isinstance(choice, RANTower):
@@ -83,6 +83,7 @@ class City:
         for node in nodes:
             node.labels[supports_central_load_balancer] = 'True'
             node.labels['city'] = self.name
+            node.labels['topo_type'] = 'cloud'
         self.cloud = XeonCloudlet(nodes, backhaul=self.internet)
 
     def _generate_cell_towers(self):
@@ -110,6 +111,11 @@ class City:
                 node.labels['city'] = self.name
             for node in tower.local_nodes:
                 node.labels['city'] = self.name
+            for node in tower.radio_nodes + tower.local_nodes:
+                if is_five_g[i]:
+                    node.labels['topo_type'] = '5g'
+                else:
+                    node.labels['topo_type'] = '4g'
             self.cell_towers.append(tower)
 
     def _generate_smart_poles(self):
@@ -118,6 +124,7 @@ class City:
             pole = SmartCityPole(nodes=compute_nodes, backhaul=self.internet)
             for node in pole.nodes:
                 node.labels['city'] = self.name
+                node.labels['topo_type'] = 'pole'
             self.smart_poles.append(pole)
 
 
@@ -131,6 +138,8 @@ def create_city(node_count: int, has_datacenter: bool, client_ratio: float, inte
     if has_datacenter:
         dc_node_count = 0.3 * node_count
     nc -= dc_node_count
+    # this works out because all poles have 2 nodes attached later on,
+    # and a tower has a 25% chance to have 4 nodes attached (not counting clients obviously)
     tower_count = int(round(nc * 0.5))
     pole_count = int(round(nc * 0.25))
     return City(

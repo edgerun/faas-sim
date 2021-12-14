@@ -45,6 +45,9 @@ def extract_result_from_sim(sim: Simulation, exp: Experiment, run_duration_secon
     result.utilization = sim.env.metrics.extract_dataframe('utilization')
     result.fets = sim.env.metrics.extract_dataframe('fets')
     result.lb_hits = sim.env.metrics.extract_dataframe('lb_hits')
+    result.lb_replica_deploy = sim.env.metrics.extract_dataframe('lb_replica_deploy')
+    result.lb_replica_remove = sim.env.metrics.extract_dataframe('lb_replica_remove')
+    result.lb_replica_count = sim.env.metrics.extract_dataframe('lb_replica_count')
     return result
 
 
