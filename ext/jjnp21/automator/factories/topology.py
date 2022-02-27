@@ -162,6 +162,8 @@ class SingleRealisticCityFactory(TopologyFactory):
         topology = Topology()
         city = create_city(150, True, self.client_ratio, 'internet', self.seed, name='newyork')
         city.materialize(topology)
+        topology.init_docker_registry()
+        topology.get_load_balancer_node()
         return topology
 
 

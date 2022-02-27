@@ -1,3 +1,4 @@
+import copy
 import logging
 import statistics
 from collections import defaultdict
@@ -7,6 +8,7 @@ import numpy as np
 
 from ext.jjnp21.automator.factories.lb_scaler import LoadBalancerScalerFactory
 from ext.jjnp21.core import LoadBalancerDeployment, LoadBalancerReplica
+from ext.jjnp21.load_balancers.lrt import LeastResponseTimeLoadBalancer
 from ext.jjnp21.localized_lb_system import LocalizedLoadBalancerFaasSystem, NetworkSimulationMode
 from ext.jjnp21.topology import client_label
 from sim.core import Environment
@@ -394,14 +396,31 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
         self.env.metrics.log_function_replica(replica)
         yield self.lb_scheduler_queue.put((replica, services))
 
+    def get_closest_lb_replica_instance(self, node: Node, ld: LoadBalancerDeployment) -> (LoadBalancerReplica, float):
+        min_dist = 10000000000
+        min_replica = None
+        for replica in self.lb_replicas[ld.name]:
+            dist = self.distance_cache.get_distance(node, replica.node.ether_node)
+            if dist < min_dist:
+                min_dist = dist
+                min_replica = replica
+        return min_replica, min_dist
+
     def osmotic_create_lb_replica(self, ld: LoadBalancerDeployment, fn: FunctionContainer,
                                   target_node: Node) -> LoadBalancerReplica:
         replica = LoadBalancerReplica()
         replica.function = ld
         replica.container = fn
         replica.load_balancer = ld.create_load_balancer(self.env, self.replicas)
-        # todo: replace this simulator with one that uses proper values
-        # Think about potentially moving the simulator creation somewhere else. The current way is kind of messy imo
+
+        # todo add initial load balancing values here.
+        #
+        closest_replica, min_dist = self.get_closest_lb_replica_instance(target_node, ld)
+        if min_dist < 50:
+            if isinstance(closest_replica.load_balancer, LeastResponseTimeLoadBalancer) and isinstance(replica.load_balancer, LeastResponseTimeLoadBalancer):
+                replica.load_balancer.wrr_providers = copy.deepcopy(closest_replica.load_balancer.wrr_providers)
+
+
         replica.simulator = FunctionSimulator()
         replica.pod = self.create_pod(ld, fn)
         if target_node is not None:

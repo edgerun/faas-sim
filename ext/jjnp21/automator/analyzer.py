@@ -82,6 +82,9 @@ def set_lb_topo_types(row: Dict, lb_adds: DataFrame, lb_removals: DataFrame, lb_
         row[type] = count
 
 
+
+
+
 class BasicResultAnalyzer:
     def __init__(self, results: List[Result]):
         self.results = results
@@ -101,6 +104,14 @@ class BasicResultAnalyzer:
                 set_node_type_distribution(row, result.invocations)
             rows.append(row)
         return DataFrame(rows)
+
+    def lb_replicas_max_surge(self) -> DataFrame:
+        rows = []
+        for result in self.results:
+            row = {}
+
+            rows.append(row)
+
 
     def lb_placement(self) -> DataFrame:
         rows = []

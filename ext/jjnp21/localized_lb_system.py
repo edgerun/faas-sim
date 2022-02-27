@@ -177,6 +177,7 @@ class LoadBalancerCapableFaasSystem(DefaultFaasSystem):
         replica.container = fn
         replica.load_balancer = ld.create_load_balancer(self.env, self.replicas)
         # todo: replace this simulator with one that uses proper values
+
         # Think about potentially moving the simulator creation somewhere else. The current way is kind of messy imo
         replica.simulator = FunctionSimulator()
         replica.pod = self.create_pod(ld, fn)
@@ -402,3 +403,4 @@ class LocalizedLoadBalancerFaasSystem(LoadBalancerCapableFaasSystem):
         elif self.net_mode == NetworkSimulationMode.FAST:
             flow = UninterruptingFlow(self.env, size_kb * 1024, route)
         yield flow.start()
+
