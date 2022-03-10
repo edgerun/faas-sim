@@ -196,6 +196,8 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
 
         return pressures
 
+
+
     def _calc_neg(self, node: Node,
                   client_assignments: Dict[Node, List[Node]], rq_log: Dict[str, Dict[Node, List[float]]],
                   fn_sorted_distances: Dict[Node, Dict[str, List[float]]], lb_nodes: Set[Node],
