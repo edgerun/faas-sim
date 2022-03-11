@@ -252,8 +252,6 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
         perf_per_fn: Dict[str, float] = defaultdict(lambda: 0)
         for fn_name, _ in request_shares.items():
             perf_per_fn[fn_name] = 1 / (fn_distances[fn_name] + client_distances[fn_name])
-            # perf_per_fn[fn_name] = ((1 / fn_distances[fn_name]) + (1 / client_distances[fn_name]))
-            # perf_per_fn[fn_name] = rq_share * ((1 / fn_distances[fn_name]) + (1 / client_distances[fn_name]))
         return perf_per_fn
 
     def _calc_p_new(self, request_shares: Dict[str, float], fn_distances: Dict[str, float],
@@ -267,62 +265,10 @@ class OsmoticLoadBalancerCapableFaasSystem(LocalizedLoadBalancerFaasSystem):
             projected_performance_delta = (projected_performance - status_quo_performance[fn_name]) / \
                                           status_quo_performance[fn_name]
             fn_pressure[fn_name] = projected_performance_delta * fn_importance
-
-            # avg_status_quo_perf = status_quo_performance[fn_name] / lb_count
-            # projected_performance = request_shares[fn_name] * node_perf[fn_name]
-            # fn_pressure[fn_name] = (projected_performance - avg_status_quo_perf) / avg_status_quo_perf * fn_importance
-
-            # fn_pressure[fn_name] = (node_perf[fn_name] - status_quo_performance[fn_name]) / status_quo_performance[fn_name] * fn_importance
-
-            # fn_pressure[fn_name] = request_shares[fn_name] * (1 / client_distances[fn_name])
-            # fn_pressure[fn_name] = request_shares[fn_name] + 0.01 * node_perf[fn_name]
-
-
-            # if there are no request shares we need to have this penalty factor, as the load balancer is in effect useless
-            # delta = ((node_perf[fn_name] * request_shares[fn_name]) - status_quo_performance[fn_name]) / status_quo_performance[fn_name]
-            # fn_pressure[fn_name] = delta * fn_importance
             if request_shares[fn_name] == 0:
                 fn_pressure[fn_name] = -1 * fn_importance
         pressure = np.nansum(list(fn_pressure.values()))
         return pressure
-
-
-    def _calc_p(self, node: Node, rq_log: Dict[str, Dict[Node, List[float]]], fn_totals: Dict[str, int]) -> float:
-        function_replica_closeness_impact_factor = 0.1  # todo IMPORTANT! re-evaluate that one!
-
-        clients, _ = self._get_potential_clients(node)
-        request_shares = self._calc_request_shares(clients, rq_log)
-        fn_distances_sorted = self._get_fx_distances_sorted(node)
-        fn_closeness_factors: Dict[str, float] = {}
-        for fn_name, distances in fn_distances_sorted.items():
-            rq_share = request_shares[fn_name]
-            # currently the fn distance is defined as:
-            # the mean distance of the s% closest function replicas, where
-            # s = the share the node has on total requests
-            # i.e. the more load the node would have, the more function replicas we consider for distance
-            fn_closeness_factors[fn_name] = float(np.mean([d for d in distances[:int(len(distances) * rq_share)]]))
-
-        fn_pressures: Dict[str, float] = {}
-        total_request_count = sum(fn_totals.values())
-        for fn_name, fn_distance in fn_closeness_factors.items():
-            # todo: figure out the scaling between these two
-            # also: 1 / fn_distance has no upper limit since 1 / 0.00000001 is very large etc.
-            # also: there is a division by 0 error waiting to happen on co-located nodes.
-            # todo: check if latencies are measured in seconds or milliseconds
-            if fn_distance == 0:
-                fn_distance = 1
-            if total_request_count == 0:
-                fn_pressures[fn_name] = 0
-                continue
-
-            # idea: <how important is the function> * <how much load would the lb get> + <function closeness> * <how important is function closeness>
-            # fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] + (
-            #         1 / fn_distance) * function_replica_closeness_impact_factor
-            # fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] * (
-            #         1 / fn_distance)
-            # fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name] + request_shares[fn_name] * (1 / fn_distance) * 0.1
-            fn_pressures[fn_name] = (fn_totals[fn_name] / total_request_count) * request_shares[fn_name]
-        return float(np.nansum(list(fn_pressures.values())))
 
     def _calculate_client_distances(self, clients: List[Node], distances: List[float],
                                     rq_log: Dict[str, Dict[Node, List[float]]]) -> Dict[str, float]:

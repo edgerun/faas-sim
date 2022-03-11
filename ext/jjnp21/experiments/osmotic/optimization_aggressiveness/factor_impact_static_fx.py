@@ -38,7 +38,8 @@ def create_experiment(threshold: float, hysteresis: float):
                       topology_factory=get_topology_factory_for_type(RealTopoType.GLOBAL, seed=45, client_ratio=0.6))
 
 def get_experiments() -> List[Experiment]:
-    vals = [(0.1, 0.05), (0.08, 0.04), (0.06, 0.03), (0.04, 0.02), (0.03, 0.015), (0.02, 0.01), (0.02, 0.02), (0.02, 0.035), (0.02, 0.05)]
+    # (0.1, 0.05), (0.08, 0.04), (0.06, 0.03), (0.04, 0.02), (0.03, 0.015),
+    vals = [ (0.1, 0.2), (0.09, 0.2), (0.08, 0.2), (0.07, 0.2), (0.06, 0.2), (0.05, 0.2), (0.04, 0.2), (0.03, 0.2), (0.02, 0.2)]
     exps = []
     for (threshold, hysteresis) in vals:
         exps.append(create_experiment(threshold, hysteresis))
@@ -63,7 +64,7 @@ md = analysis_df.to_markdown()
 print(md)
 
 print('dumping results')
-f = open('/home/jp/Documents/tmp/optimization_aggressiveness.dump', 'wb')
+f = open('/home/jp/Documents/tmp/optimization_aggressiveness4.dump', 'wb')
 # f = open('/home/jp/Documents/tmp/osmotic_basic_openfaas_scaling.dump', 'wb')
 pickle.dump(results, f)
 print('successfully dumped results')
