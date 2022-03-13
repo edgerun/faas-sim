@@ -48,6 +48,7 @@ def extract_result_from_sim(sim: Simulation, exp: Experiment, run_duration_secon
     result.lb_replica_deploy = sim.env.metrics.extract_dataframe('lb_replica_deploy')
     result.lb_replica_remove = sim.env.metrics.extract_dataframe('lb_replica_remove')
     result.lb_replica_count = sim.env.metrics.extract_dataframe('lb_replica_count')
+    result.lb_replica_count_by_city = sim.env.metrics.extract_dataframe('lb_replica_count_by_city')
     return result
 
 

@@ -27,6 +27,7 @@ class Metrics:
         self.logger: RuntimeLogger = log or NullLogger()
         self.total_invocations = 0
         self.running_lb_replicas = 0
+        self.running_lb_replicas_by_city: Dict[str, int] = defaultdict(lambda: 0)
         self.invocations = defaultdict(int)
         self.last_invocation = defaultdict(int)
         self.utilization = defaultdict(lambda: defaultdict(float))
@@ -45,6 +46,12 @@ class Metrics:
         self.running_lb_replicas += 1
         self.log('lb_replica_count', {'running_lb_replicas': self.running_lb_replicas})
 
+        # we additionally log them by city separately
+        if replica.node.ether_node.labels['city'] is not None:
+            city = replica.node.ether_node.labels['city']
+            self.running_lb_replicas_by_city[city] += 1
+            self.log('lb_replica_count_by_city', {'newyork': self.running_lb_replicas_by_city['newyork'], 'london': self.running_lb_replicas_by_city['london'], 'sydney': self.running_lb_replicas_by_city['sydney']})
+
     def log_load_balancer_replica_remove(self, replica: LoadBalancerReplica):
         node_topo_type = 'undefined'
         if replica.node.ether_node.labels['topo_type'] is not None:
@@ -55,6 +62,12 @@ class Metrics:
         # we also log the lb replica count separately, for easier analysis
         self.running_lb_replicas -= 1
         self.log('lb_replica_count', {'running_lb_replicas': self.running_lb_replicas})
+
+        # we additionally log them by city separately
+        if replica.node.ether_node.labels['city'] is not None:
+            city = replica.node.ether_node.labels['city']
+            self.running_lb_replicas_by_city[city] -= 1
+            self.log('lb_replica_count_by_city', {'newyork': self.running_lb_replicas_by_city['newyork'], 'london': self.running_lb_replicas_by_city['london'], 'sydney': self.running_lb_replicas_by_city['sydney']})
 
     def log_load_balancer_hit_fraction(self, lb: str, fraction: float):
         record = {'lb': lb, 'fraction': fraction}

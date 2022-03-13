@@ -76,6 +76,7 @@ class Result:
     utilization: DataFrame
     fets: DataFrame
     lb_hits: DataFrame
+    lb_replica_count_by_city: DataFrame
 
     def __init__(self):
         pass
