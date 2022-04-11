@@ -13,7 +13,7 @@ with open("requirements.txt", "r") as fh:
 
 setuptools.setup(
     name="faas-sim",
-    version="0.0.1.dev1",
+    version="0.1.1.dev1",
     author="Thomas Rausch, Philipp Raith, Alexander Rashed",
     author_email="t.rausch@dsg.tuwien.ac.at, p.raith@dsg.tuwien.ac.at, alexander.rashed@gmail.com",
     description="FaaS simulator",
