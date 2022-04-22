@@ -15,7 +15,8 @@ from skippy.core.utils import counter
 
 from sim import docker
 from sim.core import Environment
-from sim.faas import FunctionContainer, FunctionDeployment
+from sim.faas import SimFunctionDeployment
+from faas.system.core import FunctionContainer
 from sim.topology import LazyBandwidthGraph, DockerRegistry
 
 
@@ -113,7 +114,7 @@ def to_skippy_node(node: EtherNode) -> SkippyNode:
 pod_counters = defaultdict(counter)
 
 
-def create_function_pod(fd: 'FunctionDeployment', fn: 'FunctionContainer') -> Pod:
+def create_function_pod(fd: 'SimFunctionDeployment', fn: 'FunctionContainer') -> Pod:
     """
     Creates a new Pod that hosts the given function.
     :param fd: the function deployment to get the deployed function name

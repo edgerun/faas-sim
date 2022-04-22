@@ -2,9 +2,10 @@ from dataclasses import dataclass
 from typing import Dict
 
 from ext.raith21 import images, storage
-from sim.faas import DeploymentRanking, FunctionDeployment, FunctionImage, \
-    FunctionContainer, KubernetesResourceConfiguration, Function, ScalingConfiguration
+from sim.faas import DeploymentRanking, SimFunctionDeployment, SimScalingConfiguration
 from sim.oracle.oracle import ResourceOracle, FetOracle
+from faas.system.core import FunctionContainer, FunctionRequest, FunctionImage, Function, \
+    KubernetesResourceConfiguration
 
 default_resnet_inference_ranking = DeploymentRanking(
     [images.resnet50_inference_gpu_manifest, images.resnet50_inference_cpu_manifest])
@@ -33,7 +34,7 @@ class DeploymentSettings:
 
 
 def get_resnet50_inference_deployment(ranking: DeploymentRanking,
-                                      scaling_config: ScalingConfiguration = None) -> FunctionDeployment:
+                                      scaling_config: SimScalingConfiguration = None) -> SimFunctionDeployment:
     # Design Time
     resnet50_cpu_function_image = FunctionImage(image=images.resnet50_inference_cpu_manifest)
     resnet50_gpu_function_image = FunctionImage(image=images.resnet50_inference_gpu_manifest)
@@ -65,10 +66,10 @@ def get_resnet50_inference_deployment(ranking: DeploymentRanking,
     resnet50_gpu_function.labels.update(data_storage)
     resnet50_cpu_function.labels.update(data_storage)
 
-    deployment = FunctionDeployment(
+    deployment = SimFunctionDeployment(
         resnet50_function,
         [resnet50_gpu_function, resnet50_cpu_function],
-        ScalingConfiguration() if scaling_config is None else scaling_config,
+        SimScalingConfiguration() if scaling_config is None else scaling_config,
         ranking
     )
 
@@ -76,7 +77,7 @@ def get_resnet50_inference_deployment(ranking: DeploymentRanking,
 
 
 def get_speech_inference_deployment(ranking: DeploymentRanking,
-                                    scaling_config: ScalingConfiguration = None) -> FunctionDeployment:
+                                    scaling_config: SimScalingConfiguration = None) -> SimFunctionDeployment:
     # Design time
     speech_gpu_function_image = FunctionImage(image=images.speech_inference_gpu_manifest)
     speech_tflite_function_image = FunctionImage(image=images.speech_inference_tflite_manifest)
@@ -113,10 +114,10 @@ def get_speech_inference_deployment(ranking: DeploymentRanking,
         labels={'watchdog': 'http', 'workers': '4', 'cluster': '1'})
     speech_tflite_function.labels.update(data_storage_tflite)
 
-    deployment = FunctionDeployment(
+    deployment = SimFunctionDeployment(
         speech_function,
         [speech_gpu_function, speech_tflite_function],
-        ScalingConfiguration() if scaling_config is None else scaling_config,
+        SimScalingConfiguration() if scaling_config is None else scaling_config,
         ranking
     )
 
@@ -124,7 +125,7 @@ def get_speech_inference_deployment(ranking: DeploymentRanking,
 
 
 def get_mobilenet_inference_deployment(ranking: DeploymentRanking,
-                                       scaling_config: ScalingConfiguration = None) -> FunctionDeployment:
+                                       scaling_config: SimScalingConfiguration = None) -> SimFunctionDeployment:
     # Design time
     mobilenet_tpu_function_image = FunctionImage(image=images.mobilenet_inference_tpu_manifest)
 
@@ -162,10 +163,10 @@ def get_mobilenet_inference_deployment(ranking: DeploymentRanking,
     mobilenet_tpu_function.labels.update(data_storage_tpu_labels)
     mobilenet_tflite_function.labels.update(data_storage_tflite_labels)
 
-    deployment = FunctionDeployment(
+    deployment = SimFunctionDeployment(
         mobilenet_function,
         [mobilenet_tpu_function, mobilenet_tflite_function],
-        ScalingConfiguration() if scaling_config is None else scaling_config,
+        SimScalingConfiguration() if scaling_config is None else scaling_config,
         ranking
     )
 
@@ -178,7 +179,7 @@ def get_mobilenet_inference_deployment(ranking: DeploymentRanking,
 
 
 def get_resnet_training_deployment(ranking: DeploymentRanking,
-                                   scaling_config: ScalingConfiguration = None) -> FunctionDeployment:
+                                   scaling_config: SimScalingConfiguration = None) -> SimFunctionDeployment:
     # Design Time
     resnet_training_gpu_function_image = FunctionImage(image=images.resnet50_training_gpu_manifest)
 
@@ -217,17 +218,17 @@ def get_resnet_training_deployment(ranking: DeploymentRanking,
 
     resnet_training_cpu_function.labels.update(data_storage_labels)
 
-    deployment = FunctionDeployment(
+    deployment = SimFunctionDeployment(
         resnet_training_function,
         [resnet_training_gpu_function, resnet_training_cpu_function],
-        ScalingConfiguration() if scaling_config is None else scaling_config,
+        SimScalingConfiguration() if scaling_config is None else scaling_config,
         ranking
     )
 
     return deployment
 
 
-def get_tf_gpu_deployment(ranking: DeploymentRanking, scaling_config: ScalingConfiguration = None):
+def get_tf_gpu_deployment(ranking: DeploymentRanking, scaling_config: SimScalingConfiguration = None):
     # Design Time
     tf_gpu_function_image = FunctionImage(image=images.tf_gpu_manifest)
     tf_gpu_function = Function(
@@ -243,17 +244,17 @@ def get_tf_gpu_deployment(ranking: DeploymentRanking, scaling_config: ScalingCon
         labels={'watchdog': 'http', 'workers': '4', 'cluster': '3', 'device.edgerun.io/accelerator': 'GPU',
                 'device.edgerun.io/vram': '2000', })
 
-    deployment = FunctionDeployment(
+    deployment = SimFunctionDeployment(
         tf_gpu_function,
         [tf_gpu_function_container],
-        ScalingConfiguration() if scaling_config is None else scaling_config,
+        SimScalingConfiguration() if scaling_config is None else scaling_config,
         ranking
     )
 
     return deployment
 
 
-def get_pi_deployment(ranking: DeploymentRanking, scaling_config: ScalingConfiguration = None) -> FunctionDeployment:
+def get_pi_deployment(ranking: DeploymentRanking, scaling_config: SimScalingConfiguration = None) -> SimFunctionDeployment:
     # Design Time
     pi_function_image = FunctionImage(image=images.pi_manifest)
     pi_function = Function(name=images.pi_function, fn_images=[pi_function_image])
@@ -266,17 +267,17 @@ def get_pi_deployment(ranking: DeploymentRanking, scaling_config: ScalingConfigu
         resource_config=pi_function_requests,
         labels={'watchdog': 'http', 'workers': '4', 'cluster': '1'})
 
-    deployment = FunctionDeployment(
+    deployment = SimFunctionDeployment(
         pi_function,
         [pi_function_container],
-        ScalingConfiguration() if scaling_config is None else scaling_config,
+        SimScalingConfiguration() if scaling_config is None else scaling_config,
         ranking
     )
 
     return deployment
 
 
-def get_fio_deployment(ranking: DeploymentRanking, scaling_config: ScalingConfiguration = None) -> FunctionDeployment:
+def get_fio_deployment(ranking: DeploymentRanking, scaling_config: SimScalingConfiguration = None) -> SimFunctionDeployment:
     # Design Time
     fio_function_image = FunctionImage(image=images.fio_manifest)
     fio_function = Function(name=images.fio_function, fn_images=[fio_function_image])
@@ -289,17 +290,17 @@ def get_fio_deployment(ranking: DeploymentRanking, scaling_config: ScalingConfig
         resource_config=fio_function_requests,
         labels={'watchdog': 'http', 'workers': '4', 'cluster': '1'})
 
-    deployment = FunctionDeployment(
+    deployment = SimFunctionDeployment(
         fio_function,
         [fio_function_container],
-        ScalingConfiguration() if scaling_config is None else scaling_config,
+        SimScalingConfiguration() if scaling_config is None else scaling_config,
         ranking
     )
 
     return deployment
 
 
-def get_resnet_preprocessing_deployment(ranking: DeploymentRanking, scaling_config: ScalingConfiguration = None):
+def get_resnet_preprocessing_deployment(ranking: DeploymentRanking, scaling_config: SimScalingConfiguration = None):
     # Design time
     resnet_preprocessing_function_image = FunctionImage(image=images.resnet50_preprocessing_manifest)
     resnet_preprocessing_function = Function(name=images.resnet50_preprocessing_function,
@@ -326,10 +327,10 @@ def get_resnet_preprocessing_deployment(ranking: DeploymentRanking, scaling_conf
 
     resnet_preprocessing_function.labels.update(data_storage_labels)
 
-    deployment = FunctionDeployment(
+    deployment = SimFunctionDeployment(
         resnet_preprocessing_function,
         [resnet_preprocessing_function_container],
-        ScalingConfiguration() if scaling_config is None else scaling_config,
+        SimScalingConfiguration() if scaling_config is None else scaling_config,
         ranking
     )
 
@@ -337,7 +338,7 @@ def get_resnet_preprocessing_deployment(ranking: DeploymentRanking, scaling_conf
 
 
 def create_all_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle,
-                           deployment_rankings: DeploymentSettings = None) -> Dict[str, FunctionDeployment]:
+                           deployment_rankings: DeploymentSettings = None) -> Dict[str, SimFunctionDeployment]:
     if deployment_rankings is None:
         deployment_rankings = DeploymentSettings()
     return {

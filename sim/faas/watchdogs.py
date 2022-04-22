@@ -2,7 +2,7 @@ import logging
 
 import simpy
 
-from .core import FunctionSimulator, FunctionRequest, FunctionReplica
+from .core import FunctionSimulator, FunctionRequest, SimFunctionReplica
 from ..core import Environment
 
 logger = logging.getLogger(__name__)
@@ -10,16 +10,16 @@ logger = logging.getLogger(__name__)
 
 class Watchdog(FunctionSimulator):
 
-    def claim_resources(self, env: Environment, replica: FunctionReplica, request: FunctionRequest): ...
+    def claim_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest): ...
 
-    def release_resources(self, env: Environment, replica: FunctionReplica, request: FunctionRequest): ...
+    def release_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest): ...
 
-    def execute(self, env: Environment, replica: FunctionReplica, request: FunctionRequest): ...
+    def execute(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest): ...
 
 
 class ForkingWatchdog(Watchdog):
 
-    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         replica.node.current_requests.add(request)
         t_fet_start = env.now
 
@@ -47,10 +47,10 @@ class HTTPWatchdog(Watchdog):
         self.workers = workers
         self.queue = None
 
-    def setup(self, env: Environment, replica: FunctionReplica):
+    def setup(self, env: Environment, replica: SimFunctionReplica):
         self.queue = simpy.Resource(env, capacity=self.workers)
 
-    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         token = self.queue.request()
         t_wait_start = env.now
         yield token

@@ -26,7 +26,7 @@ from sim.docker import ContainerRegistry
 from sim.faas.system import DefaultFaasSystem
 from sim.faassim import Simulation
 from sim.logging import SimulatedClock, RuntimeLogger
-from sim.metrics import Metrics
+from sim.metrics import SimMetrics
 from sim.skippy import SimulationClusterContext
 
 np.random.seed(1234)
@@ -72,7 +72,7 @@ env = Environment()
 
 env.simulator_factory = AIPythonHTTPSimulatorFactory(
     get_raith21_function_characterizations(resource_oracle, fet_oracle))
-env.metrics = Metrics(env, log=RuntimeLogger(SimulatedClock(env)))
+env.metrics = SimMetrics(env, log=RuntimeLogger(SimulatedClock(env)))
 env.topology = topology
 env.faas = DefaultFaasSystem(env, scale_by_requests=True)
 env.container_registry = ContainerRegistry()

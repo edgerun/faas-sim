@@ -2,7 +2,7 @@ from typing import Dict
 
 from ext.raith21 import images
 from ext.raith21.deployments import create_all_deployments
-from sim.faas import FunctionDeployment
+from sim.faas import SimFunctionDeployment
 from sim.oracle.oracle import FetOracle, ResourceOracle
 
 
@@ -15,7 +15,7 @@ def extract_model_type(device: str):
         return device
 
 
-def create_ai_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[str, FunctionDeployment]:
+def create_ai_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[str, SimFunctionDeployment]:
     all_deployments = create_all_deployments(fet_oracle, resource_oracle)
     del all_deployments[images.tf_gpu_function]
     del all_deployments[images.pi_function]
@@ -23,11 +23,11 @@ def create_ai_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle
     return all_deployments
 
 
-def create_mixed_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[str, FunctionDeployment]:
+def create_mixed_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[str, SimFunctionDeployment]:
     return create_all_deployments(fet_oracle, resource_oracle)
 
 
-def create_service_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[str, FunctionDeployment]:
+def create_service_deployments(fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[str, SimFunctionDeployment]:
     all_deployments = create_all_deployments(fet_oracle, resource_oracle)
     del all_deployments[images.speech_inference_function]
     del all_deployments[images.mobilenet_inference_function]
@@ -38,7 +38,7 @@ def create_service_deployments(fet_oracle: FetOracle, resource_oracle: ResourceO
 
 
 def create_deployments_for_profile(profile: str, fet_oracle: FetOracle, resource_oracle: ResourceOracle) -> Dict[
-    str, FunctionDeployment]:
+    str, SimFunctionDeployment]:
     if profile == 'ai':
         return create_ai_deployments(fet_oracle, resource_oracle)
     elif profile == 'mixed':

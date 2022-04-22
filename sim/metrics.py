@@ -3,15 +3,17 @@ from typing import Dict
 
 import pandas as pd
 from ether.core import Capacity
+from faas.system import Metrics
 from skippy.core.model import SchedulingResult
 
 from sim.core import Environment
-from sim.faas import FunctionContainer, FunctionRequest, FunctionReplica, FunctionDeployment
+from sim.faas import SimFunctionReplica, SimFunctionDeployment
 from sim.logging import RuntimeLogger, NullLogger
+from faas.system.core import FunctionContainer, FunctionRequest
 from sim.resource import ResourceUtilization
 
 
-class Metrics:
+class SimMetrics(Metrics):
     """
     Instrumentation and trace logger.
     """
@@ -32,7 +34,7 @@ class Metrics:
     def log(self, metric, value, **tags):
         return self.logger.log(metric, value, **tags)
 
-    def log_function_deployment(self, fn: FunctionDeployment):
+    def log_function_deployment(self, fn: SimFunctionDeployment):
         """
         Logs the functions name, related container images and their metadata
         """
@@ -53,7 +55,7 @@ class Metrics:
 
             self.log('functions', record, type='deploy')
 
-    def log_function_replica(self, replica: FunctionReplica):
+    def log_function_replica(self, replica: SimFunctionReplica):
         for container in replica.pod.spec.containers:
             record = {'name': replica.function.name, 'pod': replica.pod.name, 'image': container.image}
             # TODO fix clustercontext, maybe this is unnecessary as log_function_definition already logs the image
@@ -91,7 +93,7 @@ class Metrics:
                  function_name=function_name,
                  function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)
 
-    def log_function_resource_utilization(self, replica: FunctionReplica, utilization: ResourceUtilization):
+    def log_function_resource_utilization(self, replica: SimFunctionReplica, utilization: ResourceUtilization):
         node = replica.node
         copy = utilization.copy()
         resources = self.__calculate_util(node.capacity, copy)
@@ -112,52 +114,52 @@ class Metrics:
         resources.update(update)
         return resources
 
-    def log_start_exec(self, request: FunctionRequest, replica: FunctionReplica, **kwargs):
+    def log_start_exec(self, request: FunctionRequest, replica: SimFunctionReplica, **kwargs):
         self.invocations[replica.function.name] += 1
         self.total_invocations += 1
         self.last_invocation[replica.function.name] = self.env.now
 
-    def log_stop_exec(self, request: FunctionRequest, replica: FunctionReplica, **kwargs):
+    def log_stop_exec(self, request: FunctionRequest, replica: SimFunctionReplica, **kwargs):
         pass
 
-    def log_deploy(self, replica: FunctionReplica):
+    def log_deploy(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'deploy', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
-    def log_startup(self, replica: FunctionReplica):
+    def log_startup(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'startup', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
-    def log_setup(self, replica: FunctionReplica):
+    def log_setup(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'setup', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
-    def log_finish_deploy(self, replica: FunctionReplica):
+    def log_finish_deploy(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'finish', function_name=replica.function.name, node_name=replica.node.name,
                  replica_id=id(replica))
 
-    def log_teardown(self, replica: FunctionReplica):
+    def log_teardown(self, replica: SimFunctionReplica):
         name = replica.fn_name
         node_name = replica.node.name
         self.log('replica_deployment', 'teardown', function_name=name, node_name=node_name,
                  replica_id=id(replica))
 
-    def log_function_deployment_lifecycle(self, fn: FunctionDeployment, event: str):
+    def log_function_deployment_lifecycle(self, fn: SimFunctionDeployment, event: str):
         self.log('function_deployment_lifecycle', event, name=fn.name, function_id=id(fn))
 
-    def log_queue_schedule(self, replica: FunctionReplica):
+    def log_queue_schedule(self, replica: SimFunctionReplica):
         name = replica.fn_name
         image = replica.image
         self.log('schedule', 'queue', function_name=name, image=image,
                  replica_id=id(replica))
 
-    def log_start_schedule(self, replica: FunctionReplica):
+    def log_start_schedule(self, replica: SimFunctionReplica):
         name = replica.fn_name
         image = replica.image
         self.log('schedule', 'start', function_name=name, image=image,
                  replica_id=id(replica))
 
-    def log_finish_schedule(self, replica: FunctionReplica, result: SchedulingResult):
+    def log_finish_schedule(self, replica: SimFunctionReplica, result: SchedulingResult):
         if not result.suggested_host:
             node_name = 'None'
         else:
@@ -167,21 +169,21 @@ class Metrics:
                  node_name=node_name,
                  successful=node_name != 'None', replica_id=id(replica))
 
-    def log_function_deploy(self, replica: FunctionReplica):
+    def log_function_deploy(self, replica: SimFunctionReplica):
         fn = replica.container
         image = replica.image
         name = replica.fn_name
         self.log('function_deployment', 'deploy', name=name, image=image, function_id=id(fn),
                  node=replica.node.name)
 
-    def log_function_suspend(self, replica: FunctionReplica):
+    def log_function_suspend(self, replica: SimFunctionReplica):
         fn = replica.container
         image = replica.image
         name = replica.fn_name
         self.log('function_deployment', 'suspend', name=name, image=image, function_id=id(fn),
                  node=replica.node.name)
 
-    def log_function_remove(self, replica: FunctionReplica):
+    def log_function_remove(self, replica: SimFunctionReplica):
         fn = replica.function
         image = replica.image
         name = replica.fn_name

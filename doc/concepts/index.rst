@@ -36,10 +36,10 @@ Instead, we want to allow the resource scheduler to affect the decision which im
 
 .. TODO: document the other concepts
 
-FunctionDeployment
+SimFunctionDeployment
 ------------------
 
-A FunctionDeployment is an instance of a Function with a concrete resource allocation and scaling policy configuration.
+A SimFunctionDeployment is an instance of a Function with a concrete resource allocation and scaling policy configuration.
 A deployment consists of multiple FunctionContainer instances and said configurations.
 
 FunctionContainer
@@ -50,10 +50,10 @@ It has a specific resource configuration that declares how much resources are al
 In our running example, a GPU-based "object-detector" might require less CPU but more VRAM than the CPU-based FunctionImage.
 
 
-FunctionReplica
+SimFunctionReplica
 ---------------
 
-A FunctionReplica is a concrete instantiation of a FunctionContainer.
+A SimFunctionReplica is a concrete instantiation of a FunctionContainer.
 It represents the actual running function (like a Docker container).
 
 
@@ -76,15 +76,15 @@ Think of it like the main API gateway of OpenFaaS or the kube-apiserver of Kuber
 
     class FaasSystem(abc.ABC):
 
-        def deploy(self, fn: FunctionDeployment): ...
+        def deploy(self, fn: SimFunctionDeployment): ...
 
         def invoke(self, request: FunctionRequest): ...
 
-        def remove(self, fn: FunctionDeployment): ...
+        def remove(self, fn: SimFunctionDeployment): ...
 
         def suspend(self, fn_name: str): ...
 
-        def discover(self, fn_name: str) -> List[FunctionReplica]: ...
+        def discover(self, fn_name: str) -> List[SimFunctionReplica]: ...
 
         def scale_down(self, fn_name: str, remove: int): ...
 
@@ -93,24 +93,24 @@ Think of it like the main API gateway of OpenFaaS or the kube-apiserver of Kuber
         # additional lookup methods:
         def poll_available_replica(self, fn: str, interval=0.5): ...
 
-        def get_replicas(self, fn_name: str, state=None) -> List[FunctionReplica]: ...
+        def get_replicas(self, fn_name: str, state=None) -> List[SimFunctionReplica]: ...
 
         def get_function_index(self) -> Dict[str, FunctionContainer]: ...
 
-        def get_deployments(self) -> List[FunctionDeployment]:  ...
+        def get_deployments(self) -> List[SimFunctionDeployment]:  ...
 
 Conceptually the phases are:
 
-* **deploy**: makes the function invokable and deploys the minimum number of ``FunctionReplica`` instances on the cluster. The number of minimum running instances is configured via ``ScalingConfiguration``.
+* **deploy**: makes the function invokable and deploys the minimum number of ``SimFunctionReplica`` instances on the cluster. The number of minimum running instances is configured via ``SimScalingConfiguration``.
 
-* **invoke**: the ``LoadBalancer`` selects a replica and simulates the function invocation by calling the ``invoke`` method of the associated ``FunctionSimulator``.
+* **invoke**: the ``SimLoadBalancer`` selects a replica and simulates the function invocation by calling the ``invoke`` method of the associated ``FunctionSimulator``.
 * **remove**: removes the function from the platform and shutsdown all running replias.
 
-* **discover**: returns all running ``FunctionReplica`` instances that belong to the function.
+* **discover**: returns all running ``SimFunctionReplica`` instances that belong to the function.
 
-* **scale_down**: removes the specified number of running ``FunctionReplica`` instances, with respect to the minimum requirement. The current implementation picks the most recent deployed replicas first.
+* **scale_down**: removes the specified number of running ``SimFunctionReplica`` instances, with respect to the minimum requirement. The current implementation picks the most recent deployed replicas first.
 
-* **scale_up**: deploys the specified number of ``FunctionReplica`` instances but has to respect the maximum number specified in the ``ScalingConfiguration``.
+* **scale_up**: deploys the specified number of ``SimFunctionReplica`` instances but has to respect the maximum number specified in the ``SimScalingConfiguration``.
 
 * **suspend**: executes a teardown for all running replicas of a function. (used by ``faas_idler``).
 
@@ -120,7 +120,7 @@ Conceptually the phases are:
 
 * **get_function_index**: returns all deployed ``FunctionContainers``.
 
-* **get_deployments**: returns all deployed ``FunctionDeployment`` instances.
+* **get_deployments**: returns all deployed ``SimFunctionDeployment`` instances.
 
 .. _Function Simulators:
 
@@ -136,25 +136,25 @@ The FunctionSimulator methods are invoked by the simulator to simulate the the d
 
     class FunctionSimulator(abc.ABC):
 
-        def deploy(self, env: Environment, replica: FunctionReplica):
+        def deploy(self, env: Environment, replica: SimFunctionReplica):
             yield env.timeout(0)
 
-        def startup(self, env: Environment, replica: FunctionReplica):
+        def startup(self, env: Environment, replica: SimFunctionReplica):
             yield env.timeout(0)
 
-        def setup(self, env: Environment, replica: FunctionReplica):
+        def setup(self, env: Environment, replica: SimFunctionReplica):
             yield env.timeout(0)
 
-        def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+        def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
             yield env.timeout(0)
 
-        def teardown(self, env: Environment, replica: FunctionReplica):
+        def teardown(self, env: Environment, replica: SimFunctionReplica):
             yield env.timeout(0)
 
 Conceptually the phases are:
 
 * **deploy**:
-  the FunctionReplica is being deployed on the node (e.g., pulling the container image using a ``docker pull`` command)
+  the SimFunctionReplica is being deployed on the node (e.g., pulling the container image using a ``docker pull`` command)
 * **startup**:
   the replica is spinning up (e.g., starting the container with ``docker run``)
 * **setup**:

@@ -5,7 +5,8 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from sim.core import Environment
-from sim.faas import FunctionReplica, FaasSystem, FunctionState
+from sim.faas import SimFunctionReplica
+from faas.system.core import FunctionState, FaasSystem
 
 
 class ResourceUtilization:
@@ -43,20 +44,20 @@ class NodeResourceUtilization:
     # key is pod-name,   uniqueness allows for running same FunctionContainer multiple times on node
     __resources: Dict[str, ResourceUtilization]
 
-    # associates the pod-name with its FunctionReplica
-    __replicas: Dict[str, FunctionReplica]
+    # associates the pod-name with its SimFunctionReplica
+    __replicas: Dict[str, SimFunctionReplica]
 
     def __init__(self):
         self.__resources = {}
         self.__replicas = {}
 
-    def put_resource(self, replica: FunctionReplica, resource: str, value: float):
+    def put_resource(self, replica: SimFunctionReplica, resource: str, value: float):
         self.get_resource_utilization(replica).put_resource(resource, value)
 
-    def remove_resource(self, replica: FunctionReplica, resource: str, value: float):
+    def remove_resource(self, replica: SimFunctionReplica, resource: str, value: float):
         self.get_resource_utilization(replica).remove_resource(resource, value)
 
-    def get_resource_utilization(self, replica: FunctionReplica) -> ResourceUtilization:
+    def get_resource_utilization(self, replica: SimFunctionReplica) -> ResourceUtilization:
         name = replica.pod.name
         util = self.__resources.get(name)
         if util is None:
@@ -66,7 +67,7 @@ class NodeResourceUtilization:
         else:
             return util
 
-    def list_resource_utilization(self) -> List[Tuple[FunctionReplica, ResourceUtilization]]:
+    def list_resource_utilization(self) -> List[Tuple[SimFunctionReplica, ResourceUtilization]]:
         functions = []
         for pod_name, utilization in self.__resources.items():
             replica = self.__replicas.get(pod_name)
@@ -88,20 +89,20 @@ class ResourceState:
     def __init__(self):
         self.node_resource_utilizations = {}
 
-    def put_resource(self, function_replica: FunctionReplica, resource: str, value: float):
+    def put_resource(self, function_replica: SimFunctionReplica, resource: str, value: float):
         node_name = function_replica.node.name
         node_resources = self.get_node_resource_utilization(node_name)
         node_resources.put_resource(function_replica, resource, value)
 
-    def remove_resource(self, replica: 'FunctionReplica', resource: str, value: float):
+    def remove_resource(self, replica: 'SimFunctionReplica', resource: str, value: float):
         node_name = replica.node.name
         self.get_node_resource_utilization(node_name).remove_resource(replica, resource, value)
 
-    def get_resource_utilization(self, replica: 'FunctionReplica') -> 'ResourceUtilization':
+    def get_resource_utilization(self, replica: 'SimFunctionReplica') -> 'ResourceUtilization':
         node_name = replica.node.name
         return self.get_node_resource_utilization(node_name).get_resource_utilization(replica)
 
-    def list_resource_utilization(self, node_name: str) -> List[Tuple['FunctionReplica', 'ResourceUtilization']]:
+    def list_resource_utilization(self, node_name: str) -> List[Tuple['SimFunctionReplica', 'ResourceUtilization']]:
         return self.get_node_resource_utilization(node_name).list_resource_utilization()
 
     def get_node_resource_utilization(self, node_name: str) -> Optional[NodeResourceUtilization]:
@@ -114,7 +115,7 @@ class ResourceState:
 
 @dataclass
 class ResourceWindow:
-    replica: FunctionReplica
+    replica: SimFunctionReplica
     resources: Dict[str, float]
     time: float
 
@@ -138,12 +139,12 @@ class MetricsServer:
 
         self._windows[node][pod].append(window)
 
-    def get_average_cpu_utilization(self, fn_replica: FunctionReplica, window_start: float, window_end: float) -> float:
+    def get_average_cpu_utilization(self, fn_replica: SimFunctionReplica, window_start: float, window_end: float) -> float:
         utilization = self.get_average_resource_utilization(fn_replica, 'cpu', window_start, window_end)
         millis = fn_replica.node.capacity.cpu_millis
         return utilization / millis
 
-    def get_average_resource_utilization(self, fn_replica: FunctionReplica, resource: str, window_start: float,
+    def get_average_resource_utilization(self, fn_replica: SimFunctionReplica, resource: str, window_start: float,
                                          window_end: float) -> float:
         node = fn_replica.node.name
         pod = fn_replica.pod.name

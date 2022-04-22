@@ -4,7 +4,7 @@ import numpy as np
 
 from ext.raith21.functionsim import FunctionCall
 from sim.core import Environment
-from sim.faas import FaasSystem, FunctionState
+from faas.system.core import FunctionState, FaasSystem
 from sim.oracle.oracle import ResourceOracle
 from sim.resource import ResourceWindow
 

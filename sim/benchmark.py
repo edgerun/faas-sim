@@ -8,7 +8,7 @@ from ext.raith21 import loader
 from sim import docker
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import FunctionDeployment
+from sim.faas import SimFunctionDeployment
 from sim.requestgen import function_trigger
 
 
@@ -24,7 +24,7 @@ class Benchmark:
 
 
 class BenchmarkBase(Benchmark):
-    def __init__(self, images: List[Tuple[str, str, str]], deployments: List[FunctionDeployment],
+    def __init__(self, images: List[Tuple[str, str, str]], deployments: List[SimFunctionDeployment],
                  arrival_profiles: Dict[str, Generator], duration: int = None):
         self.duration = duration  # in seconds
         self.images = images
@@ -83,7 +83,7 @@ class BenchmarkBase(Benchmark):
 
 class DegradationBenchmarkBase(BenchmarkBase):
 
-    def __init__(self, images: List[Tuple[str, str, str]], deployments: List[FunctionDeployment],
+    def __init__(self, images: List[Tuple[str, str, str]], deployments: List[SimFunctionDeployment],
                  arrival_profiles: Dict[str, Generator], duration: int = None, model_folder='./data'):
         super().__init__(images, deployments, arrival_profiles, duration)
         self.model_folder = model_folder

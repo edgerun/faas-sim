@@ -6,9 +6,10 @@ from skippy.core.scheduler import Scheduler
 from sim.benchmark import Benchmark
 from sim.core import Environment, timeout_listener
 from sim.docker import ContainerRegistry, pull as docker_pull
-from sim.faas import FunctionReplica, FunctionRequest, FunctionSimulator, SimulatorFactory, FunctionContainer
+from sim.faas import SimFunctionReplica, FunctionSimulator, SimulatorFactory
+from faas.system.core import FunctionContainer, FunctionRequest
 from sim.faas.system import DefaultFaasSystem
-from sim.metrics import Metrics, RuntimeLogger
+from sim.metrics import SimMetrics, RuntimeLogger
 from sim.resource import MetricsServer, ResourceState, ResourceMonitor
 from sim.skippy import SimulationClusterContext
 from sim.topology import Topology
@@ -74,7 +75,7 @@ class Simulation:
             env.faas = self.create_faas_system(env)
 
         if not env.metrics:
-            env.metrics = Metrics(env, RuntimeLogger())
+            env.metrics = SimMetrics(env, RuntimeLogger())
 
         if not env.cluster:
             env.cluster = SimulationClusterContext(env)
@@ -106,30 +107,30 @@ class Simulation:
 
 class DummySimulator(FunctionSimulator):
 
-    def deploy(self, env: Environment, replica: FunctionReplica):
+    def deploy(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)
 
-    def startup(self, env: Environment, replica: FunctionReplica):
+    def startup(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)
 
-    def setup(self, env: Environment, replica: FunctionReplica):
+    def setup(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)
 
-    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         yield env.timeout(0)
 
-    def teardown(self, env: Environment, replica: FunctionReplica):
+    def teardown(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)
 
 
 class DockerDeploySimMixin:
-    def deploy(self, env: Environment, replica: FunctionReplica):
+    def deploy(self, env: Environment, replica: SimFunctionReplica):
         yield from docker_pull(env, replica.image, replica.node.ether_node)
 
 
 class ModeledExecutionSimMixin:
 
-    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         # 1) get parameters of base distribution (ideal case)
         # 2) check the utilization of the node the replica is running on
         # 3) transform distribution parameters with degradation function depending on utilization

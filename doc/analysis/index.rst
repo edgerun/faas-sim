@@ -5,7 +5,7 @@ Analysis
 ========
 
 Analysis of simulation results is done by extracting pandas DataFrames upon completion (``sim.env.metrics.extract_dataframe(<name>)``).
-The environment of the simulation contains a ``Metrics`` object used throughout the simulation to log events.
+The environment of the simulation contains a ``SimMetrics`` object used throughout the simulation to log events.
 Those events describe different aspects of a FaaS platform (``FaasSystem``), such as scheduling process, data flow or invocations.
 
 Default logs
@@ -39,10 +39,10 @@ During the simulation various aspects of the system are being logged.
 Logging happens mainly from the core implementation but some aspects are left to the users.
 Details about those aspects follow later.
 
-``Metrics`` defines a general log function and different out-of-the-box log functions that target specific events in the lifecycle of a FaaS platform.
+``SimMetrics`` defines a general log function and different out-of-the-box log functions that target specific events in the lifecycle of a FaaS platform.
 
 
-The ``Metrics`` constructor takes a ``RuntimeLogger`` object as initialisation parameter.
+The ``SimMetrics`` constructor takes a ``RuntimeLogger`` object as initialisation parameter.
 The *logger* stores all records and can be configured by providing a ``Clock`` object, which determines the time of each log event.
 
 .. hint::

@@ -39,7 +39,7 @@ To implement these functions, our system contains the following state:
     Be aware that this is subject to change and using lookup methods is much safer with respect to updates.
 
 
-* ``env: Environment``: used to access global configured components (i.e., ``Metrics``, ``SimulatorFactory``, ``ClusterContext``)
+* ``env: Environment``: used to access global configured components (i.e., ``SimMetrics``, ``SimulatorFactory``, ``ClusterContext``)
 * ``function_containers: Dict[str, FunctionContainer]``: stores all available function containers from the deployed functions
 * ``replicas: Dict[str, List[FunctionReplica]``: collects all FunctionReplicas under the name of the corresponding FunctionDeployment
 * ``scheduler_queue: simpy.Store``: contains function replicas that need to be scheduled. ``scale_up`` puts replicas into the queue and ``run_schedule_worker`` polls from it.

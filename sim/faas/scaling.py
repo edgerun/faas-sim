@@ -4,7 +4,8 @@ import math
 import numpy as np
 
 from sim.core import Environment
-from sim.faas import FaasSystem, FunctionState, FunctionDeployment
+from faas.system.core import FunctionState, FaasSystem
+from sim.faas import SimFunctionDeployment
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ def faas_idler(env: Environment, inactivity_duration=300, reconcile_interval=30)
 
 class FaasRequestScaler:
 
-    def __init__(self, fn: FunctionDeployment, env: Environment):
+    def __init__(self, fn: SimFunctionDeployment, env: Environment):
         self.env = env
         self.function_invocations = dict()
         self.reconcile_interval = fn.scaling_config.rps_threshold_duration
@@ -84,7 +85,7 @@ class AverageFaasRequestScaler:
     The distributed property holds as per default the round robin scheduler is used
     """
 
-    def __init__(self, fn: FunctionDeployment, env: Environment):
+    def __init__(self, fn: SimFunctionDeployment, env: Environment):
         self.env = env
         self.function_invocations = dict()
         self.threshold = fn.scaling_config.target_average_rps
@@ -153,7 +154,7 @@ class AverageQueueFaasRequestScaler:
     The distributed property holds as per default the round robin scheduler is used
     """
 
-    def __init__(self, fn: FunctionDeployment, env: Environment):
+    def __init__(self, fn: SimFunctionDeployment, env: Environment):
         self.env = env
         self.threshold = fn.scaling_config.target_queue_length
         self.alert_window = fn.scaling_config.alert_window

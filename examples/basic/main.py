@@ -2,14 +2,15 @@ import logging
 from typing import List
 
 import ether.scenarios.urbansensing as scenario
+from faas.system.core import FunctionImage, FunctionRequest, FunctionContainer, Function, \
+    KubernetesResourceConfiguration
 from skippy.core.utils import parse_size_string
 
 from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import FunctionDeployment, FunctionRequest, Function, FunctionImage, ScalingConfiguration, \
-    DeploymentRanking, FunctionContainer, KubernetesResourceConfiguration
+from sim.faas import SimFunctionDeployment, SimScalingConfiguration, DeploymentRanking
 from sim.faassim import Simulation
 from sim.topology import Topology
 
@@ -89,7 +90,7 @@ class ExampleBenchmark(Benchmark):
         for p in ps:
             yield p
 
-    def prepare_deployments(self) -> List[FunctionDeployment]:
+    def prepare_deployments(self) -> List[SimFunctionDeployment]:
         resnet_fd = self.prepare_resnet_inference_deployment()
 
         python_pi_fd = self.prepare_python_pi_deployment()
@@ -107,10 +108,10 @@ class ExampleBenchmark(Benchmark):
 
         python_pi_fn_container = FunctionContainer(python_pi_cpu)
 
-        python_pi_fd = FunctionDeployment(
+        python_pi_fd = SimFunctionDeployment(
             python_pi_fn,
             [python_pi_fn_container],
-            ScalingConfiguration()
+            SimScalingConfiguration()
         )
 
         return python_pi_fd
@@ -135,10 +136,10 @@ class ExampleBenchmark(Benchmark):
         request = KubernetesResourceConfiguration.create_from_str(cpu='100m', memory='1024Mi')
         resnet_gpu_container = FunctionContainer(resnet_inference_gpu, resource_config=request)
 
-        resnet_fd = FunctionDeployment(
+        resnet_fd = SimFunctionDeployment(
             resnet_fn,
             [resnet_cpu_container, resnet_gpu_container],
-            ScalingConfiguration(),
+            SimScalingConfiguration(),
             DeploymentRanking([inference_gpu, inference_cpu])
         )
 

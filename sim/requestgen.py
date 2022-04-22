@@ -9,7 +9,8 @@ import pandas as pd
 import simpy
 
 from sim.core import Environment
-from sim.faas import FunctionRequest, FunctionDeployment
+from sim.faas import SimFunctionDeployment
+from faas.system.core import  FunctionRequest
 
 __all__ = [
     'constant_rps_profile',
@@ -94,7 +95,7 @@ def pre_recorded_profile(file: str):
         yield from pickle.load(fd)
 
 
-def function_trigger(env: Environment, deployment: FunctionDeployment, ia_generator, max_requests=None):
+def function_trigger(env: Environment, deployment: SimFunctionDeployment, ia_generator, max_requests=None):
     try:
         if max_requests is None:
             while True:

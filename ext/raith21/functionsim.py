@@ -1,12 +1,13 @@
 import logging
 from typing import Callable, Optional, Dict
 
+from faas.system.core import FunctionRequest, FunctionContainer
 from simpy import Resource
 
 from sim.core import Environment
 from sim.docker import pull as docker_pull
-from sim.faas import FunctionSimulator, FunctionRequest, FunctionReplica, SimulatorFactory, simulate_data_download, \
-    simulate_data_upload, FunctionCharacterization, FunctionContainer
+from sim.faas import FunctionSimulator, SimFunctionReplica, SimulatorFactory, simulate_data_download, \
+    simulate_data_upload, FunctionCharacterization
 
 
 def linear_queue_fet_increase(current_requests: int, max_requests: int) -> float:
@@ -24,7 +25,7 @@ class PythonHTTPSimulator(FunctionSimulator):
         self.fn = fn
         self.characterization = characterization
 
-    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         token = self.queue.request()
         yield token  # wait for access
 
@@ -58,7 +59,7 @@ class PythonHttpSimulatorFactory(SimulatorFactory):
 
 
 class FunctionCall:
-    replica: FunctionReplica
+    replica: SimFunctionReplica
     request: FunctionRequest
     start: int
     end: Optional[int] = None
@@ -107,15 +108,15 @@ class AIPythonHTTPSimulator(FunctionSimulator):
         self.delay = 0
         self.characterization = characterization
 
-    def deploy(self, env: Environment, replica: FunctionReplica):
+    def deploy(self, env: Environment, replica: SimFunctionReplica):
         yield from docker_pull(env, replica.image, replica.node.ether_node)
 
-    def setup(self, env: Environment, replica: FunctionReplica):
+    def setup(self, env: Environment, replica: SimFunctionReplica):
         image = replica.pod.spec.containers[0].image
         if 'inference' in image:
             yield from simulate_data_download(env, replica)
 
-    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         token = self.queue.request()
         t_wait_start = env.now
         yield token  # wait for access
@@ -160,15 +161,15 @@ class InterferenceAwarePythonHttpSimulator(FunctionSimulator):
         self.delay = 0
         self.characterization = characterization
 
-    def deploy(self, env: Environment, replica: FunctionReplica):
+    def deploy(self, env: Environment, replica: SimFunctionReplica):
         yield from docker_pull(env, replica.image, replica.node.ether_node)
 
-    def setup(self, env: Environment, replica: FunctionReplica):
+    def setup(self, env: Environment, replica: SimFunctionReplica):
         image = replica.pod.spec.containers[0].image
         if 'inference' in image:
             yield from simulate_data_download(env, replica)
 
-    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         token = self.queue.request()
         t_wait_start = env.now
         yield token  # wait for access

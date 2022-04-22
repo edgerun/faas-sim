@@ -8,13 +8,14 @@ from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import FunctionDeployment, Function, FunctionImage, ScalingConfiguration, \
-    FunctionContainer
+from sim.faas import SimFunctionDeployment, SimScalingConfiguration
 from sim.faassim import Simulation
 from sim.requestgen import function_trigger, constant_rps_profile, expovariate_arrival_profile
 from sim.topology import Topology
 
 logger = logging.getLogger(__name__)
+
+from faas.system.core import FunctionContainer, Function, FunctionImage
 
 
 def main():
@@ -72,7 +73,7 @@ class ExampleBenchmark(Benchmark):
         # run profile
         yield from function_trigger(env, deployments[0], ia_generator, max_requests=100)
 
-    def prepare_deployments(self) -> List[FunctionDeployment]:
+    def prepare_deployments(self) -> List[SimFunctionDeployment]:
         python_pi_fd = self.prepare_python_pi_deployment()
 
         return [python_pi_fd]
@@ -88,10 +89,10 @@ class ExampleBenchmark(Benchmark):
 
         python_pi_fn_container = FunctionContainer(python_pi_cpu)
 
-        python_pi_fd = FunctionDeployment(
+        python_pi_fd = SimFunctionDeployment(
             python_pi_fn,
             [python_pi_fn_container],
-            ScalingConfiguration()
+            SimScalingConfiguration()
         )
 
         return python_pi_fd

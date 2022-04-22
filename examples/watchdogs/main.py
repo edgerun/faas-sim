@@ -10,9 +10,10 @@ from sim import docker
 from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import SimulatorFactory, FunctionContainer, FunctionSimulator, FunctionDeployment, ScalingConfiguration, \
-    DeploymentRanking, FunctionImage, Function, FunctionRequest
+from sim.faas import SimulatorFactory, FunctionSimulator, SimFunctionDeployment, SimScalingConfiguration, \
+    DeploymentRanking
 from sim.faassim import Simulation
+from faas.system.core import FunctionContainer, FunctionRequest, FunctionImage, Function
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +89,7 @@ class TrainInferenceBenchmark(Benchmark):
         for p in ps:
             yield p
 
-    def prepare_deployments(self) -> List[FunctionDeployment]:
+    def prepare_deployments(self) -> List[SimFunctionDeployment]:
         resnet_inference_fd = self.prepare_resnet_inference_deployment()
 
         resnet_training_fd = self.prepare_resnet_training_deployment()
@@ -108,10 +109,10 @@ class TrainInferenceBenchmark(Benchmark):
 
         resnet_cpu_container = FunctionContainer(resnet_training_cpu)
 
-        resnet_fd = FunctionDeployment(
+        resnet_fd = SimFunctionDeployment(
             resnet_fn,
             [resnet_cpu_container],
-            ScalingConfiguration(),
+            SimScalingConfiguration(),
             DeploymentRanking([training_cpu])
         )
 
@@ -130,10 +131,10 @@ class TrainInferenceBenchmark(Benchmark):
 
         resnet_cpu_container = FunctionContainer(resnet_inference_cpu)
 
-        resnet_fd = FunctionDeployment(
+        resnet_fd = SimFunctionDeployment(
             resnet_fn,
             [resnet_cpu_container],
-            ScalingConfiguration(),
+            SimScalingConfiguration(),
             DeploymentRanking([inference_cpu])
         )
 

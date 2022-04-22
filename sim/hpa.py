@@ -1,7 +1,7 @@
 import math
 
 from sim.core import Environment
-from sim.faas import FunctionState, FaasSystem
+from faas.system.core import FunctionState, FaasSystem
 from sim.resource import MetricsServer
 
 

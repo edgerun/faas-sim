@@ -3,9 +3,9 @@ import logging
 import examples.basic.main as basic
 import sim.docker as docker
 from sim.core import Environment
-from sim.faas import FunctionSimulator, FunctionReplica, FunctionRequest, SimulatorFactory, FunctionContainer
+from sim.faas import FunctionSimulator, SimFunctionReplica, SimulatorFactory
 from sim.faassim import Simulation
-
+from faas.system.core import FunctionContainer, FunctionRequest
 logger = logging.getLogger(__name__)
 
 
@@ -33,21 +33,21 @@ class CustomSimulatorFactory(SimulatorFactory):
 
 class MyFunctionSimulator(FunctionSimulator):
 
-    def deploy(self, env: Environment, replica: FunctionReplica):
+    def deploy(self, env: Environment, replica: SimFunctionReplica):
         # simulate a docker pull command for deploying the function (also done by sim.faassim.DockerDeploySimMixin)
         yield from docker.pull(env, replica.container.image, replica.node.ether_node)
 
-    def startup(self, env: Environment, replica: FunctionReplica):
+    def startup(self, env: Environment, replica: SimFunctionReplica):
         logger.info('[simtime=%.2f] starting up function replica for function %s', env.now, replica.function.name)
 
         # you could create a very fine-grained setup routines here
         yield env.timeout(10)  # simulate docker startup
 
-    def setup(self, env: Environment, replica: FunctionReplica):
+    def setup(self, env: Environment, replica: SimFunctionReplica):
         # no setup routine
         yield env.timeout(0)
 
-    def invoke(self, env: Environment, replica: FunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         # you would probably either create one simulator per function, or use a generalized simulator, this is just
         # to demonstrate how the simulators are used to encapsulate simulator behavior.
 
@@ -74,7 +74,7 @@ class MyFunctionSimulator(FunctionSimulator):
         env.resource_state.remove_resource(replica, 'cpu', cpu_millis)
         node.current_requests.remove(request)
 
-    def teardown(self, env: Environment, replica: FunctionReplica):
+    def teardown(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)
 
 

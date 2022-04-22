@@ -5,13 +5,13 @@ from typing import Dict, List
 
 import simpy
 from ether.util import parse_size_string
+from faas.system.core import FunctionContainer, FunctionRequest, FunctionState, FaasSystem
 
 from sim.core import Environment
-from sim.faas import RoundRobinLoadBalancer, FunctionDeployment, FunctionReplica, FunctionContainer, FunctionRequest, \
-    FunctionState
+from sim.faas import RoundRobinLoadBalancer, SimFunctionDeployment, SimFunctionReplica
 from sim.net import SafeFlow
 from sim.skippy import create_function_pod
-from .core import FaasSystem, FunctionSimulator
+from .core import FunctionSimulator
 from .scaling import FaasRequestScaler, AverageFaasRequestScaler, AverageQueueFaasRequestScaler
 
 logger = logging.getLogger(__name__)
@@ -28,16 +28,16 @@ class DefaultFaasSystem(FaasSystem):
                  scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False) -> None:
         self.env = env
         self.function_containers = dict()
-        # collects all FunctionReplicas under the name of the corresponding FunctionDeployment
+        # collects all FunctionReplicas under the name of the corresponding SimFunctionDeployment
         self.replicas = defaultdict(list)
 
         self.request_queue = simpy.Store(env)
         self.scheduler_queue = simpy.Store(env)
 
-        # TODO let users inject LoadBalancer
+        # TODO let users inject SimLoadBalancer
         self.load_balancer = RoundRobinLoadBalancer(env, self.replicas)
 
-        self.functions_deployments: Dict[str, FunctionDeployment] = dict()
+        self.functions_deployments: Dict[str, SimFunctionDeployment] = dict()
         self.replica_count: Dict[str, int] = dict()
         self.functions_definitions = Counter()
 
@@ -48,19 +48,19 @@ class DefaultFaasSystem(FaasSystem):
         self.avg_faas_scalers: Dict[str, AverageFaasRequestScaler] = dict()
         self.queue_faas_scalers: Dict[str, AverageQueueFaasRequestScaler] = dict()
 
-    def get_deployments(self) -> List[FunctionDeployment]:
+    def get_deployments(self) -> List[SimFunctionDeployment]:
         return list(self.functions_deployments.values())
 
     def get_function_index(self) -> Dict[str, FunctionContainer]:
         return self.function_containers
 
-    def get_replicas(self, fn_name: str, state=None) -> List[FunctionReplica]:
+    def get_replicas(self, fn_name: str, state=None) -> List[SimFunctionReplica]:
         if state is None:
             return self.replicas[fn_name]
 
         return [replica for replica in self.replicas[fn_name] if replica.state == state]
 
-    def deploy(self, fd: FunctionDeployment):
+    def deploy(self, fd: SimFunctionDeployment):
         if fd.name in self.functions_deployments:
             raise ValueError('function already deployed')
 
@@ -86,9 +86,9 @@ class DefaultFaasSystem(FaasSystem):
         logger.info('deploying function %s with scale_min=%d', fd.name, fd.scaling_config.scale_min)
         yield from self.scale_up(fd.name, fd.scaling_config.scale_min)
 
-    def deploy_replica(self, fd: FunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer]):
+    def deploy_replica(self, fd: SimFunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer]):
         """
-        Creates and deploys a FunctionReplica for the given FunctionContainer.
+        Creates and deploys a SimFunctionReplica for the given FunctionContainer.
         In case no node supports the given FunctionContainer, the services list dictates which FunctionContainer to try next.
         In case no FunctionContainer can be hosted, the scheduling process terminates and logs the failed attempt
         """
@@ -140,7 +140,7 @@ class DefaultFaasSystem(FaasSystem):
         self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_wait, t_start,
                                         t_exec, id(replica))
 
-    def remove(self, fn: FunctionDeployment):
+    def remove(self, fn: SimFunctionDeployment):
         self.env.metrics.log_function_deployment_lifecycle(fn, 'remove')
 
         replica_count = self.replica_count[fn.name]
@@ -233,7 +233,7 @@ class DefaultFaasSystem(FaasSystem):
             logger.debug("Function %s wanted to scale, but not all requested replicas were deployed: %s", fn_name,
                          str(scale))
 
-    def next_replica(self, request) -> FunctionReplica:
+    def next_replica(self, request) -> SimFunctionReplica:
         return self.load_balancer.next_replica(request)
 
     def start(self):
@@ -249,7 +249,7 @@ class DefaultFaasSystem(FaasSystem):
         env = self.env
 
         while True:
-            replica: FunctionReplica
+            replica: SimFunctionReplica
             replica, services = yield self.scheduler_queue.get()
 
             logger.debug('scheduling next replica %s', replica.function.name)
@@ -294,21 +294,21 @@ class DefaultFaasSystem(FaasSystem):
             # start a new process to simulate starting of pod
             env.process(simulate_function_start(env, replica))
 
-    def create_pod(self, fd: FunctionDeployment, fn: FunctionContainer):
+    def create_pod(self, fd: SimFunctionDeployment, fn: FunctionContainer):
         return create_function_pod(fd, fn)
 
-    def create_replica(self, fd: FunctionDeployment, fn: FunctionContainer) -> FunctionReplica:
-        replica = FunctionReplica()
+    def create_replica(self, fd: SimFunctionDeployment, fn: FunctionContainer) -> SimFunctionReplica:
+        replica = SimFunctionReplica()
         replica.function = fd
         replica.container = fn
         replica.pod = self.create_pod(fd, fn)
         replica.simulator = self.env.simulator_factory.create(self.env, fn)
         return replica
 
-    def discover(self, function: str) -> List[FunctionReplica]:
+    def discover(self, function: str) -> List[SimFunctionReplica]:
         return [replica for replica in self.replicas[function] if replica.state == FunctionState.RUNNING]
 
-    def _remove_replica(self, replica: FunctionReplica):
+    def _remove_replica(self, replica: SimFunctionReplica):
         env = self.env
         node = replica.node.skippy_node
 
@@ -331,13 +331,13 @@ class DefaultFaasSystem(FaasSystem):
             raise ValueError
 
         # TODO interrupt startup of function containers that are starting
-        replicas: List[FunctionReplica] = self.discover(function_name)
+        replicas: List[SimFunctionReplica] = self.discover(function_name)
         self.scale_down(function_name, len(replicas))
 
         self.env.metrics.log_function_deployment_lifecycle(self.functions_deployments[function_name], 'suspend')
 
 
-def simulate_function_start(env: Environment, replica: FunctionReplica):
+def simulate_function_start(env: Environment, replica: SimFunctionReplica):
     sim: FunctionSimulator = replica.simulator
 
     logger.debug('deploying function %s to %s', replica.function.name, replica.node.name)
@@ -355,7 +355,7 @@ def simulate_function_start(env: Environment, replica: FunctionReplica):
     replica.state = FunctionState.RUNNING
 
 
-def simulate_data_download(env: Environment, replica: FunctionReplica):
+def simulate_data_download(env: Environment, replica: SimFunctionReplica):
     node = replica.node.ether_node
     func = replica
     started = env.now
@@ -384,7 +384,7 @@ def simulate_data_download(env: Environment, replica: FunctionReplica):
     env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_download')
 
 
-def simulate_data_upload(env: Environment, replica: FunctionReplica):
+def simulate_data_upload(env: Environment, replica: SimFunctionReplica):
     node = replica.node.ether_node
     func = replica
     started = env.now
@@ -413,7 +413,7 @@ def simulate_data_upload(env: Environment, replica: FunctionReplica):
     env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_upload')
 
 
-def simulate_function_invocation(env: Environment, replica: FunctionReplica, request: FunctionRequest):
+def simulate_function_invocation(env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
     env.metrics.log_start_exec(request, replica)
     yield from replica.simulator.invoke(env, replica, request)
     env.metrics.log_stop_exec(request, replica)
