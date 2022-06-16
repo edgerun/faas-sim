@@ -1,4 +1,4 @@
 coverage>=4.5.3
 pytest-cov>=2.7.1
-notebook==6.4.1
+notebook==6.4.12
 jupyter==1.0.0
