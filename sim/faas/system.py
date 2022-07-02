@@ -5,7 +5,7 @@ from typing import Dict, List
 
 import simpy
 from ether.util import parse_size_string
-from faas.system.core import FunctionContainer, FunctionRequest, FunctionState, FaasSystem
+from faas.system.core import FunctionContainer, FunctionRequest, FunctionReplicaState, FaasSystem
 
 from sim.core import Environment
 from sim.faas import RoundRobinLoadBalancer, SimFunctionDeployment, SimFunctionReplica
@@ -108,7 +108,7 @@ class DefaultFaasSystem(FaasSystem):
 
         t_received = self.env.now
 
-        replicas = self.get_replicas(request.name, FunctionState.RUNNING)
+        replicas = self.get_replicas(request.name, FunctionReplicaState.RUNNING)
         if not replicas:
             '''
             https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
@@ -159,7 +159,7 @@ class DefaultFaasSystem(FaasSystem):
             del self.functions_definitions[container.image]
 
     def scale_down(self, fn_name: str, remove: int):
-        replica_count = len(self.get_replicas(fn_name, FunctionState.RUNNING))
+        replica_count = len(self.get_replicas(fn_name, FunctionReplicaState.RUNNING))
         if replica_count == 0:
             return
         replica_count -= remove
@@ -182,7 +182,7 @@ class DefaultFaasSystem(FaasSystem):
 
     def choose_replicas_to_remove(self, fn_name: str, n: int):
         # TODO implement more sophisticated, currently just picks last ones deployed
-        running_replicas = self.get_replicas(fn_name, FunctionState.RUNNING)
+        running_replicas = self.get_replicas(fn_name, FunctionReplicaState.RUNNING)
         return running_replicas[len(running_replicas) - n:]
 
     def scale_up(self, fn_name: str, replicas: int):
@@ -242,7 +242,7 @@ class DefaultFaasSystem(FaasSystem):
         self.env.process(self.run_scheduler_worker())
 
     def poll_available_replica(self, fn: str, interval=0.5):
-        while not self.get_replicas(fn, FunctionState.RUNNING):
+        while not self.get_replicas(fn, FunctionReplicaState.RUNNING):
             yield self.env.timeout(interval)
 
     def run_scheduler_worker(self):
@@ -306,7 +306,7 @@ class DefaultFaasSystem(FaasSystem):
         return replica
 
     def discover(self, function: str) -> List[SimFunctionReplica]:
-        return [replica for replica in self.replicas[function] if replica.state == FunctionState.RUNNING]
+        return [replica for replica in self.replicas[function] if replica.state == FunctionReplicaState.RUNNING]
 
     def _remove_replica(self, replica: SimFunctionReplica):
         env = self.env
@@ -316,7 +316,7 @@ class DefaultFaasSystem(FaasSystem):
         yield from replica.simulator.teardown(env, replica)
 
         self.env.cluster.remove_pod_from_node(replica.pod, node)
-        replica.state = FunctionState.SUSPENDED
+        replica.state = FunctionReplicaState.SUSPENDED
         self.replicas[replica.function.name].remove(replica)
 
         env.metrics.log('allocation', {
@@ -343,7 +343,7 @@ def simulate_function_start(env: Environment, replica: SimFunctionReplica):
     logger.debug('deploying function %s to %s', replica.function.name, replica.node.name)
     env.metrics.log_deploy(replica)
     yield from sim.deploy(env, replica)
-    replica.state = FunctionState.STARTING
+    replica.state = FunctionReplicaState.STARTING
     env.metrics.log_startup(replica)
     logger.debug('starting function %s on %s', replica.function.name, replica.node.name)
     yield from sim.startup(env, replica)
@@ -352,7 +352,7 @@ def simulate_function_start(env: Environment, replica: SimFunctionReplica):
     env.metrics.log_setup(replica)
     yield from sim.setup(env, replica)  # FIXME: this is really domain-specific startup
     env.metrics.log_finish_deploy(replica)
-    replica.state = FunctionState.RUNNING
+    replica.state = FunctionReplicaState.RUNNING
 
 
 def simulate_data_download(env: Environment, replica: SimFunctionReplica):
