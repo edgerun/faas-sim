@@ -101,12 +101,12 @@ def function_trigger(env: Environment, deployment: SimFunctionDeployment, ia_gen
             while True:
                 ia = next(ia_generator)
                 yield env.timeout(ia)
-                env.process(env.faas.invoke(FunctionRequest(deployment.name)))
+                env.process(env.faas.invoke(FunctionRequest(deployment.name, env.now)))
         else:
             for _ in range(max_requests):
                 ia = next(ia_generator)
                 yield env.timeout(ia)
-                env.process(env.faas.invoke(FunctionRequest(deployment.name)))
+                env.process(env.faas.invoke(FunctionRequest(deployment.name, env.now)))
 
     except simpy.Interrupt:
         pass
