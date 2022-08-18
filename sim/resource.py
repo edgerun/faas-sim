@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from sim.core import Environment
 from sim.faas import SimFunctionReplica
-from faas.system.core import FunctionState, FaasSystem
+from faas.system.core import FunctionReplicaState, FaasSystem
 
 
 class ResourceUtilization:
@@ -177,7 +177,8 @@ class ResourceMonitor:
             yield self.env.timeout(self.reconcile_interval)
             now = self.env.now
             for deployment in faas.get_deployments():
-                for replica in faas.get_replicas(deployment.name, FunctionState.RUNNING):
+                replicas: List[SimFunctionReplica] = faas.get_replicas(deployment.name, True, )
+                for replica in replicas:
                     utilization = self.env.resource_state.get_resource_utilization(replica)
                     if utilization.is_empty():
                         continue

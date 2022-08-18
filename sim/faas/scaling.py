@@ -1,11 +1,13 @@
 import logging
 import math
+from typing import List
 
 import numpy as np
 
-from sim.core import Environment
-from faas.system.core import FunctionState, FaasSystem
-from sim.faas import SimFunctionDeployment
+from .core import Environment
+from faas.system.core import FunctionReplicaState, FaasSystem
+from .system import SimFunctionDeployment, SimFunctionReplica
+from .watchdogs import HTTPWatchdog
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +30,17 @@ def faas_idler(env: Environment, inactivity_duration=300, reconcile_interval=30)
         yield env.timeout(reconcile_interval)
 
         for deployment in faas.get_deployments():
-            if not deployment.scaling_config.scale_zero:
+            if not deployment.scaling_configuration.scale_zero:
                 continue
 
             name = deployment.name
-            if len(faas.get_replicas(name, FunctionState.RUNNING)) == 0:
+            replicas = faas.get_replicas(name, runnning=True)
+            if len(replicas) == 0:
                 continue
 
             idle_time = env.now - env.metrics.last_invocation[name]
             if idle_time >= inactivity_duration:
-                env.process(faas.suspend(name))
+                env.process(faas.scale_down(name, replicas))
                 logger.debug('%.2f function %s has been idle for %.2fs', env.now, name, idle_time)
 
 
@@ -101,13 +104,13 @@ class AverageFaasRequestScaler:
             yield env.timeout(self.alert_window)
             if self.function_invocations.get(self.fn_name, None) is None:
                 self.function_invocations[self.fn_name] = 0
-            running_replicas = faas.get_replicas(self.fn.name, FunctionState.RUNNING)
+            running_replicas = faas.get_replicas(self.fn.name, True)
             running = len(running_replicas)
             if running == 0:
                 continue
 
-            conceived_replicas = faas.get_replicas(self.fn.name, FunctionState.CONCEIVED)
-            starting_replicas = faas.get_replicas(self.fn.name, FunctionState.STARTING)
+            conceived_replicas = faas.get_replicas(self.fn.name, state=FunctionReplicaState.CONCEIVED)
+            pending_replicas = faas.get_replicas(self.fn.name, state=FunctionReplicaState.PENDING)
 
             last_invocations = self.function_invocations.get(self.fn_name, 0)
             current_total_invocations = env.metrics.invocations.get(self.fn_name, 0)
@@ -117,9 +120,9 @@ class AverageFaasRequestScaler:
             desired_replicas = math.ceil(running * (average / self.threshold))
 
             updated_desired_replicas = desired_replicas
-            if len(conceived_replicas) > 0 or len(starting_replicas) > 0:
+            if len(conceived_replicas) > 0 or len(pending_replicas) > 0:
                 if desired_replicas > len(running_replicas):
-                    count = len(running_replicas) + len(conceived_replicas) + len(starting_replicas)
+                    count = len(running_replicas) + len(conceived_replicas) + len(pending_replicas)
                     average = invocations / count
                     updated_desired_replicas = math.ceil(running * (average / self.threshold))
 
@@ -164,21 +167,22 @@ class AverageQueueFaasRequestScaler:
 
     def run(self):
         env: Environment = self.env
-        faas: FaasSystem = env.faas
+        faas: 'DefaultFaasSystem' = env.faas
         while self.running:
             yield env.timeout(self.alert_window)
-            running_replicas = faas.get_replicas(self.fn.name, FunctionState.RUNNING)
+            running_replicas: List[SimFunctionReplica] = faas.get_replicas(self.fn.name, runnning=True)
             running = len(running_replicas)
             if running == 0:
                 continue
 
-            conceived_replicas = faas.get_replicas(self.fn.name, FunctionState.CONCEIVED)
-            starting_replicas = faas.get_replicas(self.fn.name, FunctionState.STARTING)
+            conceived_replicas = faas.get_replicas(self.fn.name, state=FunctionReplicaState.CONCEIVED)
+            starting_replicas = faas.get_replicas(self.fn.name, state=FunctionReplicaState.PENDING)
 
             in_queue = []
             for replica in running_replicas:
-                sim: 'InterferenceAwarePythonHttpSimulator' = replica.simulator
-                in_queue.append(len(sim.queue.queue))
+                sim = replica.simulator
+                if isinstance(sim, HTTPWatchdog):
+                    in_queue.append(len(sim.queue.queue))
             if len(in_queue) == 0:
                 average = 0
             else:

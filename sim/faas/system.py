@@ -1,5 +1,6 @@
 import logging
 import time
+import uuid
 from collections import defaultdict, Counter
 from typing import Dict, List
 
@@ -54,7 +55,7 @@ class DefaultFaasSystem(FaasSystem):
     def get_function_index(self) -> Dict[str, FunctionContainer]:
         return self.function_containers
 
-    def get_replicas(self, fn_name: str, state=None) -> List[SimFunctionReplica]:
+    def get_replicas(self, fn_name: str, state=None, **kwargs) -> List[SimFunctionReplica]:
         if state is None:
             return self.replicas[fn_name]
 
@@ -298,14 +299,15 @@ class DefaultFaasSystem(FaasSystem):
         return create_function_pod(fd, fn)
 
     def create_replica(self, fd: SimFunctionDeployment, fn: FunctionContainer) -> SimFunctionReplica:
-        replica = SimFunctionReplica()
+        replica_id = fd.name + '-' + str(uuid.uuid4())[12:].replace('-', '')
+        replica = SimFunctionReplica(replica_id, fn.labels, fd, fn, None, FunctionReplicaState.CONCEIVED)
         replica.function = fd
         replica.container = fn
         replica.pod = self.create_pod(fd, fn)
         replica.simulator = self.env.simulator_factory.create(self.env, fn)
         return replica
 
-    def discover(self, function: str) -> List[SimFunctionReplica]:
+    def discover(self, function: str, **kwargs) -> List[SimFunctionReplica]:
         return [replica for replica in self.replicas[function] if replica.state == FunctionReplicaState.RUNNING]
 
     def _remove_replica(self, replica: SimFunctionReplica):
@@ -343,7 +345,7 @@ def simulate_function_start(env: Environment, replica: SimFunctionReplica):
     logger.debug('deploying function %s to %s', replica.function.name, replica.node.name)
     env.metrics.log_deploy(replica)
     yield from sim.deploy(env, replica)
-    replica.state = FunctionReplicaState.STARTING
+    replica.state = FunctionReplicaState.PENDING
     env.metrics.log_startup(replica)
     logger.debug('starting function %s on %s', replica.function.name, replica.node.name)
     yield from sim.startup(env, replica)

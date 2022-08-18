@@ -3,12 +3,11 @@ from typing import Dict
 
 import pandas as pd
 from ether.core import Capacity
-from faas.system import Metrics
+from faas.system import Metrics, RuntimeLogger, NullLogger
 from skippy.core.model import SchedulingResult
 
 from sim.core import Environment
 from sim.faas import SimFunctionReplica, SimFunctionDeployment
-from sim.logging import RuntimeLogger, NullLogger
 from faas.system.core import FunctionContainer, FunctionRequest
 from sim.resource import ResourceUtilization
 
@@ -55,7 +54,7 @@ class SimMetrics(Metrics):
 
             self.log('functions', record, type='deploy')
 
-    def log_function_replica(self, replica: SimFunctionReplica):
+    def log_function_replica(self, replica: SimFunctionReplica, **kwargs):
         for container in replica.pod.spec.containers:
             record = {'name': replica.function.name, 'pod': replica.pod.name, 'image': container.image}
             # TODO fix clustercontext, maybe this is unnecessary as log_function_definition already logs the image
@@ -63,7 +62,7 @@ class SimMetrics(Metrics):
             # for arch, size in image_state.size.items():
             #     record[f'size_{arch}'] = size
 
-            self.log('function_replicas', record, replica_id=id(replica))
+            self.log('function_replicas', record, replica_id=id(replica), **kwargs)
 
     def log_flow(self, num_bytes, duration, source, sink, action_type):
         self.log('flow', value={'bytes': num_bytes, 'duration': duration},
@@ -75,8 +74,8 @@ class SimMetrics(Metrics):
 
         self.log('network', num_bytes, **tags)
 
-    def log_scaling(self, function_name, replicas):
-        self.log('scale', replicas, function_name=function_name)
+    def log_scaling(self, function_name, replicas, **kwargs):
+        self.log('scale', replicas, function_name=function_name, **kwargs)
 
     def log_invocation(self, function_name, function_image, node_name, t_wait, t_start, t_exec, replica_id, **kwargs):
         function = self.env.faas.get_function_index()[function_image]
@@ -88,7 +87,6 @@ class SimMetrics(Metrics):
 
     def log_fet(self, function_name, function_image, node_name, t_fet_start, t_fet_end, replica_id, request_id,
                 **kwargs):
-        # TODO design more general? wait/degradation are specific to queue simulator/performance degradation
         self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, **kwargs},
                  function_name=function_name,
                  function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)

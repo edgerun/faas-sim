@@ -5,8 +5,8 @@ from typing import List, Dict, Optional
 
 from ether.core import Node as EtherNode
 from faas.system.core import FunctionRequest, LoadBalancer, FunctionReplica, FunctionDeployment, FunctionContainer, \
-    Function, FunctionState, ScalingConfiguration
-from skippy.core.model import Pod
+    Function, FunctionReplicaState, ScalingConfiguration, ResourceConfiguration
+from skippy.core.model import Pod, ResourceRequirements
 
 from sim.core import Environment, NodeState
 from sim.oracle.oracle import FetOracle, ResourceOracle
@@ -81,6 +81,12 @@ class DeploymentRanking:
 class SimScalingConfiguration:
     scaling_config: ScalingConfiguration
 
+    def __init__(self, scaling_config: ScalingConfiguration = None):
+        self.scaling_config = ScalingConfiguration()
+        if scaling_config is None:
+            self.scaling_config = ScalingConfiguration()
+
+
     @property
     def scale_min(self):
         return self.scaling_config.scale_min
@@ -117,6 +123,37 @@ class SimScalingConfiguration:
 
     target_average_rps_threshold = 0.1
 
+class SimResourceConfiguration(ResourceConfiguration):
+    requests: ResourceRequirements
+    limits: Optional[ResourceRequirements]
+
+    def __init__(self, requests: ResourceRequirements = None, limits: ResourceRequirements = None):
+        self.requests = requests if requests is not None else ResourceRequirements()
+        self.limits = limits
+
+    def get_resource_requirements(self) -> Dict:
+        return {
+            'cpu': self.requests.requests['cpu'],
+            'memory': self.requests.requests['memory']
+        }
+
+    def get_resource_limits(self) -> Optional[Dict]:
+        if self.limits is not None:
+            data = {}
+            cpu = self.limits.requests.get('cpu', None)
+            memory = self.limits.requests.get('memory', None)
+            if cpu is not None:
+                data['cpu'] = cpu
+            if memory is not None:
+                data['memory'] = memory
+            return data
+        else:
+            return None
+
+    @staticmethod
+    def create_from_str(cpu: str, memory: str):
+        return SimResourceConfiguration(ResourceRequirements.from_str(memory, cpu))
+
 
 class SimFunctionDeployment(FunctionDeployment):
     scaling_config: SimScalingConfiguration
@@ -125,7 +162,7 @@ class SimFunctionDeployment(FunctionDeployment):
 
     def __init__(self, fn: Function, fn_containers: List[FunctionContainer], scaling_config: SimScalingConfiguration,
                  deployment_ranking: DeploymentRanking = None):
-        super().__init__(fn, fn_containers)
+        super().__init__(fn, fn_containers, scaling_config, deployment_ranking)
         self.scaling_config = scaling_config
         if deployment_ranking is None:
             self.ranking = DeploymentRanking([x.image for x in self.fn.fn_images])
@@ -144,7 +181,7 @@ class SimFunctionReplica(FunctionReplica):
     container: FunctionContainer
     node: NodeState
     pod: Pod
-    state: FunctionState = FunctionState.CONCEIVED
+    state: FunctionReplicaState = FunctionReplicaState.CONCEIVED
 
     simulator: 'FunctionSimulator' = None
 
@@ -167,7 +204,7 @@ class SimLoadBalancer(LoadBalancer):
         self.replicas = replicas
 
     def get_running_replicas(self, function: str):
-        return [replica for replica in self.replicas[function] if replica.state == FunctionState.RUNNING]
+        return [replica for replica in self.replicas[function] if replica.state == FunctionReplicaState.RUNNING]
 
     def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
         raise NotImplementedError

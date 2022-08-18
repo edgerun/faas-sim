@@ -1,9 +1,14 @@
 import math
+from typing import List
 
 from sim.core import Environment
-from faas.system.core import FunctionState, FaasSystem
+from faas.system.core import FunctionReplicaState, FaasSystem, ScalingConfiguration
+
+from sim.faas import SimFunctionReplica
 from sim.resource import MetricsServer
 
+class HpaScalingConfiguration(ScalingConfiguration):
+    target_average_utilization: float
 
 class HorizontalPodAutoscaler:
 
@@ -60,26 +65,30 @@ class HorizontalPodAutoscaler:
             metrics_server: MetricsServer = self.env.metrics_server
             faas: FaasSystem = self.env.faas
             for function_deployment in faas.get_deployments():
-                running_replicas = faas.get_replicas(function_deployment.name, FunctionState.RUNNING)
+                running_replicas : List[SimFunctionReplica] = faas.get_replicas(function_deployment.name, True)
                 if len(running_replicas) == 0:
                     continue
-                conceived_replicas = faas.get_replicas(function_deployment.name, FunctionState.CONCEIVED)
-                starting_replicas = faas.get_replicas(function_deployment.name, FunctionState.STARTING)
+                conceived_replicas = faas.get_replicas(function_deployment.name, state=FunctionReplicaState.CONCEIVED)
+                pending_replicas = faas.get_replicas(function_deployment.name, state=FunctionReplicaState.PENDING)
                 sum_cpu = 0
 
+                now = self.env.now
+                start = now - self.average_window
+                end = now
                 for replica in running_replicas:
-                    sum_cpu += metrics_server.get_average_cpu_utilization(replica, self.average_window)
+                    sum_cpu += metrics_server.get_average_cpu_utilization(replica, start, end)
 
                 average_cpu = sum_cpu / len(running_replicas)
 
-                target_avg_utilization = function_deployment.scaling_config.target_average_utilization
+                configuration: HpaScalingConfiguration = function_deployment.scaling_configuration
+                target_avg_utilization = configuration.target_average_utilization
                 desired_replicas = math.ceil(
                     len(running_replicas) * (average_cpu / target_avg_utilization))
 
                 updated_desired_replicas = desired_replicas
-                if len(conceived_replicas) > 0 or len(starting_replicas) > 0:
+                if len(conceived_replicas) > 0 or len(pending_replicas) > 0:
                     if desired_replicas > len(running_replicas):
-                        count = len(running_replicas) + len(conceived_replicas) + len(starting_replicas)
+                        count = len(running_replicas) + len(conceived_replicas) + len(pending_replicas)
                         average_cpu = sum_cpu / count
                         updated_desired_replicas = math.ceil(
                             len(running_replicas) * (average_cpu / target_avg_utilization))

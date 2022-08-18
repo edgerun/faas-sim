@@ -9,6 +9,7 @@ from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
 from sim.faas import SimFunctionDeployment, SimScalingConfiguration
+from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
 from sim.requestgen import function_trigger, constant_rps_profile, expovariate_arrival_profile
 from sim.topology import Topology
@@ -87,7 +88,7 @@ class ExampleBenchmark(Benchmark):
 
         # Run time
 
-        python_pi_fn_container = FunctionContainer(python_pi_cpu)
+        python_pi_fn_container = FunctionContainer(python_pi_cpu, SimResourceConfiguration())
 
         python_pi_fd = SimFunctionDeployment(
             python_pi_fn,

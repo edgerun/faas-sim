@@ -12,6 +12,7 @@ from sim.core import Environment
 from sim.docker import ImageProperties
 from sim.faas import SimulatorFactory, FunctionSimulator, SimFunctionDeployment, SimScalingConfiguration, \
     DeploymentRanking
+from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
 from faas.system.core import FunctionContainer, FunctionRequest, FunctionImage, Function
 
@@ -79,11 +80,11 @@ class TrainInferenceBenchmark(Benchmark):
         # execute 10 requests in parallel
         logger.info('executing 10 resnet50-training requests')
         for i in range(10):
-            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-training'))))
+            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-training', env.now))))
 
         logger.info('executing 10 resnet50-inference requests')
         for i in range(10):
-            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-inference'))))
+            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-inference', env.now))))
 
         # wait for invocation processes to finish
         for p in ps:
@@ -107,7 +108,7 @@ class TrainInferenceBenchmark(Benchmark):
 
         # Run time
 
-        resnet_cpu_container = FunctionContainer(resnet_training_cpu)
+        resnet_cpu_container = FunctionContainer(resnet_training_cpu, SimResourceConfiguration())
 
         resnet_fd = SimFunctionDeployment(
             resnet_fn,
@@ -129,7 +130,7 @@ class TrainInferenceBenchmark(Benchmark):
 
         # Run time
 
-        resnet_cpu_container = FunctionContainer(resnet_inference_cpu)
+        resnet_cpu_container = FunctionContainer(resnet_inference_cpu, SimResourceConfiguration())
 
         resnet_fd = SimFunctionDeployment(
             resnet_fn,

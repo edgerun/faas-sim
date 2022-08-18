@@ -2,8 +2,7 @@ import logging
 from typing import List
 
 import ether.scenarios.urbansensing as scenario
-from faas.system.core import FunctionImage, FunctionRequest, FunctionContainer, Function, \
-    KubernetesResourceConfiguration
+from faas.system.core import FunctionImage, FunctionRequest, FunctionContainer, Function, ResourceConfiguration
 from skippy.core.utils import parse_size_string
 
 from sim import docker
@@ -11,6 +10,7 @@ from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.docker import ImageProperties
 from sim.faas import SimFunctionDeployment, SimScalingConfiguration, DeploymentRanking
+from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
 from sim.topology import Topology
 
@@ -80,11 +80,11 @@ class ExampleBenchmark(Benchmark):
         # execute 10 requests in parallel
         logger.info('executing 10 python-pi requests')
         for i in range(10):
-            ps.append(env.process(env.faas.invoke(FunctionRequest('python-pi'))))
+            ps.append(env.process(env.faas.invoke(FunctionRequest('python-pi', env.now))))
 
         logger.info('executing 10 resnet50-inference requests')
         for i in range(10):
-            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-inference'))))
+            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-inference', env.now))))
 
         # wait for invocation processes to finish
         for p in ps:
@@ -106,7 +106,7 @@ class ExampleBenchmark(Benchmark):
 
         # Run time
 
-        python_pi_fn_container = FunctionContainer(python_pi_cpu)
+        python_pi_fn_container = FunctionContainer(python_pi_cpu, SimResourceConfiguration())
 
         python_pi_fd = SimFunctionDeployment(
             python_pi_fn,
@@ -130,10 +130,10 @@ class ExampleBenchmark(Benchmark):
         # Run time
 
         # default kubernetes requested resources
-        resnet_cpu_container = FunctionContainer(resnet_inference_cpu)
+        resnet_cpu_container = FunctionContainer(resnet_inference_cpu, SimResourceConfiguration())
 
         # custom defined requested resources
-        request = KubernetesResourceConfiguration.create_from_str(cpu='100m', memory='1024Mi')
+        request = SimResourceConfiguration.create_from_str(cpu='100m', memory='1024Mi')
         resnet_gpu_container = FunctionContainer(resnet_inference_gpu, resource_config=request)
 
         resnet_fd = SimFunctionDeployment(
