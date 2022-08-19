@@ -34,7 +34,7 @@ def faas_idler(env: Environment, inactivity_duration=300, reconcile_interval=30)
                 continue
 
             name = deployment.name
-            replicas = faas.get_replicas(name, runnning=True)
+            replicas = faas.get_replicas(name, running=True)
             if len(replicas) == 0:
                 continue
 
@@ -170,7 +170,7 @@ class AverageQueueFaasRequestScaler:
         faas: 'DefaultFaasSystem' = env.faas
         while self.running:
             yield env.timeout(self.alert_window)
-            running_replicas: List[SimFunctionReplica] = faas.get_replicas(self.fn.name, runnning=True)
+            running_replicas: List[SimFunctionReplica] = faas.get_replicas(self.fn.name, running=True)
             running = len(running_replicas)
             if running == 0:
                 continue

@@ -28,7 +28,7 @@ class Raith21ResourceMonitor:
             # calculate resources over function replica resources and save in metric_server
             call_cache: Dict[str, List[FunctionCall]] = {}
             for function_deployment in faas.get_deployments():
-                for replica in faas.get_replicas(function_deployment.name, FunctionState.RUNNING):
+                for replica in faas.get_replicas(function_deployment.name, running=True):
                     node_name = replica.node.name
                     calls = call_cache.get(node_name, None)
                     if calls is None:

@@ -55,7 +55,10 @@ class DefaultFaasSystem(FaasSystem):
     def get_function_index(self) -> Dict[str, FunctionContainer]:
         return self.function_containers
 
-    def get_replicas(self, fn_name: str, state=None, **kwargs) -> List[SimFunctionReplica]:
+    def get_replicas(self, fn_name: str, running: bool = True, state=None) -> List[SimFunctionReplica]:
+        if running:
+            return [replica for replica in self.replicas[fn_name] if replica.state == FunctionReplicaState.RUNNING]
+
         if state is None:
             return self.replicas[fn_name]
 
