@@ -33,9 +33,7 @@ class ForkingWatchdog(Watchdog):
 
         t_fet_end = env.now
 
-        env.metrics.log_fet(replica.fn_name, replica.image, replica.node.name,
-                            t_fet_start=t_fet_start, t_fet_end=t_fet_end, replica_id=id(replica),
-                            request_id=request.request_id)
+        env.metrics.log_fet(replica, request, t_fet_start=t_fet_start, t_fet_end=t_fet_end)
 
         replica.node.current_requests.remove(request)
 
@@ -71,9 +69,6 @@ class HTTPWatchdog(Watchdog):
 
         replica.node.current_requests.remove(request)
 
-        env.metrics.log_fet(replica.fn_name, replica.image, replica.node.name,
-                            t_fet_start=t_fet_start, t_fet_end=t_fet_end, replica_id=id(replica),
-                            request_id=request.request_id,
-                            t_wait_start=t_wait_start, t_wait_end=t_wait_end)
+        env.metrics.log_fet(replica, request, t_fet_start=t_fet_start, t_fet_end=t_fet_end)
 
         self.queue.release(token)
