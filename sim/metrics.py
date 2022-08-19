@@ -88,8 +88,13 @@ class SimMetrics(Metrics):
                  function_name=function_name,
                  function_image=function_image, node=node_name, replica_id=replica_id)
 
-    def log_fet(self, function_name, function_image, node_name, t_fet_start, t_fet_end, replica_id, request_id,
+    def log_fet(self, replica: SimFunctionReplica, request: FunctionRequest, t_fet_start, t_fet_end,
                 **kwargs):
+        function_name = replica.fn_name
+        function_image = replica.image
+        node_name = replica.node.name
+        replica_id = replica.replica_id
+        request_id = request.request_id
         self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, **kwargs},
                  function_name=function_name,
                  function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)
