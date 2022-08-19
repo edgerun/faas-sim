@@ -8,7 +8,7 @@ from skippy.core.model import SchedulingResult
 
 from sim.core import Environment
 from sim.faas import SimFunctionReplica, SimFunctionDeployment
-from faas.system.core import FunctionContainer, FunctionRequest
+from faas.system.core import FunctionContainer, FunctionRequest, FunctionDeployment
 from sim.resource import ResourceUtilization
 
 
@@ -62,7 +62,7 @@ class SimMetrics(Metrics):
             # for arch, size in image_state.size.items():
             #     record[f'size_{arch}'] = size
 
-            self.log('function_replicas', record, replica_id=id(replica), **kwargs)
+            self.log('function_replicas', record, replica_id=replica.replica_id, **kwargs)
 
     def log_flow(self, num_bytes, duration, source, sink, action_type):
         self.log('flow', value={'bytes': num_bytes, 'duration': duration},
@@ -95,7 +95,7 @@ class SimMetrics(Metrics):
         node = replica.node
         copy = utilization.copy()
         resources = self.__calculate_util(node.capacity, copy)
-        self.log('function_utilization', resources, node=node.name, replica_id=id(replica))
+        self.log('function_utilization', resources, node=node.name, replica_id=replica.replica_id)
 
     def log_resource_utilization(self, node_name: str, capacity: Capacity, utilization: ResourceUtilization):
         resources = self.__calculate_util(capacity, utilization)
@@ -122,25 +122,25 @@ class SimMetrics(Metrics):
 
     def log_deploy(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'deploy', function_name=replica.function.name, node_name=replica.node.name,
-                 replica_id=id(replica))
+                 replica_id=replica.replica_id)
 
     def log_startup(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'startup', function_name=replica.function.name, node_name=replica.node.name,
-                 replica_id=id(replica))
+                 replica_id=replica.replica_id)
 
     def log_setup(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'setup', function_name=replica.function.name, node_name=replica.node.name,
-                 replica_id=id(replica))
+                 replica_id=replica.replica_id)
 
     def log_finish_deploy(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'finish', function_name=replica.function.name, node_name=replica.node.name,
-                 replica_id=id(replica))
+                 replica_id=replica.replica_id)
 
     def log_teardown(self, replica: SimFunctionReplica):
         name = replica.fn_name
         node_name = replica.node.name
         self.log('replica_deployment', 'teardown', function_name=name, node_name=node_name,
-                 replica_id=id(replica))
+                 replica_id=replica.replica_id)
 
     def log_function_deployment_lifecycle(self, fn: SimFunctionDeployment, event: str):
         self.log('function_deployment_lifecycle', event, name=fn.name, function_id=id(fn))
@@ -149,13 +149,13 @@ class SimMetrics(Metrics):
         name = replica.fn_name
         image = replica.image
         self.log('schedule', 'queue', function_name=name, image=image,
-                 replica_id=id(replica))
+                 replica_id=replica.replica_id)
 
     def log_start_schedule(self, replica: SimFunctionReplica):
         name = replica.fn_name
         image = replica.image
         self.log('schedule', 'start', function_name=name, image=image,
-                 replica_id=id(replica))
+                 replica_id=replica.replica_id)
 
     def log_finish_schedule(self, replica: SimFunctionReplica, result: SchedulingResult):
         if not result.suggested_host:
@@ -165,7 +165,7 @@ class SimMetrics(Metrics):
 
         self.log('schedule', 'finish', function_name=replica.function.name, image=replica.container.image,
                  node_name=node_name,
-                 successful=node_name != 'None', replica_id=id(replica))
+                 successful=node_name != 'None', replica_id=replica.replica_id)
 
     def log_function_deploy(self, replica: SimFunctionReplica):
         fn = replica.container
