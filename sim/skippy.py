@@ -37,7 +37,15 @@ class SimulationClusterContext(ClusterContext):
 
     def get_init_image_states(self) -> Dict[str, ImageState]:
         # FIXME: fix this image state business in skippy
-        return defaultdict(lambda: None)
+        img_states = {}
+        for fn, images in self.container_registry.images.items():
+            sizes = {}
+            properties = list(images.values())[0]
+            for properties in properties:
+                arch = properties.arch
+                sizes[f'size_{arch}'] = properties.size
+            img_states[fn] = ImageState(sizes, 0)
+        return img_states
 
     def retrieve_image_state(self, image_name: str) -> ImageState:
         # FIXME: hacky workaround
