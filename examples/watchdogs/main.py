@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 from ether.util import parse_size_string
+from faas.system.core import FunctionContainer, FunctionImage, Function
 
 import examples.basic.main as basic
 from examples.watchdogs.inference import InferenceFunctionSim
@@ -14,7 +15,7 @@ from sim.faas import SimulatorFactory, FunctionSimulator, SimFunctionDeployment,
     DeploymentRanking
 from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
-from faas.system.core import FunctionContainer, FunctionRequest, FunctionImage, Function
+from sim.requestgen import expovariate_arrival_profile, constant_rps_profile, function_trigger
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class AIFunctionSimulatorFactory(SimulatorFactory):
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     # prepare simulation with topology and benchmark from basic example
     sim = Simulation(basic.example_topology(), TrainInferenceBenchmark())
@@ -39,7 +40,21 @@ def main():
 
     # run the simulation
     sim.run()
+
     dfs = {
+        'allocation_df': sim.env.metrics.extract_dataframe('allocation'),
+        'invocations_df': sim.env.metrics.extract_dataframe('invocations'),
+        'scale_df': sim.env.metrics.extract_dataframe('scale'),
+        'schedule_df': sim.env.metrics.extract_dataframe('schedule'),
+        'replica_deployment_df': sim.env.metrics.extract_dataframe('replica_deployment'),
+        'function_deployments_df': sim.env.metrics.extract_dataframe('function_deployments'),
+        'function_deployment_df': sim.env.metrics.extract_dataframe('function_deployment'),
+        'function_deployment_lifecycle_df': sim.env.metrics.extract_dataframe('function_deployment_lifecycle'),
+        'functions_df': sim.env.metrics.extract_dataframe('functions'),
+        'flow_df': sim.env.metrics.extract_dataframe('flow'),
+        'network_df': sim.env.metrics.extract_dataframe('network'),
+        'node_utilization_df': sim.env.metrics.extract_dataframe('node_utilization'),
+        'function_utilization_df': sim.env.metrics.extract_dataframe('function_utilization'),
         'fets_df': sim.env.metrics.extract_dataframe('fets')
     }
     pass
@@ -77,14 +92,20 @@ class TrainInferenceBenchmark(Benchmark):
 
         # run workload
         ps = []
-        # execute 10 requests in parallel
-        logger.info('executing 10 resnet50-training requests')
-        for i in range(10):
-            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-training', env.now))))
 
-        logger.info('executing 10 resnet50-inference requests')
-        for i in range(10):
-            ps.append(env.process(env.faas.invoke(FunctionRequest('resnet50-inference', env.now))))
+        logger.info('executing resnet50-inference requests with 20 rps and maximum 100')
+        # generate profile
+        ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=20), max_ia=1)
+
+        # run profile
+        ps.append(env.process(function_trigger(env, deployments[1], ia_generator, max_requests=1000)))
+
+        logger.info('executing resnet50-training requests with 1 rps and maximum 10')
+        # generate profile
+        ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=2), max_ia=1)
+
+        # run profile
+        ps.append(env.process(function_trigger(env, deployments[0], ia_generator, max_requests=10)))
 
         # wait for invocation processes to finish
         for p in ps:
