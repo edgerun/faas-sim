@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from sim.core import Environment
 from sim.faas import SimFunctionReplica
-from faas.system.core import FunctionReplicaState, FaasSystem
+from faas.system.core import FaasSystem
 
 
 class ResourceUtilization:
@@ -139,7 +139,8 @@ class MetricsServer:
 
         self._windows[node][pod].append(window)
 
-    def get_average_cpu_utilization(self, fn_replica: SimFunctionReplica, window_start: float, window_end: float) -> float:
+    def get_average_cpu_utilization(self, fn_replica: SimFunctionReplica, window_start: float,
+                                    window_end: float) -> float:
         utilization = self.get_average_resource_utilization(fn_replica, 'cpu', window_start, window_end)
         millis = fn_replica.node.capacity.cpu_millis
         return utilization / millis
