@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
+from faas.system.core import FaasSystem
+
 from sim.core import Environment
 from sim.faas import SimFunctionReplica
-from faas.system.core import FaasSystem
 
 
 class ResourceUtilization:
@@ -47,7 +48,10 @@ class NodeResourceUtilization:
     # associates the pod-name with its SimFunctionReplica
     __replicas: Dict[str, SimFunctionReplica]
 
-    def __init__(self):
+    def __init__(self, resources: List[str] = None):
+        self.resources = resources
+        if resources is None:
+            self.resources = []
         self.__resources = {}
         self.__replicas = {}
 
@@ -80,13 +84,19 @@ class NodeResourceUtilization:
         for _, resource_utilization in self.list_resource_utilization():
             for resource, value in resource_utilization.list_resources().items():
                 total.put_resource(resource, value)
+        if total.is_empty():
+            for resource in self.resources:
+                total.put_resource(resource, 0)
         return total
 
 
 class ResourceState:
     node_resource_utilizations: Dict[str, NodeResourceUtilization]
 
-    def __init__(self):
+    def __init__(self, resources: List[str] = None):
+        self.resources = resources
+        if resources is None:
+            self.resources = []
         self.node_resource_utilizations = {}
 
     def put_resource(self, function_replica: SimFunctionReplica, resource: str, value: float):
@@ -100,7 +110,11 @@ class ResourceState:
 
     def get_resource_utilization(self, replica: 'SimFunctionReplica') -> 'ResourceUtilization':
         node_name = replica.node.name
-        return self.get_node_resource_utilization(node_name).get_resource_utilization(replica)
+        util = self.get_node_resource_utilization(node_name).get_resource_utilization(replica)
+        for resource in self.resources:
+            if util.get_resource(resource) is None:
+                util.put_resource(resource, 0)
+        return util
 
     def list_resource_utilization(self, node_name: str) -> List[Tuple['SimFunctionReplica', 'ResourceUtilization']]:
         return self.get_node_resource_utilization(node_name).list_resource_utilization()
@@ -108,7 +122,7 @@ class ResourceState:
     def get_node_resource_utilization(self, node_name: str) -> Optional[NodeResourceUtilization]:
         node_resources = self.node_resource_utilizations.get(node_name)
         if node_resources is None:
-            self.node_resource_utilizations[node_name] = NodeResourceUtilization()
+            self.node_resource_utilizations[node_name] = NodeResourceUtilization(self.resources)
             node_resources = self.node_resource_utilizations[node_name]
         return node_resources
 
@@ -166,7 +180,7 @@ class MetricsServer:
 class ResourceMonitor:
     """Simpy process - continuously collects resource data"""
 
-    def __init__(self, env: Environment, reconcile_interval: int, logging=True):
+    def __init__(self, env: Environment, reconcile_interval: float, logging=True):
         self.env = env
         self.reconcile_interval = reconcile_interval
         self.metric_server: MetricsServer = env.metrics_server
@@ -177,10 +191,11 @@ class ResourceMonitor:
         while True:
             yield self.env.timeout(self.reconcile_interval)
             now = self.env.now
+            state: ResourceState = self.env.resource_state
             for deployment in faas.get_deployments():
-                replicas: List[SimFunctionReplica] = faas.get_replicas(deployment.name, True, )
+                replicas: List[SimFunctionReplica] = faas.get_replicas(deployment.name, running=True)
                 for replica in replicas:
-                    utilization = self.env.resource_state.get_resource_utilization(replica)
+                    utilization = state.get_resource_utilization(replica)
                     if utilization.is_empty():
                         continue
                     # TODO extract logging into own process
@@ -188,3 +203,8 @@ class ResourceMonitor:
                         self.env.metrics.log_function_resource_utilization(replica, utilization)
                     self.metric_server.put(
                         ResourceWindow(replica, utilization.list_resources(), now))
+            if self.logging:
+                for node in self.env.topology.get_nodes():
+                    resource_utilization: NodeResourceUtilization = state.get_node_resource_utilization(node.name)
+                    total_utilization = resource_utilization.total_utilization
+                    self.env.metrics.log_resource_utilization(node.name, node.capacity, total_utilization)

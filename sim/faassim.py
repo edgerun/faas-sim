@@ -87,9 +87,11 @@ class Simulation:
             env.metrics_server = MetricsServer()
 
         if not env.resource_state:
-            env.resource_state = ResourceState()
+            # TODO let the users inject resources
+            env.resource_state = ResourceState(['cpu','memory'])
 
         if not env.resource_monitor:
+            # TODO let users inject reconcile interval
             env.resource_monitor = ResourceMonitor(env, 1)
 
     def create_container_registry(self):
