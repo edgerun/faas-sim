@@ -93,6 +93,6 @@ def pull(env: Environment, image_str: str, node: Node):
 
     yield flow.start()
 
-    # for hop in route.hops:
-    #     env.metrics.log_network(size, 'docker_pull', hop)
+    for hop in route.hops:
+        env.metrics.log_network(size, 'docker_pull', hop)
     env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'docker_pull')
