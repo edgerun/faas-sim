@@ -113,7 +113,7 @@ class DefaultFaasSystem(FaasSystem):
 
         t_received = self.env.now
 
-        replicas = self.get_replicas(request.name, FunctionReplicaState.RUNNING)
+        replicas = self.get_replicas(request.name, state=FunctionReplicaState.RUNNING)
         if not replicas:
             '''
             https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
@@ -164,7 +164,7 @@ class DefaultFaasSystem(FaasSystem):
             del self.functions_definitions[container.image]
 
     def scale_down(self, fn_name: str, remove: int):
-        replica_count = len(self.get_replicas(fn_name, FunctionReplicaState.RUNNING))
+        replica_count = len(self.get_replicas(fn_name, state=FunctionReplicaState.RUNNING))
         if replica_count == 0:
             return
         replica_count -= remove
@@ -187,7 +187,7 @@ class DefaultFaasSystem(FaasSystem):
 
     def choose_replicas_to_remove(self, fn_name: str, n: int):
         # TODO implement more sophisticated, currently just picks last ones deployed
-        running_replicas = self.get_replicas(fn_name, FunctionReplicaState.RUNNING)
+        running_replicas = self.get_replicas(fn_name, state=FunctionReplicaState.RUNNING)
         return running_replicas[len(running_replicas) - n:]
 
     def scale_up(self, fn_name: str, replicas: int):
@@ -246,8 +246,8 @@ class DefaultFaasSystem(FaasSystem):
             self.env.process(process(self.env))
         self.env.process(self.run_scheduler_worker())
 
-    def poll_available_replica(self, fn: str, interval=0.5):
-        while not self.get_replicas(fn, FunctionReplicaState.RUNNING):
+    def poll_available_replica(self, fn: str, interval=0.5, timeout: int = None):
+        while not self.get_replicas(fn, state=FunctionReplicaState.RUNNING):
             yield self.env.timeout(interval)
 
     def run_scheduler_worker(self):
@@ -322,7 +322,7 @@ class DefaultFaasSystem(FaasSystem):
         yield from replica.simulator.teardown(env, replica)
 
         self.env.cluster.remove_pod_from_node(replica.pod, node)
-        replica.state = FunctionReplicaState.SUSPENDED
+        replica.state = FunctionReplicaState.DELETE
         self.replicas[replica.function.name].remove(replica)
 
         env.metrics.log('allocation', {
