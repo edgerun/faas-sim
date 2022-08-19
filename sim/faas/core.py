@@ -1,11 +1,11 @@
 import abc
 import logging
 from collections import defaultdict
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Generator
 
 from ether.core import Node as EtherNode
 from faas.system.core import FunctionRequest, LoadBalancer, FunctionReplica, FunctionDeployment, FunctionContainer, \
-    Function, FunctionReplicaState, ScalingConfiguration, ResourceConfiguration
+    Function, FunctionReplicaState, ScalingConfiguration, ResourceConfiguration, FunctionResponse
 from skippy.core.model import Pod, ResourceRequirements
 
 from sim.core import Environment, NodeState
@@ -86,7 +86,6 @@ class SimScalingConfiguration:
         if scaling_config is None:
             self.scaling_config = ScalingConfiguration()
 
-
     @property
     def scale_min(self):
         return self.scaling_config.scale_min
@@ -122,6 +121,7 @@ class SimScalingConfiguration:
     target_queue_length: int = 75
 
     target_average_rps_threshold = 0.1
+
 
 class SimResourceConfiguration(ResourceConfiguration):
     requests: ResourceRequirements
@@ -237,8 +237,10 @@ class FunctionSimulator(abc.ABC):
     def setup(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)
 
-    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
+    def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
+        None, None, Optional[FunctionResponse]]:
         yield env.timeout(0)
+        return None
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)

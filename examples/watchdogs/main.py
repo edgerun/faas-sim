@@ -15,7 +15,8 @@ from sim.faas import SimulatorFactory, FunctionSimulator, SimFunctionDeployment,
     DeploymentRanking
 from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
-from sim.requestgen import expovariate_arrival_profile, constant_rps_profile, function_trigger
+from sim.requestgen import expovariate_arrival_profile, constant_rps_profile, function_trigger, FunctionRequestFactory, \
+    SimpleFunctionRequestFactory
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,17 @@ class AIFunctionSimulatorFactory(SimulatorFactory):
 
 
 def main():
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
+
+    #  inference factory - we assume that the file size is 250KB - client is a raspberry pi
+    inference_factory = SimpleFunctionRequestFactory(client='rpi3_0', size=250)
+
+    # training factory - we assume that the file size is 10MB (100000KB) - client is a raspberry pi
+    train_factory = SimpleFunctionRequestFactory(client='rpi3_1', size=10000)
+
 
     # prepare simulation with topology and benchmark from basic example
-    sim = Simulation(basic.example_topology(), TrainInferenceBenchmark())
+    sim = Simulation(basic.example_topology(), TrainInferenceBenchmark(inference_factory, train_factory))
 
     # override the SimulatorFactory factory
     sim.create_simulator_factory = AIFunctionSimulatorFactory
@@ -61,6 +69,11 @@ def main():
 
 
 class TrainInferenceBenchmark(Benchmark):
+
+    def __init__(self, inference_request_factory: FunctionRequestFactory,
+                 training_request_factory: FunctionRequestFactory):
+        self.inference_request_factory = inference_request_factory
+        self.training_request_factory = training_request_factory
 
     def setup(self, env: Environment):
         containers: docker.ContainerRegistry = env.container_registry
@@ -93,19 +106,25 @@ class TrainInferenceBenchmark(Benchmark):
         # run workload
         ps = []
 
-        logger.info('executing resnet50-inference requests with 20 rps and maximum 100')
+        max_rps_inference = 5
+        max_requests_inference = 400
+        logger.info(f'executing resnet50-inference requests with {max_rps_inference} rps and maximum {max_requests_inference}')
         # generate profile
-        ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=20), max_ia=1)
+        ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=max_rps_inference), max_ia=1)
 
         # run profile
-        ps.append(env.process(function_trigger(env, deployments[1], ia_generator, max_requests=1000)))
+        ps.append(env.process(
+            function_trigger(env, deployments[1], self.inference_request_factory, ia_generator, max_requests=max_requests_inference)))
 
-        logger.info('executing resnet50-training requests with 1 rps and maximum 10')
+        max_rps_training = 1
+        max_requests_training = 10
+        logger.info(f'executing resnet50-training requests with {max_rps_training} rps and maximum {max_requests_inference}')
         # generate profile
-        ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=2), max_ia=1)
+        ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=max_rps_training), max_ia=1)
 
         # run profile
-        ps.append(env.process(function_trigger(env, deployments[0], ia_generator, max_requests=10)))
+        ps.append(env.process(
+            function_trigger(env, deployments[0], self.training_request_factory, ia_generator, max_requests=max_requests_training)))
 
         # wait for invocation processes to finish
         for p in ps:

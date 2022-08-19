@@ -9,7 +9,7 @@ from sim import docker
 from sim.core import Environment
 from sim.docker import ImageProperties
 from sim.faas import SimFunctionDeployment
-from sim.requestgen import function_trigger
+from sim.requestgen import function_trigger, FunctionRequestFactory
 
 
 class Benchmark:
@@ -25,11 +25,13 @@ class Benchmark:
 
 class BenchmarkBase(Benchmark):
     def __init__(self, images: List[Tuple[str, str, str]], deployments: List[SimFunctionDeployment],
-                 arrival_profiles: Dict[str, Generator], duration: int = None):
+                 arrival_profiles: Dict[str, Generator], fn_request_factories: Dict[str, FunctionRequestFactory],
+                 duration: int = None):
         self.duration = duration  # in seconds
         self.images = images
         self.deployments = deployments
         self.deployments_per_name = self.__create_deployments_per_name()
+        self.fn_request_factories = fn_request_factories
         self.arrival_profiles = arrival_profiles
 
     def __create_deployments_per_name(self):
@@ -60,12 +62,14 @@ class BenchmarkBase(Benchmark):
         ps = []
         logging.info('executing requests')
         for deployment in self.deployments:
+            fn_request_factory = self.fn_request_factories[deployment.name]
             try:
                 ia_generator = self.arrival_profiles[deployment.name]
                 if self.duration is None:
-                    p = env.process(function_trigger(env, deployment, ia_generator, max_requests=1000))
+                    p = env.process(
+                        function_trigger(env, deployment, fn_request_factory, ia_generator, max_requests=1000))
                 else:
-                    p = env.process(function_trigger(env, deployment, ia_generator))
+                    p = env.process(function_trigger(env, deployment, fn_request_factory, ia_generator))
                 ps.append(p)
             except KeyError:
                 logging.warning('no arrival profile for deployment %s', deployment.name)
@@ -84,8 +88,9 @@ class BenchmarkBase(Benchmark):
 class DegradationBenchmarkBase(BenchmarkBase):
 
     def __init__(self, images: List[Tuple[str, str, str]], deployments: List[SimFunctionDeployment],
-                 arrival_profiles: Dict[str, Generator], duration: int = None, model_folder='./data'):
-        super().__init__(images, deployments, arrival_profiles, duration)
+                 arrival_profiles: Dict[str, Generator], fn_request_factories: Dict[str, FunctionRequestFactory],
+                 duration: int = None, model_folder='./data'):
+        super().__init__(images, deployments, arrival_profiles, fn_request_factories, duration)
         self.model_folder = model_folder
 
     def setup(self, env: Environment):

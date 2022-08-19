@@ -2,7 +2,7 @@ import logging
 import time
 import uuid
 from collections import defaultdict, Counter
-from typing import Dict, List
+from typing import Dict, List, Generator
 
 import simpy
 from ether.util import parse_size_string
@@ -10,7 +10,7 @@ from faas.system.core import FunctionContainer, FunctionRequest, FunctionReplica
 
 from sim.core import Environment
 from sim.faas import RoundRobinLoadBalancer, SimFunctionDeployment, SimFunctionReplica
-from sim.net import SafeFlow
+from sim.net import SafeFlow, LowBandwidthException
 from sim.skippy import create_function_pod
 from .core import FunctionSimulator
 from .scaling import FaasRequestScaler, AverageFaasRequestScaler, AverageQueueFaasRequestScaler
@@ -136,14 +136,14 @@ class DefaultFaasSystem(FaasSystem):
         logger.debug('dispatching request %s:%d to %s', request.name, request.request_id, replica.node.name)
 
         t_start = self.env.now
-        yield from simulate_function_invocation(self.env, replica, request)
+        status = yield from self.simulate_function_invocation(self.env, replica, request)
 
         t_end = self.env.now
 
         t_wait = t_start - t_received
         t_exec = t_end - t_start
         self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_wait, t_start,
-                                        t_exec, id(replica))
+                                        t_exec, id(replica), status=status)
 
     def remove(self, fn: SimFunctionDeployment):
         self.env.metrics.log_function_deployment_lifecycle(fn, 'remove')
@@ -342,6 +342,68 @@ class DefaultFaasSystem(FaasSystem):
 
         self.env.metrics.log_function_deployment_lifecycle(self.functions_deployments[function_name], 'suspend')
 
+    def simulate_function_invocation(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
+        env.metrics.log_start_exec(request, replica)
+
+        # simulate transfer of request from invoker to function
+        if request.client is not None and request.size is not None:
+            src_name = request.client
+            dest_name = replica.node.name
+            size_kb = request.size
+            success = yield from self.simulate_request_transfer(request.name, src_name, dest_name, size_kb)
+            if not success:
+                logger.info(
+                    f'A LowBandwidthException occurred when calling {request.name} with the client'
+                    f'{request.client} and the destination node {replica.node.name}.'
+                    f'The Call is aborted.')
+                return 500
+
+        response = yield from replica.simulator.invoke(env, replica, request)
+
+        if response is not None and response.client is not None and response.size is not None:
+            # simulate transfer of response from function to invoker
+            src_name = replica.node.name
+            dest_name = request.client
+            size_kb = response.size
+            success = yield from self.simulate_request_transfer(request.name, src_name, dest_name, size_kb)
+            if not success:
+                logger.info(
+                    f'A LowBandwidthException occurred when returning the response of {request.name} with the client'
+                    f'{request.client} and the destination node {replica.node.name}.'
+                    f'The Call is aborted.')
+                return 500
+
+        env.metrics.log_stop_exec(request, replica)
+        if response is not None:
+            return response.code
+        else:
+            return 200
+
+    def simulate_request_transfer(self, fn_name: str, src_name: str, dest_name: str, size_kb: float) -> Generator[
+        None, None, bool]:
+        """
+        Simulates a transfer from src to dest. The size is in KB.
+        The return value of this function indicates the result of the transfer.
+        If it is True, the transfer happened.
+        If it is False, the transfer failed due to LowBandwidth
+        """
+        env = self.env
+        started = env.now
+        route = self.env.topology.route_by_node_name(src_name, dest_name)
+        if len(route.hops) == 0:
+            return True
+        # TODO add FlowFactory that can create UninterruptingFlows like in Jacob's thesis branch
+        try:
+            flow = SafeFlow(self.env, size_kb * 1024, route)
+            yield flow.start()
+            for hop in route.hops:
+                env.metrics.log_network(size_kb, fn_name, hop)
+            env.metrics.log_flow(size_kb, env.now - started, route.source, route.destination, fn_name)
+            return True
+        except LowBandwidthException:
+            logger.debug(f'LowBandwidthException thrown while transferring {size_kb}KB from {src_name} to {dest_name}')
+            return False
+
 
 def simulate_function_start(env: Environment, replica: SimFunctionReplica):
     sim: FunctionSimulator = replica.simulator
@@ -418,8 +480,38 @@ def simulate_data_upload(env: Environment, replica: SimFunctionReplica):
         env.metrics.log_network(size, 'data_upload', hop)
     env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_upload')
 
-
-def simulate_function_invocation(env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
-    env.metrics.log_start_exec(request, replica)
-    yield from replica.simulator.invoke(env, replica, request)
-    env.metrics.log_stop_exec(request, replica)
+# def simulate_function_invocation(env, replica: FunctionReplica, request: FunctionRequest):
+#     """
+#     Adapted version of "simulate function invocation" that also includes network simulation
+#     @param replica: The function replica
+#     @param request: The request to be processed
+#     """
+#     tx_time_cl_lb = 0
+#     tx_time_lb_fx = 0
+#     t_start = self.env.now
+#
+#     if request.load_balancer is not None and hasattr(request, 'client_node') and isinstance(request.load_balancer,
+#                                                                                             LocalizedLoadBalancer):
+#         # right now I used 250kb request payload, which should be a small JPG with the added HTTP overhead
+#         cl_lb_start = self.env.now
+#         yield from self.simulate_request_transfer(request.load_balancer.ether_node.name, request.client_node.name,
+#                                                   250)
+#         tx_time_cl_lb = self.env.now - cl_lb_start
+#         lb_fx_start = self.env.now
+#         yield from self.simulate_request_transfer(request.load_balancer.ether_node.name,
+#                                                   replica.node.ether_node.name,
+#                                                   250)
+#         tx_time_lb_fx = self.env.now - lb_fx_start
+#
+#     # actual function simulation portion
+#     yield from simulate_function_invocation(self.env, replica, request)
+#     t_end = self.env.now
+#
+#     # report the total response time to the load-balancer for weight updates etc.
+#     if request.load_balancer is not None:
+#         if isinstance(request.load_balancer, LeastResponseTimeLoadBalancer):
+#             request.load_balancer.report_response_time(request, replica, t_end - t_start)
+#
+#     if tx_time_cl_lb != 0 and tx_time_lb_fx != 0:
+#         request.tx_time_cl_lb = tx_time_cl_lb
+#         request.tx_time_lb_fx = tx_time_lb_fx

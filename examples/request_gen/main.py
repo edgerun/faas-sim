@@ -11,7 +11,8 @@ from sim.docker import ImageProperties
 from sim.faas import SimFunctionDeployment, SimScalingConfiguration
 from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
-from sim.requestgen import function_trigger, constant_rps_profile, expovariate_arrival_profile
+from sim.requestgen import function_trigger, constant_rps_profile, expovariate_arrival_profile, FunctionRequestFactory, \
+    SimpleFunctionRequestFactory
 from sim.topology import Topology
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,11 @@ def example_topology() -> Topology:
 
 class ExampleBenchmark(Benchmark):
 
+    def __init__(self, request_factory: SimpleFunctionRequestFactory = None):
+        self.request_factory = request_factory
+        if self.request_factory is None:
+            self.request_factory = SimpleFunctionRequestFactory()
+
     def setup(self, env: Environment):
         containers: docker.ContainerRegistry = env.container_registry
 
@@ -72,7 +78,7 @@ class ExampleBenchmark(Benchmark):
         ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=20))
 
         # run profile
-        yield from function_trigger(env, deployments[0], ia_generator, max_requests=100)
+        yield from function_trigger(env, deployments[0], self.request_factory, ia_generator, max_requests=100)
 
     def prepare_deployments(self) -> List[SimFunctionDeployment]:
         python_pi_fd = self.prepare_python_pi_deployment()
