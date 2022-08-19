@@ -57,7 +57,7 @@ class MyFunctionSimulator(FunctionSimulator):
         cpu_millis = replica.node.capacity.cpu_millis * 0.1
         env.resource_state.put_resource(replica, 'cpu', cpu_millis)
         node = replica.node
-
+        start_ts = env.now
         node.current_requests.add(request)
 
         if replica.function.name == 'python-pi':
@@ -69,6 +69,10 @@ class MyFunctionSimulator(FunctionSimulator):
             yield env.timeout(0.5)  # invoking this function takes 500 ms
         else:
             yield env.timeout(0)
+
+        # log function execution time (FET)
+        end_ts = env.now
+        env.metrics.log_fet(replica, request, start_ts, end_ts)
 
         # also, you have to release them at the end
         env.resource_state.remove_resource(replica, 'cpu', cpu_millis)
