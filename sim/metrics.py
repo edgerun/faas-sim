@@ -4,6 +4,7 @@ from typing import Dict
 import pandas as pd
 from ether.core import Capacity
 from faas.system import Metrics, RuntimeLogger, NullLogger
+from skippy.core.clustercontext import ClusterContext
 from skippy.core.model import SchedulingResult
 
 from sim.core import Environment
@@ -42,17 +43,19 @@ class SimMetrics(Metrics):
         record = {'name': fn.name}
         self.log('function_deployments', record, type='deploy')
 
-    def log_function_definition(self, fn_name: str, fn: FunctionContainer):
+    def log_function_definition(self, fn: SimFunctionDeployment):
         """
         Logs the functions name, related container images and their metadata
         """
-        record = {'name': fn_name, 'image': fn.image}
-        # TODO fix clustercontext
-        image_state = self.env.cluster.image_states[fn.image]
-        for arch, size in image_state.size.items():
-            record[f'size_{arch}'] = size
+        cluster: ClusterContext = self.env.cluster
+        for fn_container in fn.fn_containers:
+            record = {'name': fn.name, 'image': fn_container.image, 'sizes': {}}
 
-            self.log('functions', record, type='deploy')
+            image_state = cluster.retrieve_image_state(fn_container.fn_image.image)
+            for arch, size in image_state.size.items():
+                record['sizes'][f'size_{arch}'] = size
+
+            self.log('functions', record)
 
     def log_function_replica(self, replica: SimFunctionReplica, **kwargs):
         for container in replica.pod.spec.containers:

@@ -82,6 +82,7 @@ class DefaultFaasSystem(FaasSystem):
             self.function_containers[f.image] = f
 
         # TODO log metadata
+        self.env.metrics.log_function_definition(fd)
         self.env.metrics.log_function_deployment(fd)
         self.env.metrics.log_function_deployment_lifecycle(fd, 'deploy')
         logger.info('deploying function %s with scale_min=%d', fd.name, fd.scaling_config.scale_min)
