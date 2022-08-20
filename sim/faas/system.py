@@ -14,6 +14,7 @@ from sim.net import SafeFlow, LowBandwidthException
 from sim.skippy import create_function_pod
 from .core import FunctionSimulator
 from .scaling import FaasRequestScaler, AverageFaasRequestScaler, AverageQueueFaasRequestScaler
+from ..factory.flow import FlowFactory
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +351,7 @@ class DefaultFaasSystem(FaasSystem):
             src_name = request.client
             dest_name = replica.node.name
             size_kb = request.size
-            success = yield from self.simulate_request_transfer(request.name, src_name, dest_name, size_kb)
+            success = yield from self.simulate_request_transfer(self.env.flow_factory, request.name, src_name, dest_name, size_kb)
             if not success:
                 logger.info(
                     f'A LowBandwidthException occurred when calling {request.name} with the client'
@@ -379,7 +380,7 @@ class DefaultFaasSystem(FaasSystem):
         else:
             return 200
 
-    def simulate_request_transfer(self, fn_name: str, src_name: str, dest_name: str, size_kb: float) -> Generator[
+    def simulate_request_transfer(self, flow_factory: FlowFactory, fn_name: str, src_name: str, dest_name: str, size_kb: int) -> Generator[
         None, None, bool]:
         """
         Simulates a transfer from src to dest. The size is in KB.
@@ -393,9 +394,8 @@ class DefaultFaasSystem(FaasSystem):
         route = self.env.topology.route_by_node_name(src_name, dest_name)
         if len(route.hops) == 0:
             return True
-        # TODO add FlowFactory that can create UninterruptingFlows like in Jacob's thesis branch
         try:
-            flow = SafeFlow(self.env, size_kb * 1024, route)
+            flow = flow_factory.create_flow(self.env, size_kb * 1024, route)
             yield flow.start()
             for hop in route.hops:
                 env.metrics.log_network(size_kb, fn_name, hop)
@@ -446,7 +446,7 @@ def simulate_data_download(env: Environment, replica: SimFunctionReplica):
 
     storage_node = env.cluster.get_node(storage_node_name)
     route = env.topology.route_by_node_name(storage_node.name, node.name)
-    flow = SafeFlow(env, size, route)
+    flow = env.flow_factory.create_flow(env, size, route)
     yield flow.start()
     for hop in route.hops:
         env.metrics.log_network(size, 'data_download', hop)
@@ -475,7 +475,7 @@ def simulate_data_upload(env: Environment, replica: SimFunctionReplica):
 
     storage_node = env.cluster.get_node(storage_node_name)
     route = env.topology.route_by_node_name(node.name, storage_node.name)
-    flow = SafeFlow(env, size, route)
+    flow = env.flow_factory.create_flow(env, size, route)
     yield flow.start()
     for hop in route.hops:
         env.metrics.log_network(size, 'data_upload', hop)

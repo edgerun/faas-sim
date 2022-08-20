@@ -9,6 +9,7 @@ from sim.docker import ContainerRegistry, pull as docker_pull
 from sim.faas import SimFunctionReplica, FunctionSimulator, SimulatorFactory
 from faas.system.core import FunctionContainer, FunctionRequest
 from sim.faas.system import DefaultFaasSystem
+from sim.factory.flow import SafeFlowFactory
 from sim.metrics import SimMetrics, RuntimeLogger
 from sim.resource import MetricsServer, ResourceState, ResourceMonitor
 from sim.skippy import SimulationClusterContext
@@ -93,6 +94,9 @@ class Simulation:
         if not env.resource_monitor:
             # TODO let users inject reconcile interval
             env.resource_monitor = ResourceMonitor(env, 1)
+
+        if not env.flow_factory:
+            env.flow_factory = SafeFlowFactory()
 
     def create_container_registry(self):
         return ContainerRegistry()

@@ -89,7 +89,7 @@ def pull(env: Environment, image_str: str, node: Node):
     #     size = size * 0.1
 
     route = env.topology.route(DockerRegistry, node)
-    flow = SafeFlow(env, size, route)
+    flow = env.flow_factory.create_flow(env, size, route)
 
     yield flow.start()
 

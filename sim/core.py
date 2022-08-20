@@ -128,6 +128,7 @@ class Environment(simpy.Environment):
         self.metrics_server = None
         self.resource_state = None
         self.resource_monitor = None
+        self.flow_factory = None
         self.background_processes: List[Callable[[Environment], Generator[simpy.events.Event, Any, Any]]] = []
         self.degradation_models: Dict[str, Optional[RegressorMixin]] = {}
 
