@@ -387,6 +387,7 @@ class DefaultFaasSystem(FaasSystem):
         If it is True, the transfer happened.
         If it is False, the transfer failed due to LowBandwidth
         """
+        # TODO this is missing the load balancer, see TODO at the bottom of file
         env = self.env
         started = env.now
         route = self.env.topology.route_by_node_name(src_name, dest_name)
@@ -480,6 +481,8 @@ def simulate_data_upload(env: Environment, replica: SimFunctionReplica):
         env.metrics.log_network(size, 'data_upload', hop)
     env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_upload')
 
+# TODO the following implementation of jacob's thesis branch should be adopted as it explictly transfers data from the client
+# to the load balancer and from the load balancer to the function - which is how it happens in real life
 # def simulate_function_invocation(env, replica: FunctionReplica, request: FunctionRequest):
 #     """
 #     Adapted version of "simulate function invocation" that also includes network simulation
