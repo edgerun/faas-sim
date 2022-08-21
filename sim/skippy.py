@@ -134,7 +134,7 @@ def create_function_pod(fd: 'SimFunctionDeployment', fn: 'FunctionContainer') ->
 
     spec = PodSpec()
     spec.containers = [Container(fn.image, resource_requirements)]
-    spec.labels = fn.labels
+    spec.labels = fn.labels.copy()
 
     cnt = next(pod_counters[fd.name])
     pod = Pod(f'pod-{fd.name}-{cnt}', 'faas-sim')
