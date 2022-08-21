@@ -2,6 +2,7 @@ import logging
 import time
 
 import examples.basic.main as basic
+from examples.util.clients import find_clients
 from examples.watchdogs.main import TrainInferenceBenchmark, AIFunctionSimulatorFactory
 from sim.faassim import Simulation
 from sim.factory.flow import SafeFlowFactory, UninterruptingFlowFactory, FlowFactory
@@ -10,9 +11,6 @@ from sim.topology import Topology
 
 logger = logging.getLogger(__name__)
 
-
-def find_clients(topology: Topology, client='rpi3'):
-    return [x for x in topology.get_nodes() if client in x.name]
 
 
 def execute_benchmark(flow_factory: FlowFactory):
