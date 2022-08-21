@@ -193,12 +193,88 @@ def prepare_resnet_training_deployment():
     return resnet_fd
 
 
-def prepare_deployments() -> List[SimFunctionDeployment]:
+def prepare_function_deployments() -> List[SimFunctionDeployment]:
     resnet_inference_fd = prepare_resnet_inference_deployment()
 
     resnet_training_fd = prepare_resnet_training_deployment()
 
     return [resnet_inference_fd, resnet_training_fd]
+
+
+def get_resnet50_inference_cpu_image_properties():
+    return [
+        ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='arm32'),
+        ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='x86'),
+        ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='aarch64')
+    ]
+
+
+def get_galileo_worker_image_properties():
+    return [
+        ImageProperties('galileo-worker', parse_size_string('23M'), arch='arm32'),
+        ImageProperties('galileo-worker', parse_size_string('23M'), arch='x86'),
+        ImageProperties('galileo-worker', parse_size_string('23M'), arch='aarch64')
+    ]
+
+
+def get_resnet50_training_cpu_image_properties():
+    return [
+        ImageProperties('resnet50-training-cpu', parse_size_string('128M'), arch='arm32'),
+        ImageProperties('resnet50-training-cpu', parse_size_string('128M'), arch='x86'),
+        ImageProperties('resnet50-training-cpu', parse_size_string('128M'), arch='aarch64')
+    ]
+
+
+def prepare_client_deployments(ia_generator, client_names: List[str], deployment: SimFunctionDeployment,
+                               max_requests: int, request_factory):
+    client_fds = []
+    for idx, client in enumerate(client_names):
+        client_inference_fd = prepare_client_deployment(
+            str(idx),
+            client,
+            ia_generator,
+            max_requests,
+            request_factory,
+            deployment
+        )
+        client_fds.append(client_inference_fd)
+
+    return client_fds
+
+
+def prepare_inference_clients(clients: List[str], request_factory, deployment: SimFunctionDeployment) -> List[
+    SimFunctionDeployment]:
+    inference_max_rps = 5
+    inference_max_requests = 200
+    # generate profile
+    inference_ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=inference_max_rps), max_ia=1)
+
+    inference_client_fds = prepare_client_deployments(
+        inference_ia_generator,
+        clients,
+        deployment, inference_max_requests,
+        request_factory
+    )
+    return inference_client_fds
+
+
+def prepare_training_clients(clients: List[str], request_factory, deployment: SimFunctionDeployment) -> List[
+    SimFunctionDeployment]:
+    training_max_rps = 1
+    training_max_requests = 10
+    logger.info(
+        f'executing resnet50-training requests with {training_max_rps} rps and maximum {training_max_requests}')
+    # generate profile
+    training_ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=training_max_rps), max_ia=1)
+
+    training_client_fds = prepare_client_deployments(
+        training_ia_generator,
+        clients,
+        deployment, training_max_requests,
+        request_factory
+    )
+
+    return training_client_fds
 
 
 class DecentralizedTrainInferenceBenchmark(Benchmark):
@@ -211,19 +287,17 @@ class DecentralizedTrainInferenceBenchmark(Benchmark):
 
     def setup(self, env: Environment):
         containers: docker.ContainerRegistry = env.container_registry
+        images = []
+        resnet50_inference_cpu_img_properties = get_resnet50_inference_cpu_image_properties()
+        resnet50_training_cpu_img_properties = get_resnet50_training_cpu_image_properties()
+        galileo_worker_image_properties = get_galileo_worker_image_properties()
 
-        containers.put(ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='arm32'))
-        containers.put(ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='x86'))
-        containers.put(ImageProperties('resnet50-inference-cpu', parse_size_string('56M'), arch='aarch64'))
+        images.extend(resnet50_inference_cpu_img_properties)
+        images.extend(resnet50_training_cpu_img_properties)
+        images.extend(galileo_worker_image_properties)
 
-        # this container will be used for clients
-        containers.put(ImageProperties('galileo-worker', parse_size_string('23M'), arch='arm32'))
-        containers.put(ImageProperties('galileo-worker', parse_size_string('23M'), arch='x86'))
-        containers.put(ImageProperties('galileo-worker', parse_size_string('23M'), arch='aarch64'))
-
-        containers.put(ImageProperties('resnet50-training-cpu', parse_size_string('128M'), arch='arm32'))
-        containers.put(ImageProperties('resnet50-training-cpu', parse_size_string('128M'), arch='x86'))
-        containers.put(ImageProperties('resnet50-training-cpu', parse_size_string('128M'), arch='aarch64'))
+        for image in images:
+            containers.put(image)
 
         # log all the images in the container
         for name, tag_dict in containers.images.items():
@@ -232,20 +306,19 @@ class DecentralizedTrainInferenceBenchmark(Benchmark):
 
     def run(self, env: Environment):
         # deploy functions
-        deployments = prepare_deployments()
-        client_deployments = self.prepare_client_deployments_for_experiment(deployments)
+        deployments = []
+        fn_deployments = prepare_function_deployments()
+        client_deployments = self.prepare_client_deployments_for_experiment(fn_deployments)
+
+        deployments.extend(fn_deployments)
+        deployments.extend(client_deployments)
+
         for deployment in deployments:
-            yield from env.faas.deploy(deployment)
-        for deployment in client_deployments:
             yield from env.faas.deploy(deployment)
 
         # block until replicas become available (scheduling has finished and replicas have been deployed on the node)
-        logger.info('waiting for replica')
-        yield env.process(env.faas.poll_available_replica('resnet50-training'))
-        yield env.process(env.faas.poll_available_replica('resnet50-inference'))
-
-        # wait for clients to spawn
-        for deployment in client_deployments:
+        logger.info('waiting for replicas')
+        for deployment in deployments:
             yield env.process(env.faas.poll_available_replica(deployment.name))
 
         # run workload
@@ -258,58 +331,14 @@ class DecentralizedTrainInferenceBenchmark(Benchmark):
         for p in ps:
             yield p
 
-    def prepare_client_deployments(self, ia_generator, client_names: List[str], deployment: SimFunctionDeployment,
-                                   max_requests: int):
-        client_fds = []
-        for idx, client in enumerate(client_names):
-            client_inference_fd = prepare_client_deployment(
-                str(idx),
-                client,
-                ia_generator,
-                max_requests,
-                self.inference_request_factory,
-                deployment
-            )
-            client_fds.append(client_inference_fd)
-
-        return client_fds
-
-    def prepare_inference_clients(self, deployment: SimFunctionDeployment) -> List[SimFunctionDeployment]:
-        inference_max_rps = 5
-        inference_max_requests = 200
-        # generate profile
-        inference_ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=inference_max_rps), max_ia=1)
-
-        inference_client_fds = self.prepare_client_deployments(
-            inference_ia_generator,
-            [self.clients[0].name],
-            deployment, inference_max_requests
-        )
-        return inference_client_fds
-
-    def prepare_training_clients(self, deployment: SimFunctionDeployment) -> List[SimFunctionDeployment]:
-        training_max_rps = 1
-        training_max_requests = 10
-        logger.info(
-            f'executing resnet50-training requests with {training_max_rps} rps and maximum {training_max_requests}')
-        # generate profile
-        training_ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=training_max_rps), max_ia=1)
-
-        training_client_fds = self.prepare_client_deployments(
-            training_ia_generator,
-            [self.clients[1].name],
-            deployment, training_max_requests
-        )
-
-        return training_client_fds
-
     def prepare_client_deployments_for_experiment(self, deployments: List[SimFunctionDeployment]) -> List[
         SimFunctionDeployment]:
 
         fds = []
-
-        fds.extend(self.prepare_inference_clients(deployments[0]))
-        fds.extend(self.prepare_training_clients(deployments[1]))
+        inference_clients = [self.clients[0].name]
+        training_clients = [self.clients[1].name]
+        fds.extend(prepare_inference_clients(inference_clients, self.inference_request_factory, deployments[0]))
+        fds.extend(prepare_training_clients(training_clients, self.training_request_factory, deployments[1]))
 
         return fds
 
