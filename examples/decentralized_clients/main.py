@@ -19,7 +19,7 @@ from sim.docker import ImageProperties
 from sim.faas import FunctionSimulator, SimFunctionReplica, SimFunctionDeployment, SimulatorFactory
 from sim.faas.core import SimResourceConfiguration, SimScalingConfiguration, DeploymentRanking
 from sim.faassim import Simulation
-from sim.predicates import PodHostEqualsNode
+from sim.predicates import PodHostEqualsNode, host_label
 from sim.requestgen import FunctionRequestFactory, SimpleFunctionRequestFactory, expovariate_arrival_profile, \
     constant_rps_profile
 
@@ -122,6 +122,85 @@ class ClientAIFunctionSimulatorFactory(SimulatorFactory):
             return ClientSimulator()
 
 
+def prepare_client_deployment(client_id: str, host: str, ia_generator, max_requests, request_factory,
+                              deployment: SimFunctionDeployment):
+    # Design time
+    client_fn_name = f'client-{deployment.name}-' + client_id + "-" + host
+    client_image_name = 'galileo-worker'
+    client_image = FunctionImage(image=client_image_name)
+    client_fn = Function(client_fn_name, fn_images=[client_image])
+
+    fn_container = FunctionContainer(client_image, SimResourceConfiguration(),
+                                     {client_label: 'true',
+                                      host_label: host})
+    client_container = ClientFunctionContainer(fn_container, ia_generator, request_factory,
+                                               deployment,
+                                               max_requests=max_requests)
+
+    client_fd = SimFunctionDeployment(
+        client_fn,
+        [client_container],
+        SimScalingConfiguration(ScalingConfiguration(scale_min=1, scale_max=1, scale_zero=False)),
+        DeploymentRanking([client_image_name])
+    )
+    return client_fd
+
+
+def prepare_resnet_inference_deployment():
+    # Design time
+
+    resnet_inference = 'resnet50-inference'
+    inference_cpu = 'resnet50-inference-cpu'
+
+    resnet_inference_cpu = FunctionImage(image=inference_cpu)
+    resnet_fn = Function(resnet_inference, fn_images=[resnet_inference_cpu])
+
+    # Run time
+
+    resnet_cpu_container = FunctionContainer(resnet_inference_cpu, SimResourceConfiguration(),
+                                             {"node-role.kubernetes.io/worker": "true"})
+
+    resnet_fd = SimFunctionDeployment(
+        resnet_fn,
+        [resnet_cpu_container],
+        SimScalingConfiguration(),
+        DeploymentRanking([inference_cpu])
+    )
+
+    return resnet_fd
+
+
+def prepare_resnet_training_deployment():
+    # Design time
+
+    resnet_training = 'resnet50-training'
+    training_cpu = 'resnet50-training-cpu'
+
+    resnet_training_cpu = FunctionImage(image=training_cpu)
+    resnet_fn = Function(resnet_training, fn_images=[resnet_training_cpu])
+
+    # Run time
+
+    resnet_cpu_container = FunctionContainer(resnet_training_cpu, SimResourceConfiguration())
+
+    resnet_fd = SimFunctionDeployment(
+        resnet_fn,
+        [resnet_cpu_container],
+        SimScalingConfiguration(),
+        DeploymentRanking([training_cpu])
+    )
+
+    return resnet_fd
+
+
+def prepare_deployments() -> List[SimFunctionDeployment]:
+    resnet_inference_fd = prepare_resnet_inference_deployment()
+
+    resnet_training_fd = prepare_resnet_training_deployment()
+
+    return [resnet_inference_fd, resnet_training_fd]
+
+
 class DecentralizedTrainInferenceBenchmark(Benchmark):
 
     def __init__(self, clients: List[Node], inference_request_factory: FunctionRequestFactory,
@@ -153,7 +232,7 @@ class DecentralizedTrainInferenceBenchmark(Benchmark):
 
     def run(self, env: Environment):
         # deploy functions
-        deployments = self.prepare_deployments()
+        deployments = prepare_deployments()
         client_deployments = self.prepare_client_deployments_for_experiment(deployments)
         for deployment in deployments:
             yield from env.faas.deploy(deployment)
@@ -183,7 +262,7 @@ class DecentralizedTrainInferenceBenchmark(Benchmark):
                                    max_requests: int):
         client_fds = []
         for idx, client in enumerate(client_names):
-            client_inference_fd = self.prepare_client_deployment(
+            client_inference_fd = prepare_client_deployment(
                 str(idx),
                 client,
                 ia_generator,
@@ -233,81 +312,6 @@ class DecentralizedTrainInferenceBenchmark(Benchmark):
         fds.extend(self.prepare_training_clients(deployments[1]))
 
         return fds
-
-    def prepare_deployments(self) -> List[SimFunctionDeployment]:
-        resnet_inference_fd = self.prepare_resnet_inference_deployment()
-
-        resnet_training_fd = self.prepare_resnet_training_deployment()
-
-        return [resnet_inference_fd, resnet_training_fd]
-
-    def prepare_client_deployment(self, client_id: str, host: str, ia_generator, max_requests, request_factory,
-                                  deployment: SimFunctionDeployment):
-        # Design time
-        client_fn_name = f'client-{deployment.name}-' + client_id + "-" + host
-        client_image_name = 'galileo-worker'
-        client_image = FunctionImage(image=client_image_name)
-        client_fn = Function(client_fn_name, fn_images=[client_image])
-
-        fn_container = FunctionContainer(client_image, SimResourceConfiguration(),
-                                         {client_label: 'true',
-                                          'faassim.edgerun.io/hostname': host})
-        client_container = ClientFunctionContainer(fn_container, ia_generator, request_factory,
-                                                   deployment,
-                                                   max_requests=max_requests)
-
-        client_fd = SimFunctionDeployment(
-            client_fn,
-            [client_container],
-            SimScalingConfiguration(ScalingConfiguration(scale_min=1, scale_max=1, scale_zero=False)),
-            DeploymentRanking([client_image_name])
-        )
-        return client_fd
-
-    def prepare_resnet_training_deployment(self):
-        # Design time
-
-        resnet_training = 'resnet50-training'
-        training_cpu = 'resnet50-training-cpu'
-
-        resnet_training_cpu = FunctionImage(image=training_cpu)
-        resnet_fn = Function(resnet_training, fn_images=[resnet_training_cpu])
-
-        # Run time
-
-        resnet_cpu_container = FunctionContainer(resnet_training_cpu, SimResourceConfiguration())
-
-        resnet_fd = SimFunctionDeployment(
-            resnet_fn,
-            [resnet_cpu_container],
-            SimScalingConfiguration(),
-            DeploymentRanking([training_cpu])
-        )
-
-        return resnet_fd
-
-    def prepare_resnet_inference_deployment(self):
-        # Design time
-
-        resnet_inference = 'resnet50-inference'
-        inference_cpu = 'resnet50-inference-cpu'
-
-        resnet_inference_cpu = FunctionImage(image=inference_cpu)
-        resnet_fn = Function(resnet_inference, fn_images=[resnet_inference_cpu])
-
-        # Run time
-
-        resnet_cpu_container = FunctionContainer(resnet_inference_cpu, SimResourceConfiguration(),
-                                                 {"node-role.kubernetes.io/worker": "true"})
-
-        resnet_fd = SimFunctionDeployment(
-            resnet_fn,
-            [resnet_cpu_container],
-            SimScalingConfiguration(),
-            DeploymentRanking([inference_cpu])
-        )
-
-        return resnet_fd
 
 
 def execute_benchmark():
