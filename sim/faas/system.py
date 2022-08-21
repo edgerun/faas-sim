@@ -366,7 +366,7 @@ class DefaultFaasSystem(FaasSystem):
             src_name = replica.node.name
             dest_name = request.client
             size_kb = response.size
-            success = yield from self.simulate_request_transfer(request.name, src_name, dest_name, size_kb)
+            success = yield from self.simulate_request_transfer(self.env.flow_factory, request.name, src_name, dest_name, size_kb)
             if not success:
                 logger.info(
                     f'A LowBandwidthException occurred when returning the response of {request.name} with the client'
