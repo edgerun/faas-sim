@@ -37,7 +37,7 @@ class DefaultFaasSystem(FaasSystem):
         self.scheduler_queue = simpy.Store(env)
 
         # TODO let users inject SimLoadBalancer
-        self.load_balancer = RoundRobinLoadBalancer(env, self.replicas)
+        self.load_balancer = RoundRobinLoadBalancer(env)
 
         self.functions_deployments: Dict[str, SimFunctionDeployment] = dict()
         self.replica_count: Dict[str, int] = dict()
@@ -113,26 +113,28 @@ class DefaultFaasSystem(FaasSystem):
             return
 
         t_received = self.env.now
+        if request.replica is None:
+            replicas = self.get_replicas(request.name, state=FunctionReplicaState.RUNNING)
+            if not replicas:
+                '''
+                https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
+    
+                When scale_from_zero is enabled a cache is maintained in memory indicating the readiness of each function.
+                If when a request is received a function is not ready, then the HTTP connection is blocked, the function is
+                scaled to min replicas, and as soon as a replica is available the request is proxied through as per normal.
+                You will see this process taking place in the logs of the gateway component.
+                '''
+                yield from self.poll_available_replica(request.name)
 
-        replicas = self.get_replicas(request.name, state=FunctionReplicaState.RUNNING)
-        if not replicas:
-            '''
-            https://docs.openfaas.com/architecture/autoscaling/#scaling-up-from-zero-replicas
-
-            When scale_from_zero is enabled a cache is maintained in memory indicating the readiness of each function.
-            If when a request is received a function is not ready, then the HTTP connection is blocked, the function is
-            scaled to min replicas, and as soon as a replica is available the request is proxied through as per normal.
-            You will see this process taking place in the logs of the gateway component.
-            '''
-            yield from self.poll_available_replica(request.name)
-
-        if len(replicas) < 1:
-            raise ValueError
-        elif len(replicas) > 1:
-            logger.debug('asking load balancer for replica for request %s:%d', request.name, request.request_id)
-            replica = self.next_replica(request)
+            if len(replicas) < 1:
+                raise ValueError
+            elif len(replicas) > 1:
+                logger.debug('asking load balancer for replica for request %s:%d', request.name, request.request_id)
+                replica = self.next_replica(request)
+            else:
+                replica = replicas[0]
         else:
-            replica = replicas[0]
+            replica = request.replica
 
         logger.debug('dispatching request %s:%d to %s', request.name, request.request_id, replica.node.name)
 

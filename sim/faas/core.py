@@ -196,15 +196,14 @@ class SimFunctionReplica(FunctionReplica):
 
 class SimLoadBalancer(LoadBalancer):
     env: Environment
-    replicas: Dict[str, List[SimFunctionReplica]]
 
-    def __init__(self, env, replicas) -> None:
+    def __init__(self, env) -> None:
         super().__init__()
         self.env = env
-        self.replicas = replicas
 
-    def get_running_replicas(self, function: str):
-        return [replica for replica in self.replicas[function] if replica.state == FunctionReplicaState.RUNNING]
+    def get_running_replicas(self, function: str) -> List[SimFunctionReplica]:
+        faas: 'DefaultFaasSystem' = self.env.faas
+        return faas.get_replicas(function, running=True)
 
     def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
         raise NotImplementedError
@@ -212,8 +211,8 @@ class SimLoadBalancer(LoadBalancer):
 
 class RoundRobinLoadBalancer(SimLoadBalancer):
 
-    def __init__(self, env, replicas) -> None:
-        super().__init__(env, replicas)
+    def __init__(self, env) -> None:
+        super().__init__(env)
         self.counters = defaultdict(lambda: 0)
 
     def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
