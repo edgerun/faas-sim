@@ -6,9 +6,11 @@ import simpy
 from ether.util import parse_size_string
 from faas.system import FunctionRequest, FunctionResponse, FunctionContainer, FunctionImage, Function, \
     ScalingConfiguration
+from faas.util.constant import client_role_label, hostname_label
 from skippy.core.scheduler import Scheduler
 
 import examples.basic.main as basic
+from examples.decentralized_loadbalancers.topology import testbed_topology
 from examples.util.clients import find_clients
 from examples.watchdogs.inference import InferenceFunctionSim
 from examples.watchdogs.training import TrainingFunctionSim
@@ -19,14 +21,11 @@ from sim.docker import ImageProperties
 from sim.faas import FunctionSimulator, SimFunctionReplica, SimFunctionDeployment, SimulatorFactory
 from sim.faas.core import SimResourceConfiguration, SimScalingConfiguration, DeploymentRanking
 from sim.faassim import Simulation
-from sim.predicates import PodHostEqualsNode, host_label
+from sim.predicates import PodHostEqualsNode
 from sim.requestgen import FunctionRequestFactory, SimpleFunctionRequestFactory, expovariate_arrival_profile, \
     constant_rps_profile
 
 logger = logging.getLogger(__name__)
-
-client_label = 'node-role.kubernetes.io/client'
-worker_label = 'node-role.kubernetes.io/worker'
 
 """
 This example shows how to generate requests from different nodes.
@@ -131,8 +130,8 @@ def prepare_client_deployment(client_id: str, host: str, ia_generator, max_reque
     client_fn = Function(client_fn_name, fn_images=[client_image])
 
     fn_container = FunctionContainer(client_image, SimResourceConfiguration(),
-                                     {client_label: 'true',
-                                      host_label: host})
+                                     {client_role_label: 'true',
+                                      hostname_label: host})
     client_container = ClientFunctionContainer(fn_container, ia_generator, request_factory,
                                                deployment,
                                                max_requests=max_requests)
@@ -344,7 +343,7 @@ class DecentralizedTrainInferenceBenchmark(Benchmark):
 
 
 def execute_benchmark():
-    topology = basic.example_topology()
+    topology = testbed_topology()
 
     clients = find_clients(topology)
 
