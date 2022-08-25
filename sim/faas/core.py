@@ -125,7 +125,9 @@ class SimLoadBalancer(LoadBalancer):
 
     def get_functions(self) -> List[SimFunctionDeployment]:
         deployment_service: SimFunctionDeploymentService = self.env.context.deployment_service
-        return deployment_service.get_deployments()
+        functions = [d for d in deployment_service.get_deployments() if
+                     d.labels.get(function_label) and d.labels.get(function_label) != api_gateway_type_label]
+        return functions
 
     def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
         raise NotImplementedError
