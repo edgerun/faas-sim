@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Callable
 import numpy as np
 from faas.system import FunctionRequest, FunctionReplicaState
 
+from sim.context.platform.deployment.model import SimFunctionDeployment
 from sim.core import Environment
 from sim.faas.core import SimFunctionReplica, LocalizedContextLoadBalancer
 
@@ -270,7 +271,8 @@ class LeastResponseTimeLoadBalancer(LocalizedContextLoadBalancer):
     #             initial_response_times = self.lrt_providers[function_name].get_response_times()
     #             self.wrr_providers[function_name] = WeightedRoundRobinProvider(initial_response_times)
     def _sync_replica_state(self):
-        for function_name in self._get_managed_functions():
+        for function in self._get_managed_functions():
+            function_name = function.name
             replicas = self._get_managed_replicas(function_name)
             # Entirely new function deployment
             if function_name not in self.wrr_providers.keys():
@@ -320,7 +322,8 @@ class LeastResponseTimeLoadBalancer(LocalizedContextLoadBalancer):
         return self.get_running_replicas(function)
 
     def _init_lrt_components(self):
-        for function_name in self._get_managed_functions():
+        for function in self._get_managed_functions():
+            function_name = function.name
             replicas = self._get_managed_replicas(function_name)
             replica_ids = self.get_running_replica_ids(replicas)
             self.lrt_providers[function_name] = \
@@ -332,13 +335,13 @@ class LeastResponseTimeLoadBalancer(LocalizedContextLoadBalancer):
     def _should_update_weights(self):
         return self.env.now - self.last_weight_update >= self.weight_update_frequency
 
-    def _get_managed_functions(self) -> List[str]:
+    def _get_managed_functions(self) -> List[SimFunctionDeployment]:
         return self.get_functions()
 
     def _update_weights(self):
         # print('*********************************************')
         # print('Updating weights for LB: ' + str(id(self)))
-        for function_name in self._get_managed_functions():
+        for function in self._get_managed_functions():
             # Debugging: log out hitlist
             # if len(list(self.wrr_providers[function_name].hit_list.keys())) > 12:
             #     non_hit = []
@@ -358,7 +361,7 @@ class LeastResponseTimeLoadBalancer(LocalizedContextLoadBalancer):
             # for r_id, hit in self.wrr_providers[function_name].hit_list.items():
             #     if hit:
             #         self.hit_list[r_id] = True
-
+            function_name = function.name
             response_times = self.lrt_providers[function_name].get_response_times()
             current_wrr = self.wrr_providers[function_name]
             self.wrr_providers[function_name] = current_wrr.update_weights(current_wrr, response_times)
