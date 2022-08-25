@@ -1,7 +1,7 @@
 import abc
 import logging
 import time
-from typing import Generator, Optional, List
+from typing import Generator, Optional, List, Callable, Any
 
 import simpy
 from ether.util import parse_size_string
@@ -15,7 +15,7 @@ from examples.decentralized_clients.main import get_resnet50_inference_cpu_image
     get_resnet50_training_cpu_image_properties, get_galileo_worker_image_properties, \
     extract_dfs, prepare_function_deployments
 from examples.decentralized_loadbalancers.topology import testbed_topology
-from examples.decentralized_loadbalancers.wrr import LeastResponseTimeLoadBalancer
+from examples.decentralized_loadbalancers.wrr import LoadBalancerUpdateProcess, LeastResponseTimeLoadBalancer
 from examples.util.clients import find_clients
 from examples.watchdogs.inference import InferenceFunctionSim
 from examples.watchdogs.training import TrainingFunctionSim
@@ -25,8 +25,8 @@ from sim.context.platform.deployment.model import SimFunctionDeployment, Deploym
 from sim.core import Environment
 from sim.docker import ImageProperties
 from sim.faas import FunctionSimulator, SimFunctionReplica, SimulatorFactory
-from sim.faas.core import SimResourceConfiguration, RoundRobinLoadBalancer, \
-    SimLoadBalancer, Node, LocalizedRoundRobinBalancer
+from sim.faas.core import SimResourceConfiguration, SimLoadBalancer, Node, RoundRobinLoadBalancer, \
+    LocalizedRoundRobinBalancer
 from sim.faassim import Simulation
 from sim.predicates import PodHostEqualsNode
 from sim.requestgen import SimpleFunctionRequestFactory, expovariate_arrival_profile, \
@@ -190,6 +190,9 @@ class LoadBalancerSimulator(BaseLoadBalancerSimulator):
 
 class DecentralizedAIFunctionSimulatorFactory(SimulatorFactory):
 
+    def __init__(self, load_balancer_factory: Callable[[Environment, FunctionContainer], Any]):
+        self.load_balancer_factory = load_balancer_factory
+
     def create(self, env: Environment, fn: FunctionContainer) -> FunctionSimulator:
         if 'inference' in fn.fn_image.image:
             return InferenceFunctionSim(4)
@@ -197,15 +200,8 @@ class DecentralizedAIFunctionSimulatorFactory(SimulatorFactory):
             return TrainingFunctionSim()
         elif 'galileo-worker' in fn.fn_image.image:
             return ForwardingClientSimulator()
-        elif 'rr-balancer' == fn.fn_image.image:
-            return LoadBalancerSimulator(RoundRobinLoadBalancer(env))
-        elif 'localized-lrt-balancer' == fn.fn_image.image:
-            # TODO let user pass more parameters, possibly via labels
-            cluster = fn.labels[zone_label]
-            return LoadBalancerSimulator(LeastResponseTimeLoadBalancer(env, cluster))
-        elif 'localized-rr-balancer' == fn.fn_image.image:
-            cluster = fn.labels[zone_label]
-            return LoadBalancerSimulator(LocalizedRoundRobinBalancer(env, cluster))
+        elif 'load-balancer' == fn.fn_image.image:
+            return LoadBalancerSimulator(self.load_balancer_factory(env, fn))
 
 
 def create_load_balancer_deployment(lb_id: str, type: str, host: str, cluster: str):
@@ -425,20 +421,35 @@ def execute_benchmark():
     clients = find_clients(topology)
 
     lbs = find_lbs(topology)
-    balancer = 'localized-rr-balancer'
+    balancer = 'load-balancer'
     # balancer = 'rr-balancer'
     benchmark = DecentralizedLoadBalancerTrainInferenceBenchmark(balancer, clients, lbs)
 
     # prepare simulation with topology and benchmark from basic example
     sim = Simulation(topology, benchmark)
-    sim.create_simulator_factory = DecentralizedAIFunctionSimulatorFactory
+    lb_process = LoadBalancerUpdateProcess(reconcile_interval=5)
+    balancer = 'localized-lrt-balancer'
+    def create_load_balancer(env: Environment, fn: FunctionContainer):
+        if 'rr-balancer' == balancer:
+            return RoundRobinLoadBalancer(env)
+        elif 'localized-lrt-balancer' == balancer:
+            # TODO let user pass more parameters, possibly via labels
+            cluster = fn.labels[zone_label]
+            lb = LeastResponseTimeLoadBalancer(env, cluster)
+            lb_process.add(lb)
+            return lb
+        elif 'localized-rr-balancer' == fn.fn_image.image:
+            cluster = fn.labels[zone_label]
+            return LocalizedRoundRobinBalancer(env, cluster)
+
 
     # override the SimulatorFactory factory
     sim.env.benchmark = benchmark
     sim.env.topology = topology
     sim.init_environment(sim.env)
     sim.env.scheduler = create_scheduler(sim.env)
-
+    sim.env.simulator_factory = DecentralizedAIFunctionSimulatorFactory(create_load_balancer)
+    sim.env.background_processes.append(lb_process.run)
     # run the simulation
     start = time.time()
     sim.run()
