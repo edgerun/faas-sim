@@ -1,8 +1,11 @@
+from typing import Generator
+
 from faas.system.core import FunctionRequest
 
 from sim import docker
 from sim.core import Environment
 from sim.faas import HTTPWatchdog, SimFunctionReplica, simulate_data_download
+from sim.faas.watchdogs import WatchdogResponse
 
 
 class InferenceFunctionSim(HTTPWatchdog):
@@ -42,5 +45,11 @@ class InferenceFunctionSim(HTTPWatchdog):
         env.resource_state.remove_resource(replica, 'cpu', 0.2)
         yield env.timeout(0)
 
-    def execute(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
+    def execute(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
+        None, None, WatchdogResponse]:
         yield env.timeout(0.2)
+        return WatchdogResponse(
+            '',
+            200,
+            150
+        )

@@ -6,9 +6,9 @@ from ether.util import parse_size_string
 
 from ext.raith21 import loader
 from sim import docker
+from sim.context.platform.deployment.model import SimFunctionDeployment
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import SimFunctionDeployment
 from sim.requestgen import function_trigger, FunctionRequestFactory
 
 

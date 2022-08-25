@@ -1,10 +1,13 @@
 import logging
+from typing import Generator
 
 from faas.system.core import FunctionRequest
 
 from sim import docker
 from sim.core import Environment
 from sim.faas import ForkingWatchdog, SimFunctionReplica
+from sim.faas.watchdogs import WatchdogResponse
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,7 +36,8 @@ class TrainingFunctionSim(ForkingWatchdog):
         env.resource_state.remove_resource(replica, 'cpu', 0.2)
         yield env.timeout(0)
 
-    def execute(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
+    def execute(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
+        None, None, WatchdogResponse]:
         # mock download, for actual network download simulation look at simulate_data_download
         yield env.timeout(1)
 
@@ -42,6 +46,12 @@ class TrainingFunctionSim(ForkingWatchdog):
 
         # mock upload
         yield env.timeout(1)
+
+        return WatchdogResponse(
+            '',
+            200,
+            150
+        )
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)

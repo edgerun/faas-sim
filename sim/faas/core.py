@@ -1,14 +1,21 @@
 import abc
 import logging
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import List, Dict, Optional, Generator
 
 from ether.core import Node as EtherNode
-from faas.system.core import FunctionRequest, LoadBalancer, FunctionReplica, FunctionDeployment, FunctionContainer, \
-    Function, FunctionReplicaState, ScalingConfiguration, ResourceConfiguration, FunctionResponse
-from skippy.core.model import Pod, ResourceRequirements
+from faas.context import PlatformContext
+from faas.system.core import FunctionRequest, LoadBalancer, FunctionContainer, \
+    ResourceConfiguration
+from faas.util.constant import function_label, zone_label, api_gateway_type_label
+from skippy.core.model import ResourceRequirements
 
-from sim.core import Environment, NodeState
+from sim.context.platform.deployment.model import SimFunctionDeployment
+from sim.context.platform.deployment.service import SimFunctionDeploymentService
+from sim.context.platform.replica.model import SimFunctionReplica
+from sim.context.platform.replica.service import SimFunctionReplicaService
+from sim.core import Environment
 from sim.oracle.oracle import FetOracle, ResourceOracle
 
 logger = logging.getLogger(__name__)
@@ -57,70 +64,20 @@ class FunctionCharacterization:
         return self.resource_oracle.get_resources(host, self.image)
 
 
-class DeploymentRanking:
-    # TODO probably better to remove default/enable default for one image
-    images: List[str]
-
-    # TODO probably removable after moving decision on which node to deploy pod to user
-    # percentages of scaling per image, can be used to hinder scheduler to overuse expensive resources (i.e. tpu)
-    function_factor: Dict[str, float]
-
-    def __init__(self, images: List[str], function_factor: Dict[str, float] = None):
-        self.images = images
-        self.function_factor = function_factor if function_factor is not None else {image: 1 for image in images}
-
-    def set_first(self, image: str):
-        index = self.images.index(image)
-        updated = self.images[:index] + self.images[index + 1:]
-        self.images = [image] + updated
-
-    def get_first(self):
-        return self.images[0]
-
-
-class SimScalingConfiguration:
-    scaling_config: ScalingConfiguration
-
-    def __init__(self, scaling_config: ScalingConfiguration = None):
-        self.scaling_config = ScalingConfiguration()
-        if scaling_config is None:
-            self.scaling_config = ScalingConfiguration()
-
-    @property
-    def scale_min(self):
-        return self.scaling_config.scale_min
-
-    @property
-    def scale_max(self):
-        return self.scaling_config.scale_max
-
-    @property
-    def scale_zero(self):
-        return self.scaling_config.scale_zero
-
-    @property
-    def scale_factor(self):
-        return self.scale_factor
-
-    # average requests per second threshold for scaling
-    rps_threshold: int = 20
-
-    # window over which to track the average rps
-    alert_window: int = 50  # TODO currently not supported by FaasRequestScaler
-
-    # seconds the rps threshold must be violated to trigger scale up
-    rps_threshold_duration: int = 10
-
-    # target average cpu utilization of all replicas, used by HPA
-    target_average_utilization: float = 0.5
-
-    # target average rps over all replicas, used by AverageFaasRequestScaler
-    target_average_rps: int = 200
-
-    # target of maximum requests in queue
-    target_queue_length: int = 75
-
-    target_average_rps_threshold = 0.1
+@dataclass
+class FunctionSimulatorResponse:
+    # response body
+    body: str
+    # size of the response
+    size: int
+    # response status code
+    code: int
+    # timestamp of waiting to be executed
+    t_wait: float
+    # timestamp of starting execution
+    t_exec: float
+    # raw function execution time, without wait
+    fet: float
 
 
 class SimResourceConfiguration(ResourceConfiguration):
@@ -155,45 +112,6 @@ class SimResourceConfiguration(ResourceConfiguration):
         return SimResourceConfiguration(ResourceRequirements.from_str(memory, cpu))
 
 
-class SimFunctionDeployment(FunctionDeployment):
-    scaling_config: SimScalingConfiguration
-    # used to determine which function to take when scaling
-    ranking: DeploymentRanking
-
-    def __init__(self, fn: Function, fn_containers: List[FunctionContainer], scaling_config: SimScalingConfiguration,
-                 deployment_ranking: DeploymentRanking = None):
-        super().__init__(fn, fn_containers, scaling_config, deployment_ranking)
-        self.scaling_config = scaling_config
-        if deployment_ranking is None:
-            self.ranking = DeploymentRanking([x.image for x in self.fn.fn_images])
-        else:
-            self.ranking = deployment_ranking
-
-    def get_selected_service(self):
-        return self.fn.get_image(self.ranking.get_first())
-
-
-class SimFunctionReplica(FunctionReplica):
-    """
-    A function replica is an instance of a function running on a specific node.
-    """
-    function: SimFunctionDeployment
-    container: FunctionContainer
-    node: NodeState
-    pod: Pod
-    state: FunctionReplicaState = FunctionReplicaState.CONCEIVED
-
-    simulator: 'FunctionSimulator' = None
-
-    @property
-    def fn_name(self):
-        return self.function.name
-
-    @property
-    def image(self):
-        return self.container.image
-
-
 class SimLoadBalancer(LoadBalancer):
     env: Environment
 
@@ -202,11 +120,85 @@ class SimLoadBalancer(LoadBalancer):
         self.env = env
 
     def get_running_replicas(self, function: str) -> List[SimFunctionReplica]:
-        faas: 'DefaultFaasSystem' = self.env.faas
-        return faas.get_replicas(function, running=True)
+        replica_service: SimFunctionReplicaService = self.env.context.replica_service
+        return replica_service.get_function_replicas_of_deployment(function, running=True)
+
+    def get_functions(self) -> List[SimFunctionDeployment]:
+        deployment_service: SimFunctionDeploymentService = self.env.context.deployment_service
+        return deployment_service.get_deployments()
 
     def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
         raise NotImplementedError
+
+
+class ContextLoadBalancer(SimLoadBalancer):
+    def __init__(self, env) -> None:
+        super().__init__(env)
+        self.env = env
+
+    def get_running_replicas(self, function: str) -> List[SimFunctionReplica]:
+        env: Environment = self.env
+        context: PlatformContext = env.context
+        replicas = context.replica_service.find_function_replicas_with_labels(labels={
+            function_label: function
+        }, running=True)
+        return replicas
+
+    def get_functions(self) -> List[SimFunctionDeployment]:
+        env: Environment = self.env
+        context: PlatformContext = env.context
+        deployments = context.deployment_service.get_deployments()
+        return [deployment for deployment in deployments]
+
+    def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
+        raise NotImplementedError
+
+
+class LocalizedContextLoadBalancer(SimLoadBalancer):
+
+    def __init__(self, env: Environment, cluster: str):
+        super().__init__(env)
+        self.cluster = cluster
+
+    def get_running_replicas(self, function: str) -> List[SimFunctionReplica]:
+        env: Environment = self.env
+        context: PlatformContext = env.context
+        replicas = context.replica_service.find_function_replicas_with_labels(labels={
+            function_label: function}, node_labels={zone_label: self.cluster}, running=True)
+        logger.debug('here')
+        all_load_balancers = context.replica_service.find_function_replicas_with_labels(labels={
+            function_label: api_gateway_type_label
+        })
+        other_load_balancers = [l for l in all_load_balancers if l.labels[zone_label] != self.cluster]
+        for lb in other_load_balancers:
+            other_cluster = lb.labels[zone_label]
+            other_replicas = context.replica_service.find_function_replicas_with_labels(labels={
+                function_label: function,
+            }, node_labels={zone_label: other_cluster}, running=True)
+            if len(other_replicas) > 0:
+                replicas.append(lb)
+        return replicas
+
+    def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
+        raise NotImplementedError()
+
+
+class LocalizedRoundRobinBalancer(LocalizedContextLoadBalancer):
+
+    def __init__(self, env, cluster):
+        super().__init__(env, cluster)
+        self.counters = defaultdict(lambda: 0)
+
+    def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
+        replicas = self.get_running_replicas(request.name)
+        if request.headers is not None:
+            replicas = [r for r in replicas if r.labels[function_label] != api_gateway_type_label]
+        i = self.counters[request.name] % len(replicas)
+        self.counters[request.name] = (i + 1) % len(replicas)
+
+        replica = replicas[i]
+
+        return replica
 
 
 class RoundRobinLoadBalancer(SimLoadBalancer):
@@ -237,9 +229,9 @@ class FunctionSimulator(abc.ABC):
         yield env.timeout(0)
 
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
-        None, None, Optional[FunctionResponse]]:
+        None, None, Optional[FunctionSimulatorResponse]]:
         yield env.timeout(0)
-        return None
+        return FunctionSimulatorResponse(request.body, 150, 200, 0)
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)

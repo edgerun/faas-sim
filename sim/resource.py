@@ -1,9 +1,7 @@
-from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-import numpy as np
 from faas.system.core import FaasSystem
 
 from sim.core import Environment
@@ -42,10 +40,10 @@ class ResourceUtilization:
 
 
 class NodeResourceUtilization:
-    # key is pod-name,   uniqueness allows for running same FunctionContainer multiple times on node
+    # key is replica_id,  uniqueness allows for running same FunctionContainer multiple times on node
     __resources: Dict[str, ResourceUtilization]
 
-    # associates the pod-name with its SimFunctionReplica
+    # associates the replica_id with its SimFunctionReplica
     __replicas: Dict[str, SimFunctionReplica]
 
     def __init__(self, resources: List[str] = None):
@@ -62,7 +60,7 @@ class NodeResourceUtilization:
         self.get_resource_utilization(replica).remove_resource(resource, value)
 
     def get_resource_utilization(self, replica: SimFunctionReplica) -> ResourceUtilization:
-        name = replica.pod.name
+        name = replica.replica_id
         util = self.__resources.get(name)
         if util is None:
             self.__resources[name] = ResourceUtilization()
@@ -88,6 +86,18 @@ class NodeResourceUtilization:
             for resource in self.resources:
                 total.put_resource(resource, 0)
         return total
+
+    def copy(self) -> 'NodeResourceUtilization':
+        resources = {}
+        for replica_id, util in self.__resources.items():
+            resources[replica_id] = util.copy()
+
+        replicas = self.__replicas.copy()
+
+        util = NodeResourceUtilization(self.resources)
+        util.__resources = resources
+        util.__replicas = replicas
+        return util
 
 
 class ResourceState:
@@ -128,62 +138,25 @@ class ResourceState:
 
 
 @dataclass
-class ResourceWindow:
+class ReplicaResourceWindow:
     replica: SimFunctionReplica
-    resources: Dict[str, float]
-    time: float
+    resources: 'ResourceUtilization'
+    time: int
 
 
-class MetricsServer:
-    """
-    contains methods to obtain metrics - offers query functions for resources (functionreplica)
-
-    stores time-series data in data structure (i.e. list)
-
-    """
-
-    def __init__(self):
-        # TODO this will inevitably leak memory
-        self._windows = defaultdict(lambda: defaultdict(list))
-
-    # TODO make dynamic -> read key-values from replica/pod
-    def put(self, window: ResourceWindow):
-        node = window.replica.node.name
-        pod = window.replica.pod.name
-
-        self._windows[node][pod].append(window)
-
-    def get_average_cpu_utilization(self, fn_replica: SimFunctionReplica, window_start: float,
-                                    window_end: float) -> float:
-        utilization = self.get_average_resource_utilization(fn_replica, 'cpu', window_start, window_end)
-        millis = fn_replica.node.capacity.cpu_millis
-        return utilization / millis
-
-    def get_average_resource_utilization(self, fn_replica: SimFunctionReplica, resource: str, window_start: float,
-                                         window_end: float) -> float:
-        node = fn_replica.node.name
-        pod = fn_replica.pod.name
-        windows: List[ResourceWindow] = self._windows.get(node, {}).get(pod, [])
-        if len(windows) == 0:
-            return 0
-        average_windows = []
-
-        for window in reversed(windows):
-            if window.time <= window_end:
-                if window.time < window_start:
-                    break
-                average_windows.append(window)
-        # slicing never throws IndexError
-        return np.mean(list(map(lambda l: l.resources[resource], average_windows)))
+@dataclass
+class NodeResourceWindow:
+    node: str
+    resources: NodeResourceUtilization
+    time: int
 
 
 class ResourceMonitor:
-    """Simpy process - continuously collects resource data"""
+    """Simpy process - continuously collects resource data puts it into the TelemetryService"""
 
     def __init__(self, env: Environment, reconcile_interval: float, logging=True):
         self.env = env
         self.reconcile_interval = reconcile_interval
-        self.metric_server: MetricsServer = env.metrics_server
         self.logging = logging
 
     def run(self):
@@ -192,8 +165,12 @@ class ResourceMonitor:
             yield self.env.timeout(self.reconcile_interval)
             now = self.env.now
             state: ResourceState = self.env.resource_state
-            for deployment in faas.get_deployments():
-                replicas: List[SimFunctionReplica] = faas.get_replicas(deployment.name, running=True)
+            replica_service = self.env.context.replica_service
+            telemetry_service = self.env.context.telemetry_service
+            deployment_service = self.env.context.deployment_service
+            for deployment in deployment_service.get_deployments():
+                replicas: List[SimFunctionReplica] = replica_service.get_function_replicas_of_deployment(
+                    deployment.name, running=True)
                 for replica in replicas:
                     utilization = state.get_resource_utilization(replica)
                     if utilization.is_empty():
@@ -201,10 +178,12 @@ class ResourceMonitor:
                     # TODO extract logging into own process
                     if self.logging:
                         self.env.metrics.log_function_resource_utilization(replica, utilization)
-                    self.metric_server.put(
-                        ResourceWindow(replica, utilization.list_resources(), now))
-            if self.logging:
-                for node in self.env.topology.get_nodes():
-                    resource_utilization: NodeResourceUtilization = state.get_node_resource_utilization(node.name)
+                    telemetry_service.put_replica_resource_utilization(
+                        ReplicaResourceWindow(replica, utilization.copy(), now))
+            for node in self.env.topology.get_nodes():
+                resource_utilization: NodeResourceUtilization = state.get_node_resource_utilization(node.name)
+                telemetry_service.put_node_resource_utilization(
+                    NodeResourceWindow(node.name, resource_utilization.copy(), now))
+                if self.logging:
                     total_utilization = resource_utilization.total_utilization
                     self.env.metrics.log_resource_utilization(node.name, node.capacity, total_utilization)

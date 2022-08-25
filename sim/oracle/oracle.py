@@ -151,8 +151,8 @@ class ResourceUtilizationOracle(Oracle):
         return 'resource_utilization', str(resource_utilization)
 
     def score_resource_utilization(self, pod, node) -> float:
-        mem_cap = node.capacity.memory
-        cpu_cap = node.capacity.cpu_millis
+        mem_cap = node.ether_node.capacity.memory
+        cpu_cap = node.ether_node.capacity.cpu_millis
         mem_all = 0
         cpu_all = 0
         for container in pod.spec.containers:

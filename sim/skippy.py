@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import List, Dict
 
 from ether.core import Node as EtherNode
+from faas.system.core import FunctionContainer
 from skippy.core.clustercontext import ClusterContext
 from skippy.core.model import Node as SkippyNode, Capacity as SkippyCapacity, ImageState, Pod, PodSpec, Container, \
     ResourceRequirements
@@ -14,9 +15,8 @@ from skippy.core.storage import StorageIndex
 from skippy.core.utils import counter
 
 from sim import docker
+from sim.context.platform.deployment.model import SimFunctionDeployment
 from sim.core import Environment
-from sim.faas import SimFunctionDeployment
-from faas.system.core import FunctionContainer
 from sim.topology import LazyBandwidthGraph, DockerRegistry
 
 
@@ -122,7 +122,7 @@ def to_skippy_node(node: EtherNode) -> SkippyNode:
 pod_counters = defaultdict(counter)
 
 
-def create_function_pod(fd: 'SimFunctionDeployment', fn: 'FunctionContainer') -> Pod:
+def create_function_pod(fd: SimFunctionDeployment, fn: 'FunctionContainer') -> Pod:
     """
     Creates a new Pod that hosts the given function.
     :param fd: the function deployment to get the deployed function name

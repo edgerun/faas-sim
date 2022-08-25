@@ -1,17 +1,18 @@
 import logging
 import time
 
+from faas.system.core import FunctionContainer, FunctionRequest
 from skippy.core.scheduler import Scheduler
 
 from sim.benchmark import Benchmark
+from sim.context.factory import create_platform_context
 from sim.core import Environment, timeout_listener
 from sim.docker import ContainerRegistry, pull as docker_pull
 from sim.faas import SimFunctionReplica, FunctionSimulator, SimulatorFactory
-from faas.system.core import FunctionContainer, FunctionRequest
 from sim.faas.system import DefaultFaasSystem
 from sim.factory.flow import SafeFlowFactory
 from sim.metrics import SimMetrics, RuntimeLogger
-from sim.resource import MetricsServer, ResourceState, ResourceMonitor
+from sim.resource import ResourceState, ResourceMonitor
 from sim.skippy import SimulationClusterContext
 from sim.topology import Topology
 
@@ -84,12 +85,9 @@ class Simulation:
         if not env.scheduler:
             env.scheduler = self.create_scheduler(env)
 
-        if not env.metrics_server:
-            env.metrics_server = MetricsServer()
-
         if not env.resource_state:
             # TODO let the users inject resources
-            env.resource_state = ResourceState(['cpu','memory'])
+            env.resource_state = ResourceState(['cpu', 'memory'])
 
         if not env.resource_monitor:
             # TODO let users inject reconcile interval
@@ -97,6 +95,10 @@ class Simulation:
 
         if not env.flow_factory:
             env.flow_factory = SafeFlowFactory()
+
+        if not env.context:
+            # this initialization has to be last as the platform context factories may use the environment
+            env.context = create_platform_context(env)
 
     def create_container_registry(self):
         return ContainerRegistry()

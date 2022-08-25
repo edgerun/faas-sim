@@ -2,14 +2,14 @@ import logging
 from typing import List
 
 import ether.scenarios.urbansensing as scenario
-from faas.system.core import FunctionImage, FunctionRequest, FunctionContainer, Function, ResourceConfiguration
+from faas.system.core import FunctionImage, FunctionRequest, FunctionContainer, Function
 from skippy.core.utils import parse_size_string
 
 from sim import docker
 from sim.benchmark import Benchmark
+from sim.context.platform.deployment.model import SimFunctionDeployment, SimScalingConfiguration, DeploymentRanking
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import SimFunctionDeployment, SimScalingConfiguration, DeploymentRanking
 from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
 from sim.topology import Topology

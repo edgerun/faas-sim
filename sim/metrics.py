@@ -4,12 +4,13 @@ from typing import Dict
 import pandas as pd
 from ether.core import Capacity
 from faas.system import Metrics, RuntimeLogger, NullLogger
+from faas.system.core import FunctionRequest
 from skippy.core.clustercontext import ClusterContext
 from skippy.core.model import SchedulingResult
 
+from sim.context.platform.deployment.model import SimFunctionDeployment
 from sim.core import Environment
-from sim.faas import SimFunctionReplica, SimFunctionDeployment
-from faas.system.core import FunctionContainer, FunctionRequest, FunctionDeployment
+from sim.faas import SimFunctionReplica
 from sim.resource import ResourceUtilization
 
 
@@ -67,26 +68,30 @@ class SimMetrics(Metrics):
 
             self.log('function_replicas', record, replica_id=replica.replica_id, **kwargs)
 
-    def log_flow(self, num_bytes, duration, source, sink, action_type):
+    def log_flow(self, num_bytes, duration, source, sink, action_type, **kwargs):
         self.log('flow', value={'bytes': num_bytes, 'duration': duration},
-                 source=source.name, sink=sink.name, action_type=action_type)
+                 source=source.name, sink=sink.name, action_type=action_type, **kwargs)
 
-    def log_network(self, num_bytes, data_type, link):
+    def log_network(self, num_bytes, data_type, link, **kwargs):
         tags = dict(link.tags)
         tags['data_type'] = data_type
 
-        self.log('network', num_bytes, **tags)
+        self.log('network', num_bytes, **tags, **kwargs)
 
     def log_scaling(self, function_name, replicas, **kwargs):
         self.log('scale', replicas, function_name=function_name, **kwargs)
 
-    def log_invocation(self, function_name, function_image, node_name, t_wait, t_start, t_exec, replica_id, **kwargs):
+    def log_invocation(self, function_name, function_image, node_name, t_received, t_start, t_end, replica_id,
+                       request_id,
+                       **kwargs):
         function = self.env.faas.get_function_index()[function_image]
         mem = function.get_resource_requirements().get('memory')
 
-        self.log('invocations', {'t_wait': t_wait, 't_exec': t_exec, 't_start': t_start, 'memory': mem, **kwargs},
+        self.log('invocations',
+                 {'t_wait': t_received - t_start, 't_received': t_received, 't_exec': t_end - t_start, 't_end': t_end,
+                  't_start': t_start, 'memory': mem, **kwargs},
                  function_name=function_name,
-                 function_image=function_image, node=node_name, replica_id=replica_id)
+                 function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)
 
     def log_fet(self, replica: SimFunctionReplica, request: FunctionRequest, t_fet_start, t_fet_end,
                 **kwargs):
@@ -102,7 +107,7 @@ class SimMetrics(Metrics):
     def log_function_resource_utilization(self, replica: SimFunctionReplica, utilization: ResourceUtilization):
         node = replica.node
         copy = utilization.copy()
-        resources = self.__calculate_util(node.capacity, copy)
+        resources = self.__calculate_util(node.ether_node.capacity, copy)
         self.log('function_utilization', resources, node=node.name, replica_id=replica.replica_id)
 
     def log_resource_utilization(self, node_name: str, capacity: Capacity, utilization: ResourceUtilization):

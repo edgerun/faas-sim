@@ -1,8 +1,11 @@
 from collections import defaultdict
 from typing import List, Tuple, NamedTuple, Dict
 
-from sim.core import Node, Environment
-from sim.net import SafeFlow
+from faas.context import NodeService
+from faas.system import FunctionNode
+
+from sim.context.platform.node.model import SimFunctionNode
+from sim.core import Environment
 from sim.topology import DockerRegistry
 
 
@@ -52,7 +55,7 @@ def split_image_name(image: str) -> Tuple[str, str]:
     return parts[0], parts[1]
 
 
-def pull(env: Environment, image_str: str, node: Node):
+def pull(env: Environment, image_str: str, node: FunctionNode):
     """
     Simulate a docker pull command of the given image on the given node.
 
@@ -71,7 +74,8 @@ def pull(env: Environment, image_str: str, node: Node):
         raise ValueError('image not in registry: %s arch=%s' % (image_str, node.arch))
     image = images[0]
 
-    node_state = env.get_node_state(node.name)
+    node_service: NodeService[SimFunctionNode] = env.context.node_service
+    node_state: SimFunctionNode = node_service.find(node.name)
     if node_state:
         if image in node_state.docker_images:
             return

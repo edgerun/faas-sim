@@ -1,17 +1,17 @@
-from abc import ABC
 import logging
 import math
 import pickle
 import random
 import time
+from abc import ABC
 
 import numpy as np
 import pandas as pd
 import simpy
-
-from sim.core import Environment
-from sim.faas import SimFunctionDeployment
 from faas.system.core import FunctionRequest
+
+from sim.context.platform.deployment.model import SimFunctionDeployment
+from sim.core import Environment
 
 __all__ = [
     'constant_rps_profile',

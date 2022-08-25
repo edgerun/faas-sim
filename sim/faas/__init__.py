@@ -1,7 +1,6 @@
 from .core import FunctionResourceCharacterization, FunctionCharacterization, \
-    DeploymentRanking, SimFunctionDeployment, SimFunctionReplica, SimLoadBalancer, RoundRobinLoadBalancer, \
-    FunctionSimulator, SimulatorFactory, \
-    SimScalingConfiguration
+    SimFunctionReplica, SimLoadBalancer, RoundRobinLoadBalancer, \
+    FunctionSimulator, SimulatorFactory
 from .system import DefaultFaasSystem, simulate_data_download, simulate_data_upload
 from .watchdogs import ForkingWatchdog, HTTPWatchdog
 from ..core import Environment
@@ -9,11 +8,8 @@ from ..core import Environment
 name = 'faas'
 
 __all__ = [
-    'DeploymentRanking',
     'Environment',
-    'SimFunctionDeployment',
     'SimFunctionReplica',
-    'SimScalingConfiguration',
     'SimLoadBalancer',
     'RoundRobinLoadBalancer',
     'FunctionSimulator',

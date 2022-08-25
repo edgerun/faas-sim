@@ -6,20 +6,20 @@ import simpy
 from ether.util import parse_size_string
 from faas.system import FunctionRequest, FunctionResponse, FunctionContainer, FunctionImage, Function, \
     ScalingConfiguration
-from faas.util.constant import client_role_label, hostname_label
+from faas.util.constant import client_role_label, hostname_label, worker_role_label, function_label
 from skippy.core.scheduler import Scheduler
 
-import examples.basic.main as basic
 from examples.decentralized_loadbalancers.topology import testbed_topology
 from examples.util.clients import find_clients
 from examples.watchdogs.inference import InferenceFunctionSim
 from examples.watchdogs.training import TrainingFunctionSim
 from sim import docker
 from sim.benchmark import Benchmark
-from sim.core import Environment, Node
+from sim.context.platform.deployment.model import SimFunctionDeployment, SimScalingConfiguration, DeploymentRanking
+from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import FunctionSimulator, SimFunctionReplica, SimFunctionDeployment, SimulatorFactory
-from sim.faas.core import SimResourceConfiguration, SimScalingConfiguration, DeploymentRanking
+from sim.faas import FunctionSimulator, SimFunctionReplica, SimulatorFactory
+from sim.faas.core import SimResourceConfiguration, Node
 from sim.faassim import Simulation
 from sim.predicates import PodHostEqualsNode
 from sim.requestgen import FunctionRequestFactory, SimpleFunctionRequestFactory, expovariate_arrival_profile, \
@@ -152,12 +152,12 @@ def prepare_resnet_inference_deployment():
     inference_cpu = 'resnet50-inference-cpu'
 
     resnet_inference_cpu = FunctionImage(image=inference_cpu)
-    resnet_fn = Function(resnet_inference, fn_images=[resnet_inference_cpu])
+    resnet_fn = Function(resnet_inference, fn_images=[resnet_inference_cpu], labels={function_label: resnet_inference})
 
     # Run time
 
     resnet_cpu_container = FunctionContainer(resnet_inference_cpu, SimResourceConfiguration(),
-                                             {"node-role.kubernetes.io/worker": "true"})
+                                             {worker_role_label: "true", function_label: resnet_inference})
 
     resnet_fd = SimFunctionDeployment(
         resnet_fn,
@@ -176,11 +176,12 @@ def prepare_resnet_training_deployment():
     training_cpu = 'resnet50-training-cpu'
 
     resnet_training_cpu = FunctionImage(image=training_cpu)
-    resnet_fn = Function(resnet_training, fn_images=[resnet_training_cpu])
+    resnet_fn = Function(resnet_training, fn_images=[resnet_training_cpu], labels={function_label: resnet_training})
 
     # Run time
 
-    resnet_cpu_container = FunctionContainer(resnet_training_cpu, SimResourceConfiguration())
+    resnet_cpu_container = FunctionContainer(resnet_training_cpu, SimResourceConfiguration(),
+                                             labels={function_label: resnet_training, worker_role_label: 'true'})
 
     resnet_fd = SimFunctionDeployment(
         resnet_fn,

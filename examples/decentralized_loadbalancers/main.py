@@ -7,26 +7,29 @@ import simpy
 from ether.util import parse_size_string
 from faas.system import FunctionRequest, FunctionResponse, FunctionContainer, FunctionImage, Function, \
     ScalingConfiguration
-from faas.util.constant import controller_role_label, hostname_label, client_role_label, zone_label
+from faas.util.constant import controller_role_label, hostname_label, client_role_label, zone_label, function_label, \
+    api_gateway_type_label
 from skippy.core.scheduler import Scheduler
 
-import examples.basic.main as basic
 from examples.decentralized_clients.main import get_resnet50_inference_cpu_image_properties, \
     get_resnet50_training_cpu_image_properties, get_galileo_worker_image_properties, \
-    extract_dfs, ClientFunctionContainer, prepare_function_deployments
+    extract_dfs, prepare_function_deployments
 from examples.decentralized_loadbalancers.topology import testbed_topology
+from examples.decentralized_loadbalancers.wrr import LeastResponseTimeLoadBalancer
 from examples.util.clients import find_clients
 from examples.watchdogs.inference import InferenceFunctionSim
 from examples.watchdogs.training import TrainingFunctionSim
 from sim import docker
 from sim.benchmark import Benchmark
-from sim.core import Environment, Node
+from sim.context.platform.deployment.model import SimFunctionDeployment, DeploymentRanking, SimScalingConfiguration
+from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import FunctionSimulator, SimFunctionReplica, SimFunctionDeployment, SimulatorFactory
-from sim.faas.core import SimResourceConfiguration, SimScalingConfiguration, DeploymentRanking, RoundRobinLoadBalancer
+from sim.faas import FunctionSimulator, SimFunctionReplica, SimulatorFactory
+from sim.faas.core import SimResourceConfiguration, RoundRobinLoadBalancer, \
+    SimLoadBalancer, Node, LocalizedRoundRobinBalancer
 from sim.faassim import Simulation
 from sim.predicates import PodHostEqualsNode
-from sim.requestgen import FunctionRequestFactory, SimpleFunctionRequestFactory, expovariate_arrival_profile, \
+from sim.requestgen import SimpleFunctionRequestFactory, expovariate_arrival_profile, \
     constant_rps_profile
 
 logger = logging.getLogger(__name__)
@@ -79,19 +82,9 @@ class ForwardingClientSimulator(FunctionSimulator):
 
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
         None, None, Optional[FunctionResponse]]:
-        container: ForwardingClientFunctionContainer = replica.container
         now = env.now
-        request = FunctionRequest(
-            container.lb_fn.name,
-            now,
-            client=replica.node.name,
-            size=container.size,
-            body=container.fn.name
-        )
-        # read generator parameters
-        fn_deployment = replica.container.fn
         try:
-            container: ClientFunctionContainer = replica.container
+            container: ForwardingClientFunctionContainer = replica.container
             ia_generator = container.ia_generator
             max_requests = None
             if container.max_requests:
@@ -100,11 +93,25 @@ class ForwardingClientSimulator(FunctionSimulator):
             if max_requests is None:
                 while True:
                     ia = next(ia_generator)
+                    request = FunctionRequest(
+                        container.lb_fn.name,
+                        now,
+                        client=replica.node.name,
+                        size=container.size,
+                        body=container.fn.name
+                    )
                     yield env.timeout(ia)
                     yield from env.faas.invoke(request)
             else:
                 for _ in range(max_requests):
                     ia = next(ia_generator)
+                    request = FunctionRequest(
+                        container.lb_fn.name,
+                        now,
+                        client=replica.node.name,
+                        size=container.size,
+                        body=container.fn.name
+                    )
                     yield env.timeout(ia)
                     yield from env.faas.invoke(request)
 
@@ -112,6 +119,8 @@ class ForwardingClientSimulator(FunctionSimulator):
             pass
         except StopIteration:
             logger.debug(f'{replica.function.name} gen has finished')
+        except Exception as e:
+            logger.error(e)
         finally:
             # return FunctionResponse(request, request.request_id, request.client, request.name, request.body, 200, None,
             #                         None, None, None)
@@ -131,14 +140,20 @@ class BaseLoadBalancerSimulator(FunctionSimulator, abc.ABC):
         proxy_request = self._create_proxy_request(env, host, next_replica, request)
         response = yield from env.faas.invoke(proxy_request)
         # TODO might be interesting to insert here some headers (i.e., when the load balancer received the request,...)
-        return None
+        return response
 
     def next_replica(self, env: Environment, replica: SimFunctionReplica,
-                     request: FunctionRequest) -> SimFunctionReplica: ...
+                     request: FunctionRequest) -> SimFunctionReplica:
+        ...
 
     def _create_proxy_request(self, env: Environment, host: str, replica: SimFunctionReplica,
                               request: FunctionRequest) -> FunctionRequest:
-        fn = request.body
+        fn = request.body if replica.labels[function_label] == request.body else replica.function.name
+        forwarded_true = {'lb-forwarded': True}
+        if request.headers is not None:
+            request.headers.update(forwarded_true)
+        else:
+            request.headers = forwarded_true
         return FunctionRequest(
             name=fn,
             start=env.now,
@@ -146,13 +161,14 @@ class BaseLoadBalancerSimulator(FunctionSimulator, abc.ABC):
             request_id=request.request_id,
             body=request.body,
             client=host,
-            replica=replica
+            replica=replica,
+            headers=request.headers
         )
 
 
-class GlobalRoundRobinLoadBalancerSimulator(BaseLoadBalancerSimulator):
+class LoadBalancerSimulator(BaseLoadBalancerSimulator):
 
-    def __init__(self, lb: RoundRobinLoadBalancer):
+    def __init__(self, lb: SimLoadBalancer):
         self.lb = lb
 
     def next_replica(self, env: Environment, replica: SimFunctionReplica,
@@ -167,7 +183,8 @@ class GlobalRoundRobinLoadBalancerSimulator(BaseLoadBalancerSimulator):
             size=request.size,
             request_id=request.request_id,
             body=request.body,
-            client=host
+            client=host,
+            headers=request.headers
         )
 
 
@@ -180,18 +197,28 @@ class DecentralizedAIFunctionSimulatorFactory(SimulatorFactory):
             return TrainingFunctionSim()
         elif 'galileo-worker' in fn.fn_image.image:
             return ForwardingClientSimulator()
-        elif 'global-rr-load-balancer' in fn.fn_image.image:
-            return GlobalRoundRobinLoadBalancerSimulator(RoundRobinLoadBalancer(env))
+        elif 'rr-balancer' == fn.fn_image.image:
+            return LoadBalancerSimulator(RoundRobinLoadBalancer(env))
+        elif 'localized-lrt-balancer' == fn.fn_image.image:
+            # TODO let user pass more parameters, possibly via labels
+            cluster = fn.labels[zone_label]
+            return LoadBalancerSimulator(LeastResponseTimeLoadBalancer(env, cluster))
+        elif 'localized-rr-balancer' == fn.fn_image.image:
+            cluster = fn.labels[zone_label]
+            return LoadBalancerSimulator(LocalizedRoundRobinBalancer(env, cluster))
 
 
-def create_load_balancer_deployment(lb_id: str, host: str, cluster: str):
+def create_load_balancer_deployment(lb_id: str, type: str, host: str, cluster: str):
     lb_fn_name = f'lb-' + lb_id + "-" + host
-    lb_image_name = 'global-rr-load-balancer'
+    lb_image_name = type
     lb_image = FunctionImage(image=lb_image_name)
-    lb_fn = Function(lb_fn_name, fn_images=[lb_image])
+    lb_fn = Function(lb_fn_name, fn_images=[lb_image],
+                     labels={function_label: api_gateway_type_label, controller_role_label: 'true',
+                             zone_label: cluster})
 
     fn_container = FunctionContainer(lb_image, SimResourceConfiguration(),
-                                     {controller_role_label: 'true', hostname_label: host, zone_label: cluster})
+                                     {function_label: api_gateway_type_label, controller_role_label: 'true',
+                                      hostname_label: host, zone_label: cluster})
 
     lb_container = LoadBalancerFunctionContainer(fn_container)
 
@@ -205,29 +232,30 @@ def create_load_balancer_deployment(lb_id: str, host: str, cluster: str):
     return lb_fd
 
 
-def get_go_load_balancer_image_props() -> List[ImageProperties]:
+def get_go_load_balancer_image_props(name: str) -> List[ImageProperties]:
     return [
         # image size from go-load-balancer
-        ImageProperties('global-rr-load-balancer', parse_size_string('10M'), arch='arm32v7'),
-        ImageProperties('global-rr-load-balancer', parse_size_string('10M'), arch='x86'),
-        ImageProperties('global-rr-load-balancer', parse_size_string('10M'), arch='arm64v8'),
+        ImageProperties(name, parse_size_string('10M'), arch='arm32v7'),
+        ImageProperties(name, parse_size_string('10M'), arch='x86'),
+        ImageProperties(name, parse_size_string('10M'), arch='arm64v8'),
     ]
 
 
-def prepare_load_balancer_deployments(hosts: List[Node]) -> List[SimFunctionDeployment]:
+def prepare_load_balancer_deployments(type: str, hosts: List[Node]) -> List[SimFunctionDeployment]:
     def create_id(i: int):
-        return f'global-rr-load-balancer-{i}'
+        return f'load-balancer-{i}'
 
     lbs = []
     for idx, host in enumerate(hosts):
         lb_id = create_id(idx)
-        lbs.append(create_load_balancer_deployment(lb_id, host.name, host.labels[zone_label]))
+        lbs.append(create_load_balancer_deployment(lb_id, type, host.name, host.labels[zone_label]))
 
     return lbs
 
 
 class DecentralizedLoadBalancerTrainInferenceBenchmark(Benchmark):
-    def __init__(self, clients: List[Node], load_balancers_hosts: List[Node]):
+    def __init__(self, balancer: str, clients: List[Node], load_balancers_hosts: List[Node]):
+        self.balancer = balancer
         self.clients = clients
         self.load_balancer_hosts = load_balancers_hosts
 
@@ -237,7 +265,7 @@ class DecentralizedLoadBalancerTrainInferenceBenchmark(Benchmark):
         resnet50_inference_cpu_img_properties = get_resnet50_inference_cpu_image_properties()
         resnet50_training_cpu_img_properties = get_resnet50_training_cpu_image_properties()
         galileo_worker_image_properties = get_galileo_worker_image_properties()
-        lb_image_properties = get_go_load_balancer_image_props()
+        lb_image_properties = get_go_load_balancer_image_props(self.balancer)
 
         images.extend(resnet50_inference_cpu_img_properties)
         images.extend(resnet50_training_cpu_img_properties)
@@ -255,7 +283,7 @@ class DecentralizedLoadBalancerTrainInferenceBenchmark(Benchmark):
     def run(self, env: Environment):
         deployments = []
         function_deployments = prepare_function_deployments()
-        load_balancer_deployment = prepare_load_balancer_deployments(self.load_balancer_hosts)
+        load_balancer_deployment = prepare_load_balancer_deployments(self.balancer, self.load_balancer_hosts)
         client_deployments = self.prepare_client_deployments_for_experiment(load_balancer_deployment,
                                                                             function_deployments)
 
@@ -352,7 +380,8 @@ def prepare_inference_clients(clients: List[str], size: int, deployment: SimFunc
     inference_max_requests = 200
     # generate profile
     inference_ia_generator = expovariate_arrival_profile(constant_rps_profile(rps=inference_max_rps), max_ia=1)
-
+    logger.info(
+        f'executing resnet50-inference requests with {inference_max_rps} rps and maximum {inference_max_requests}')
     inference_client_fds = prepare_client_deployments(
         inference_ia_generator,
         clients,
@@ -396,8 +425,9 @@ def execute_benchmark():
     clients = find_clients(topology)
 
     lbs = find_lbs(topology)
-
-    benchmark = DecentralizedLoadBalancerTrainInferenceBenchmark(clients, lbs)
+    balancer = 'localized-rr-balancer'
+    # balancer = 'rr-balancer'
+    benchmark = DecentralizedLoadBalancerTrainInferenceBenchmark(balancer, clients, lbs)
 
     # prepare simulation with topology and benchmark from basic example
     sim = Simulation(topology, benchmark)

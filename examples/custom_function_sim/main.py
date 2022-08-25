@@ -1,11 +1,14 @@
 import logging
 
+from faas.system.core import FunctionContainer, FunctionRequest
+
 import examples.basic.main as basic
 import sim.docker as docker
 from sim.core import Environment
 from sim.faas import FunctionSimulator, SimFunctionReplica, SimulatorFactory
+from sim.faas.core import FunctionSimulatorResponse
 from sim.faassim import Simulation
-from faas.system.core import FunctionContainer, FunctionRequest
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,16 +53,17 @@ class MyFunctionSimulator(FunctionSimulator):
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         # you would probably either create one simulator per function, or use a generalized simulator, this is just
         # to demonstrate how the simulators are used to encapsulate simulator behavior.
+        t_wait = env.now
 
         logger.info('[simtime=%.2f] invoking function %s on node %s', env.now, request, replica.node.name)
 
         # for full flexibility you decide the resources used
-        cpu_millis = replica.node.capacity.cpu_millis * 0.1
+        cpu_millis = replica.node.ether_node.capacity.cpu_millis * 0.1
         env.resource_state.put_resource(replica, 'cpu', cpu_millis)
         node = replica.node
-        start_ts = env.now
-        node.current_requests.add(request)
 
+        node.current_requests.add(request)
+        t_exec = env.now
         if replica.function.name == 'python-pi':
             if replica.node.name.startswith('rpi3'):  # those are nodes we created in basic.example_topology()
                 yield env.timeout(20)  # invoking this function takes 20 seconds on a raspberry pi
@@ -71,12 +75,21 @@ class MyFunctionSimulator(FunctionSimulator):
             yield env.timeout(0)
 
         # log function execution time (FET)
-        end_ts = env.now
-        env.metrics.log_fet(replica, request, start_ts, end_ts)
-
+        t_end = env.now
+        env.metrics.log_fet(replica, request, t_exec, t_end)
+        fet = t_end - t_exec
         # also, you have to release them at the end
         env.resource_state.remove_resource(replica, 'cpu', cpu_millis)
         node.current_requests.remove(request)
+
+        return FunctionSimulatorResponse(
+            body=request.body,
+            size=150,
+            code=200,
+            t_wait=t_wait,
+            t_exec=t_exec,
+            fet=fet
+        )
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)

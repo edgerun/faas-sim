@@ -1,19 +1,23 @@
 import logging
 import time
 import uuid
-from collections import defaultdict, Counter
-from typing import Dict, List, Generator
+from typing import Dict, List, Generator, Optional
 
 import simpy
 from ether.util import parse_size_string
-from faas.system.core import FunctionContainer, FunctionRequest, FunctionReplicaState, FaasSystem
+from faas.context import NodeService
+from faas.system.core import FunctionContainer, FunctionRequest, FunctionReplicaState, FaasSystem, FunctionResponse
 
 from sim.core import Environment
-from sim.faas import RoundRobinLoadBalancer, SimFunctionDeployment, SimFunctionReplica
-from sim.net import SafeFlow, LowBandwidthException
+from sim.faas import RoundRobinLoadBalancer, SimFunctionReplica
+from sim.net import LowBandwidthException
 from sim.skippy import create_function_pod
-from .core import FunctionSimulator
-from .scaling import FaasRequestScaler, AverageFaasRequestScaler, AverageQueueFaasRequestScaler
+from .core import FunctionSimulator, FunctionSimulatorResponse
+from ..context.platform.deployment.model import SimFunctionDeployment
+from ..context.platform.deployment.service import SimFunctionDeploymentService
+from ..context.platform.node.model import SimFunctionNode
+from ..context.platform.replica.service import SimFunctionReplicaService
+from ..context.platform.trace.service import SimTraceService
 from ..factory.flow import FlowFactory
 
 logger = logging.getLogger(__name__)
@@ -24,14 +28,8 @@ class DefaultFaasSystem(FaasSystem):
     A default implementation of the FaasSystem interface using faas-sim concepts.
     """
 
-    # TODO probably best to inject scaler via env as backgroundprocess - these scalers need to handle all deployed functions
-    # currently a scaler per function deployment is started
-    def __init__(self, env: Environment, scale_by_requests: bool = False,
-                 scale_by_average_requests: bool = False, scale_by_queue_requests_per_replica: bool = False) -> None:
+    def __init__(self, env: Environment) -> None:
         self.env = env
-        self.function_containers = dict()
-        # collects all FunctionReplicas under the name of the corresponding SimFunctionDeployment
-        self.replicas = defaultdict(list)
 
         self.request_queue = simpy.Store(env)
         self.scheduler_queue = simpy.Store(env)
@@ -39,53 +37,36 @@ class DefaultFaasSystem(FaasSystem):
         # TODO let users inject SimLoadBalancer
         self.load_balancer = RoundRobinLoadBalancer(env)
 
-        self.functions_deployments: Dict[str, SimFunctionDeployment] = dict()
-        self.replica_count: Dict[str, int] = dict()
-        self.functions_definitions = Counter()
+    @property
+    def replica_service(self) -> SimFunctionReplicaService:
+        return self.env.context.replica_service
 
-        self.scale_by_requests = scale_by_requests
-        self.scale_by_average_requests_per_replica = scale_by_average_requests
-        self.scale_by_queue_requests_per_replica = scale_by_queue_requests_per_replica
-        self.faas_scalers: Dict[str, FaasRequestScaler] = dict()
-        self.avg_faas_scalers: Dict[str, AverageFaasRequestScaler] = dict()
-        self.queue_faas_scalers: Dict[str, AverageQueueFaasRequestScaler] = dict()
+    @property
+    def deployment_service(self) -> SimFunctionDeploymentService:
+        return self.env.context.deployment_service
+
+    @property
+    def trace_service(self) -> SimTraceService:
+        return self.env.context.trace_service
+
+    @property
+    def node_service(self) -> NodeService[SimFunctionNode]:
+        return self.env.context.node_service
 
     def get_deployments(self) -> List[SimFunctionDeployment]:
-        return list(self.functions_deployments.values())
+        return self.deployment_service.get_deployments()
 
     def get_function_index(self) -> Dict[str, FunctionContainer]:
-        return self.function_containers
+        return self.deployment_service.get_function_containers_by_name()
 
     def get_replicas(self, fn_name: str, running: bool = True, state=None) -> List[SimFunctionReplica]:
-        if running:
-            return [replica for replica in self.replicas[fn_name] if replica.state == FunctionReplicaState.RUNNING]
-
-        if state is None:
-            return self.replicas[fn_name]
-
-        return [replica for replica in self.replicas[fn_name] if replica.state == state]
+        return self.replica_service.get_function_replicas_of_deployment(fn_name, running, state)
 
     def deploy(self, fd: SimFunctionDeployment):
-        if fd.name in self.functions_deployments:
+        if self.deployment_service.exists(fd.name):
             raise ValueError('function already deployed')
 
-        self.functions_deployments[fd.name] = fd
-        # TODO remove specific scaling approaches, it's more extendable to let users start scaling technique that iterates over FDs
-        self.faas_scalers[fd.name] = FaasRequestScaler(fd, self.env)
-        self.avg_faas_scalers[fd.name] = AverageFaasRequestScaler(fd, self.env)
-        self.queue_faas_scalers[fd.name] = AverageQueueFaasRequestScaler(fd, self.env)
-
-        if self.scale_by_requests:
-            self.env.process(self.faas_scalers[fd.name].run())
-        if self.scale_by_average_requests_per_replica:
-            self.env.process(self.avg_faas_scalers[fd.name].run())
-        if self.scale_by_queue_requests_per_replica:
-            self.env.process(self.queue_faas_scalers[fd.name].run())
-
-        for f in fd.fn_containers:
-            self.function_containers[f.image] = f
-
-        # TODO log metadata
+        self.deployment_service.add(fd)
         self.env.metrics.log_function_definition(fd)
         self.env.metrics.log_function_deployment(fd)
         self.env.metrics.log_function_deployment_lifecycle(fd, 'deploy')
@@ -99,7 +80,7 @@ class DefaultFaasSystem(FaasSystem):
         In case no FunctionContainer can be hosted, the scheduling process terminates and logs the failed attempt
         """
         replica = self.create_replica(fd, fn)
-        self.replicas[fd.name].append(replica)
+        self.replica_service.add_function_replica(replica)
         self.env.metrics.log_queue_schedule(replica)
         self.env.metrics.log_function_replica(replica)
         yield self.scheduler_queue.put((replica, services))
@@ -108,7 +89,7 @@ class DefaultFaasSystem(FaasSystem):
         # TODO: how to return a FunctionResponse?
         logger.debug('invoking function %s', request.name)
 
-        if request.name not in self.functions_deployments.keys():
+        if not self.deployment_service.exists(request.name):
             logger.warning('invoking non-existing function %s', request.name)
             return
 
@@ -139,32 +120,20 @@ class DefaultFaasSystem(FaasSystem):
         logger.debug('dispatching request %s:%d to %s', request.name, request.request_id, replica.node.name)
 
         t_start = self.env.now
-        status = yield from self.simulate_function_invocation(self.env, replica, request)
+        response: FunctionResponse = yield from self.simulate_function_invocation(self.env, replica, request)
 
         t_end = self.env.now
 
-        t_wait = t_start - t_received
-        t_exec = t_end - t_start
-        self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_wait, t_start,
-                                        t_exec, id(replica), status=status)
+        self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_received, t_start,
+                                        t_end, replica.replica_id, request.request_id, status=response.code)
+        return response
 
     def remove(self, fn: SimFunctionDeployment):
         self.env.metrics.log_function_deployment_lifecycle(fn, 'remove')
-
-        replica_count = self.replica_count[fn.name]
-        yield from self.scale_down(fn.name, replica_count)
-        # TODO can be removed after using a central scaler for all FDs
-        self.faas_scalers[fn.name].stop()
-        self.avg_faas_scalers[fn.name].stop()
-        self.queue_faas_scalers[fn.name].stop()
-
-        del self.functions_deployments[fn.name]
-        del self.faas_scalers[fn.name]
-        del self.avg_faas_scalers[fn.name]
-        del self.queue_faas_scalers[fn.name]
-        del self.replica_count[fn.name]
-        for container in fn.fn_containers:
-            del self.functions_definitions[container.image]
+        self.deployment_service.remove(fn.name)
+        replicas: List[SimFunctionReplica] = [f for f in self.replica_service.get_function_replicas() if
+                                              f.fn_name == fn.name]
+        yield from self.scale_down(fn.name, len(replicas))
 
     def scale_down(self, fn_name: str, remove: int):
         replica_count = len(self.get_replicas(fn_name, state=FunctionReplicaState.RUNNING))
@@ -174,9 +143,9 @@ class DefaultFaasSystem(FaasSystem):
         if replica_count <= 0:
             remove = remove + replica_count
 
-        scale_min = self.functions_deployments[fn_name].scaling_config.scale_min
-        if self.replica_count.get(fn_name, 0) - remove < scale_min:
-            remove = self.replica_count.get(fn_name, 0) - scale_min
+        scale_min = self.deployment_service.get_by_name(fn_name).scaling_config.scale_min
+        if replica_count - remove < scale_min:
+            remove = replica_count - scale_min
 
         if replica_count - remove <= 0 or remove == 0:
             return
@@ -186,7 +155,6 @@ class DefaultFaasSystem(FaasSystem):
         self.env.metrics.log_scaling(fn_name, -remove)
         for replica in replicas:
             yield from self._remove_replica(replica)
-            replicas.remove(replica)
 
     def choose_replicas_to_remove(self, fn_name: str, n: int):
         # TODO implement more sophisticated, currently just picks last ones deployed
@@ -194,21 +162,21 @@ class DefaultFaasSystem(FaasSystem):
         return running_replicas[len(running_replicas) - n:]
 
     def scale_up(self, fn_name: str, replicas: int):
-        fd = self.functions_deployments[fn_name]
+        fd = self.deployment_service.get_by_name(fn_name)
         config = fd.scaling_config
         ranking = fd.ranking
 
         scale = replicas
-        if self.replica_count.get(fn_name, None) is None:
-            self.replica_count[fn_name] = 0
+        fn_replicas = self.get_replicas(fn_name, state=FunctionReplicaState.RUNNING)
+        replica_count = len(fn_replicas)
 
-        if self.replica_count[fn_name] >= config.scale_max:
+        if replica_count >= config.scale_max:
             logger.debug('Function %s wanted to scale up, but maximum number of replicas reached', fn_name)
             return
 
         # check whether request would exceed maximum number of containers for the function and reduce to scale to max
-        if self.replica_count[fn_name] + replicas > config.scale_max:
-            reduce = self.replica_count[fn_name] + replicas - config.scale_max
+        if replica_count + replicas > config.scale_max:
+            reduce = replica_count + replicas - config.scale_max
             scale = replicas - reduce
 
         if scale == 0:
@@ -218,13 +186,12 @@ class DefaultFaasSystem(FaasSystem):
             # check whether service has capacity, otherwise continue
             leftover_scale = scale
             max_replicas = int(ranking.function_factor[service.image] * config.scale_max)
-
+            fn_container_count = len([f for f in fn_replicas if f.container.image == service.image])
             # check if scaling all new pods would exceed the maximum number of replicas for this function container
-            if max_replicas * config.scale_max < leftover_scale + self.functions_definitions[
-                service.image]:
+            if max_replicas * config.scale_max < leftover_scale + fn_container_count:
 
                 # calculate how many pods of this service can be deployed while satisfying the max function factor
-                reduce = max_replicas - self.functions_definitions[service.image]
+                reduce = max_replicas - fn_container_count
                 if reduce < 0:
                     # all replicas used
                     continue
@@ -250,8 +217,10 @@ class DefaultFaasSystem(FaasSystem):
         self.env.process(self.run_scheduler_worker())
 
     def poll_available_replica(self, fn: str, interval=0.5, timeout: int = None):
-        while not self.get_replicas(fn, state=FunctionReplicaState.RUNNING):
+        replicas = self.get_replicas(fn, state=FunctionReplicaState.RUNNING)
+        while len(replicas) == 0:
             yield self.env.timeout(interval)
+            replicas = self.get_replicas(fn, state=FunctionReplicaState.RUNNING)
 
     def run_scheduler_worker(self):
         env = self.env
@@ -276,7 +245,7 @@ class DefaultFaasSystem(FaasSystem):
                 logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
 
             if not result.suggested_host:
-                self.replicas[replica.fn_name].remove(replica)
+                self.replica_service.delete_function_replica(replica.replica_id)
                 if len(services) > 0:
                     logger.warning('retry scheduling pod %s', pod.name)
                     yield from self.deploy_replica(replica.function, services[0], services[1:])
@@ -287,7 +256,7 @@ class DefaultFaasSystem(FaasSystem):
 
             logger.info('pod %s was scheduled to %s', pod.name, result.suggested_host)
 
-            replica.node = self.env.get_node_state(result.suggested_host.name)
+            replica.node = self.node_service.find(result.suggested_host.name)
             node = replica.node.skippy_node
 
             env.metrics.log('allocation', {
@@ -295,11 +264,14 @@ class DefaultFaasSystem(FaasSystem):
                 'mem': 1 - (node.allocatable.memory / node.capacity.memory)
             }, node=node.name)
 
-            self.functions_definitions[replica.image] += 1
-            self.replica_count[replica.fn_name] += 1
+            # TODO check if replica is set to RUNNING immediately, actually must be PENDING
+            # self.functions_definitions[replica.image] += 1
+            # self.replica_count[replica.fn_name] += 1
 
             self.env.metrics.log_function_deploy(replica)
             # start a new process to simulate starting of pod
+
+            # TODO Replica must still be PENDING and in the simulate_function_start is has to be set to running
             env.process(simulate_function_start(env, replica))
 
     def create_pod(self, fd: SimFunctionDeployment, fn: FunctionContainer):
@@ -311,41 +283,49 @@ class DefaultFaasSystem(FaasSystem):
         replica.function = fd
         replica.container = fn
         replica.pod = self.create_pod(fd, fn)
+        # this simulator dictates the behavior of the replica
         replica.simulator = self.env.simulator_factory.create(self.env, fn)
         return replica
 
     def discover(self, function: str, **kwargs) -> List[SimFunctionReplica]:
-        return [replica for replica in self.replicas[function] if replica.state == FunctionReplicaState.RUNNING]
+        return self.replica_service.get_function_replicas_of_deployment(function, running=True)
 
     def _remove_replica(self, replica: SimFunctionReplica):
         env = self.env
+
+        # set the state to SHUTDOWN
+        self.replica_service.shutdown_function_replica(replica.replica_id)
+        env.metrics.log_teardown(replica)
+
         node = replica.node.skippy_node
 
-        env.metrics.log_teardown(replica)
         yield from replica.simulator.teardown(env, replica)
 
         self.env.cluster.remove_pod_from_node(replica.pod, node)
-        replica.state = FunctionReplicaState.DELETE
-        self.replicas[replica.function.name].remove(replica)
+
+        # set the state to DELETE
+        self.replica_service.delete_function_replica(replica.replica_id)
 
         env.metrics.log('allocation', {
-            'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
-            'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+            'cpu': 1 - (node.allocatable.cpu_millis / node.ether_node.capacity.cpu_millis),
+            'mem': 1 - (node.allocatable.memory / node.ether_node.capacity.memory)
         }, node=node.name)
-        self.replica_count[replica.fn_name] -= 1
-        self.functions_definitions[replica.image] -= 1
 
     def suspend(self, function_name: str):
-        if function_name not in self.functions_deployments.keys():
+        deployment = self.deployment_service.get_by_name(function_name)
+        if deployment is None:
             raise ValueError
 
         # TODO interrupt startup of function containers that are starting
-        replicas: List[SimFunctionReplica] = self.discover(function_name)
+        replicas: List[SimFunctionReplica] = [f for f in self.replica_service.get_function_replicas() if
+                                              f.fn_name == function_name]
         self.scale_down(function_name, len(replicas))
 
-        self.env.metrics.log_function_deployment_lifecycle(self.functions_deployments[function_name], 'suspend')
+        self.env.metrics.log_function_deployment_lifecycle(deployment, 'suspend')
 
-    def simulate_function_invocation(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
+    def simulate_function_invocation(self, env: Environment, replica: SimFunctionReplica,
+                                     request: FunctionRequest) -> FunctionResponse:
+        t_start = env.now
         env.metrics.log_start_exec(request, replica)
 
         # simulate transfer of request from invoker to function
@@ -353,7 +333,9 @@ class DefaultFaasSystem(FaasSystem):
             src_name = request.client
             dest_name = replica.node.name
             size_kb = request.size
-            success = yield from self.simulate_request_transfer(self.env.flow_factory, request.name, src_name, dest_name, size_kb)
+            success = yield from self.simulate_request_transfer(self.env.flow_factory, request.name, request.request_id,
+                                                                src_name,
+                                                                dest_name, size_kb)
             if not success:
                 logger.info(
                     f'A LowBandwidthException occurred when calling {request.name} with the client'
@@ -361,28 +343,68 @@ class DefaultFaasSystem(FaasSystem):
                     f'The Call is aborted.')
                 return 500
 
-        response = yield from replica.simulator.invoke(env, replica, request)
+        simulator: FunctionSimulator = replica.simulator
+        # if sim response is None, this will be used for t_exec and t_wait
+        t_wait = env.now
+        t_exec = env.now
+        sim_response: Optional[FunctionSimulatorResponse] = yield from simulator.invoke(env, replica, request)
+        t_exec_end = env.now
+        code = 200
+        size = None
+        body = ''
+        # default fet calculation, only considered when sim response is None
+        fet = t_exec_end - t_exec
 
-        if response is not None and response.client is not None and response.size is not None:
-            # simulate transfer of response from function to invoker
-            src_name = replica.node.name
-            dest_name = request.client
-            size_kb = response.size
-            success = yield from self.simulate_request_transfer(self.env.flow_factory, request.name, src_name, dest_name, size_kb)
-            if not success:
-                logger.info(
-                    f'A LowBandwidthException occurred when returning the response of {request.name} with the client'
-                    f'{request.client} and the destination node {replica.node.name}.'
-                    f'The Call is aborted.')
-                return 500
+        if sim_response is not None:
+            code = sim_response.code
+            size = sim_response.size
+            body = sim_response.body
+            t_wait = sim_response.t_wait
+            t_exec = sim_response.t_exec
+            fet = sim_response.fet
 
-        env.metrics.log_stop_exec(request, replica)
-        if response is not None:
-            return response.code
+            if request.client is not None and sim_response.size is not None:
+                # simulate transfer of response from function to invoker
+                src_name = replica.node.name
+                dest_name = request.client
+                size_kb = sim_response.size
+                success = yield from self.simulate_request_transfer(self.env.flow_factory, request.name,
+                                                                    request.request_id,
+                                                                    src_name, dest_name, size_kb)
+
+                if not success:
+                    logger.info(
+                        f'A LowBandwidthException occurred when returning the response of {request.name} with the client'
+                        f'{request.client} and the destination node {replica.node.name}.'
+                        f'The Call is aborted.')
+                    code = 500
         else:
-            return 200
+            logger.debug(f'{request.request_id} go None response.')
+        env.metrics.log_stop_exec(request, replica)
+        t_end = env.now
 
-    def simulate_request_transfer(self, flow_factory: FlowFactory, fn_name: str, src_name: str, dest_name: str, size_kb: int) -> Generator[
+        response = FunctionResponse(
+            request,
+            request_id=request.request_id,
+            client=request.client,
+            name=request.name,
+            body=body,
+            code=code,
+            t_start=t_start,
+            t_end=t_end,
+            replica=replica,
+            node=replica.node,
+            t_wait=t_wait,
+            t_exec=t_exec,
+            size=size,
+            fet=fet
+        )
+        env.context.trace_service.add_trace(response)
+        return response
+
+    def simulate_request_transfer(self, flow_factory: FlowFactory, fn_name: str, request_id: int, src_name: str,
+                                  dest_name: str,
+                                  size_kb: int) -> Generator[
         None, None, bool]:
         """
         Simulates a transfer from src to dest. The size is in KB.
@@ -400,8 +422,9 @@ class DefaultFaasSystem(FaasSystem):
             flow = flow_factory.create_flow(self.env, size_kb * 1024, route)
             yield flow.start()
             for hop in route.hops:
-                env.metrics.log_network(size_kb, fn_name, hop)
-            env.metrics.log_flow(size_kb, env.now - started, route.source, route.destination, fn_name)
+                env.metrics.log_network(size_kb, fn_name, hop, request_id=request_id)
+            env.metrics.log_flow(size_kb, env.now - started, route.source, route.destination, fn_name,
+                                 request_id=request_id)
             return True
         except LowBandwidthException:
             logger.debug(f'LowBandwidthException thrown while transferring {size_kb}KB from {src_name} to {dest_name}')
@@ -410,7 +433,8 @@ class DefaultFaasSystem(FaasSystem):
 
 def simulate_function_start(env: Environment, replica: SimFunctionReplica):
     sim: FunctionSimulator = replica.simulator
-
+    # TODO check if mutating the state here causes problems
+    # TODO this function can be interrupted through suspend, i.e., a function starting up might be shutdown the next moment
     logger.debug('deploying function %s to %s', replica.function.name, replica.node.name)
     env.metrics.log_deploy(replica)
     yield from sim.deploy(env, replica)

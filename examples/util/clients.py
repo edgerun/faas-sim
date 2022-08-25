@@ -2,7 +2,7 @@ from typing import List
 
 from faas.util.constant import client_role_label
 
-from sim.core import Node
+from sim.faas.core import Node
 from sim.topology import Topology
 
 

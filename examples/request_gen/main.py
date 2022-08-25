@@ -6,12 +6,12 @@ from skippy.core.utils import parse_size_string
 
 from sim import docker
 from sim.benchmark import Benchmark
+from sim.context.platform.deployment.model import SimFunctionDeployment, SimScalingConfiguration
 from sim.core import Environment
 from sim.docker import ImageProperties
-from sim.faas import SimFunctionDeployment, SimScalingConfiguration
 from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
-from sim.requestgen import function_trigger, constant_rps_profile, expovariate_arrival_profile, FunctionRequestFactory, \
+from sim.requestgen import function_trigger, constant_rps_profile, expovariate_arrival_profile, \
     SimpleFunctionRequestFactory
 from sim.topology import Topology
 
