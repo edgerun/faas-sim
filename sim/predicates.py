@@ -4,7 +4,6 @@ from skippy.core.model import Pod, Node
 from skippy.core.predicates import Predicate
 
 
-
 class PodHostEqualsNode(Predicate):
 
     def passes_predicate(self, context: ClusterContext, pod: Pod, node: Node) -> bool:
@@ -13,4 +12,3 @@ class PodHostEqualsNode(Predicate):
             return True
         else:
             return node.name == host
-

@@ -3,9 +3,9 @@ import math
 from typing import List
 
 import numpy as np
+from faas.system.core import FunctionReplicaState, FaasSystem
 
 from .core import Environment
-from faas.system.core import FunctionReplicaState, FaasSystem
 from .system import SimFunctionDeployment, SimFunctionReplica
 from .watchdogs import HTTPWatchdog
 

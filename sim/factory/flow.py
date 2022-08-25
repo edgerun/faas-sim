@@ -1,8 +1,8 @@
 import abc
-
-from ether.core import Flow, Route
-import simpy
 import logging
+
+import simpy
+from ether.core import Flow, Route
 
 from sim.net import SafeFlow
 
@@ -23,6 +23,7 @@ def add_without_rebalance(flow: Flow):
         link.num_flows += 1
         link.recalculate_max_allocatable()
         link.allocation[flow] = allocated_bandwidth
+
 
 # TODO move this implementation into Ether
 class UninterruptingFlow(Flow):

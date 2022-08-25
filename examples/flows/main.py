@@ -7,10 +7,8 @@ from examples.watchdogs.main import TrainInferenceBenchmark, AIFunctionSimulator
 from sim.faassim import Simulation
 from sim.factory.flow import SafeFlowFactory, UninterruptingFlowFactory, FlowFactory
 from sim.requestgen import SimpleFunctionRequestFactory
-from sim.topology import Topology
 
 logger = logging.getLogger(__name__)
-
 
 
 def execute_benchmark(flow_factory: FlowFactory):

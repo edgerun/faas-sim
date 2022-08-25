@@ -1,14 +1,16 @@
 import math
 from typing import List
 
-from sim.core import Environment
 from faas.system.core import FunctionReplicaState, FaasSystem, ScalingConfiguration
 
+from sim.core import Environment
 from sim.faas import SimFunctionReplica
 from sim.resource import MetricsServer
 
+
 class HpaScalingConfiguration(ScalingConfiguration):
     target_average_utilization: float
+
 
 class HorizontalPodAutoscaler:
 
@@ -65,7 +67,7 @@ class HorizontalPodAutoscaler:
             metrics_server: MetricsServer = self.env.metrics_server
             faas: FaasSystem = self.env.faas
             for function_deployment in faas.get_deployments():
-                running_replicas : List[SimFunctionReplica] = faas.get_replicas(function_deployment.name, True)
+                running_replicas: List[SimFunctionReplica] = faas.get_replicas(function_deployment.name, True)
                 if len(running_replicas) == 0:
                     continue
                 conceived_replicas = faas.get_replicas(function_deployment.name, state=FunctionReplicaState.CONCEIVED)
