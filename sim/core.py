@@ -30,6 +30,7 @@ class Environment(simpy.Environment):
         self.context = None
         self.background_processes: List[Callable[[Environment], Generator[simpy.events.Event, Any, Any]]] = []
         self.degradation_models: Dict[str, Optional[RegressorMixin]] = {}
+        self.kv_storage = None
 
 
 def timeout_listener(env, started, max_time, interval=1):

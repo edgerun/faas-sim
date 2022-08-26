@@ -6,7 +6,6 @@ from faas.util.rwlock import ReadWriteLock
 I = TypeVar('I')
 
 
-# TODO maybe this can be put into the faas project
 class KeyValueStorage(abc.ABC, Generic[I]):
 
     def get(self, key: str, default=None) -> Optional[I]: ...

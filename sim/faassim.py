@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import Any
 
 from faas.system.core import FunctionContainer, FunctionRequest
 from skippy.core.scheduler import Scheduler
@@ -9,6 +10,7 @@ from sim.context.factory import create_platform_context
 from sim.core import Environment, timeout_listener
 from sim.docker import ContainerRegistry, pull as docker_pull
 from sim.faas import SimFunctionReplica, FunctionSimulator, SimulatorFactory
+from sim.faas.kvstorage import InMemoryKeyValueStorage
 from sim.faas.system import DefaultFaasSystem
 from sim.factory.flow import SafeFlowFactory
 from sim.metrics import SimMetrics, RuntimeLogger
@@ -99,6 +101,9 @@ class Simulation:
         if not env.context:
             # this initialization has to be last as the platform context factories may use the environment
             env.context = create_platform_context(env)
+
+        if not env.kv_storage:
+            env.kv_storage = InMemoryKeyValueStorage[Any]()
 
     def create_container_registry(self):
         return ContainerRegistry()
