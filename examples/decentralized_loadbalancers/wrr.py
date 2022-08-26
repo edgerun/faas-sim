@@ -8,28 +8,21 @@ import math
 import random
 import statistics
 from collections import Counter, defaultdict
-from typing import Dict, List, Optional, Callable, Generator, Any
+from typing import Dict, List, Optional, Callable
 
 import numpy as np
-import simpy
 from faas.context import TraceService, FunctionReplicaService
 from faas.system import FunctionRequest, FunctionReplicaState
-from faas.util.rwlock import ReadWriteLock
 
 from sim.context.platform.deployment.model import SimFunctionDeployment
 from sim.core import Environment
 from sim.faas.core import SimFunctionReplica, LocalizedContextLoadBalancer
+from sim.faas.loadbalancers import UpdateableLoadBalancer
 
 logger = logging.getLogger(__name__)
 
 
-class UpdateableLoadBalancer(abc.ABC):
 
-    def update(self, env: Environment):
-        """
-        This method is automatically called and should update the weights of this loadbalancer
-        """
-        ...
 
 
 class WRRProvider(abc.ABC):
@@ -426,24 +419,4 @@ class LeastResponseTimeLoadBalancer(UpdateableLoadBalancer, LocalizedContextLoad
     #         # not sure how this can be with _update_weights, but figure out what's going on...
 
 
-class LoadBalancerUpdateProcess():
 
-    def __init__(self, reconcile_interval: int):
-        self.load_balancers: List[UpdateableLoadBalancer] = []
-        self.reconcile_interval = reconcile_interval
-        self.rw_lock = ReadWriteLock()
-
-    def run(self, env: Environment) -> Generator[simpy.events.Event, Any, Any]:
-        for lb in self.load_balancers:
-            lb.update(env)
-        while True:
-            yield env.timeout(self.reconcile_interval)
-            logger.debug(f'Update load balancer weights')
-            for lb in self.load_balancers:
-                try:
-                    lb.update(env)
-                except Exception as e:
-                    logger.error(e)
-
-    def add(self, lb: UpdateableLoadBalancer):
-        self.load_balancers.append(lb)
