@@ -379,6 +379,7 @@ def extract_dfs(sim):
     return {
         'allocation_df': sim.env.metrics.extract_dataframe('allocation'),
         'invocations_df': sim.env.metrics.extract_dataframe('invocations'),
+        'traces_df': sim.env.metrics.extract_dataframe('traces'),
         'scale_df': sim.env.metrics.extract_dataframe('scale'),
         'schedule_df': sim.env.metrics.extract_dataframe('schedule'),
         'replica_deployment_df': sim.env.metrics.extract_dataframe('replica_deployment'),

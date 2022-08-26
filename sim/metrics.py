@@ -212,7 +212,81 @@ class SimMetrics(Metrics):
     def records(self):
         return self.logger.records
 
+    def _get_traces(self):
+        requests_by_id = defaultdict(list)
+        for record in self.records:
+            if record.measurement == 'invocations':
+                for k,v in record.fields.items():
+                    if k == 'request_id':
+                        requests_by_id[v].append(record)
+                for k,v in record.tags.items():
+                    if k == 'request_id':
+                        requests_by_id[v].append(record)
+        data = list()
+
+        for request_id, records in requests_by_id.items():
+            max_rtt = 0
+            max_response = None
+            last_start = 0
+            last_response = None
+            for record in records:
+                if record.fields['t_exec'] > max_rtt:
+                    # this is the invocation of the client to load balancer
+                    max_rtt = record.fields['t_exec']
+                    max_response = record
+                if record.fields['t_start'] > last_start:
+                    # this is the last invocation from load balancer to actual replica
+                    last_start = record.fields['t_start']
+                    last_response = record
+            t_wait = max_response.fields['t_wait']
+            t_received = max_response.fields['t_received']
+            t_exec = last_response.fields['t_exec']
+            t_end = last_response.fields['t_end']
+            t_start =max_response.fields['t_start']
+            memory = last_response.fields['memory']
+            status = max_response.fields['status']
+            if max_response.fields.get('client'):
+                client = max_response.fields['client']
+            else:
+                client = 'N/A'
+
+            function_name = last_response.tags['function_name']
+            function_image = last_response.tags['function_image']
+            node = last_response.tags['node']
+            replica_id = last_response.tags['replica_id']
+            request_id = last_response.tags['request_id']
+
+            r  = dict()
+            r['time'] = max_response.time
+            r['t_wait'] = t_wait
+            r['t_received'] = t_received
+            r['t_exec'] = t_exec
+            r['t_end'] = t_end
+            r['t_start'] = t_start
+            r['memory'] = memory
+            r['status'] = status
+            r['client'] = client
+            r['function_name'] = function_name
+            r['function_image'] = function_image
+            r['node'] = node
+            r['replica_id'] = replica_id
+            r['request_id'] = request_id
+            data.append(r)
+
+        df = pd.DataFrame(data)
+
+        if len(data) == 0:
+            return df
+
+        df.index = pd.DatetimeIndex(pd.to_datetime(df['time']))
+        del df['time']
+        return df
+
+
     def extract_dataframe(self, measurement: str):
+        if measurement == 'traces':
+            return self._get_traces()
+
         data = list()
 
         for record in self.records:
