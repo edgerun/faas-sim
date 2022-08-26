@@ -136,9 +136,11 @@ class SimTraceService(TraceService):
                 last_response = None
                 for request in requests:
                     if request.rtt > max_rtt:
+                        # this is the invocation of the client to load balancer
                         max_rtt = request.rtt
                         max_response = request
                     if request.sent > last_sent:
+                        # this is the last invocation from load balancer to actual replica
                         last_response = request
                         last_sent = request.sent
 
@@ -154,7 +156,7 @@ class SimTraceService(TraceService):
                     origin_zone=max_response.origin_zone,
                     dest_zone=last_response.dest_zone,
                     client=max_response.client,
-                    status=last_response.status,
+                    status=max_response.status,
                     request_id=request_id
                 )
 
