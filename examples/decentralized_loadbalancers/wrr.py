@@ -109,6 +109,8 @@ class LeastResponseTimeMetricProvider:
                 start=self.env.now - self.window,
                 end=self.env.now
             )
+            if len(traces) == 0:
+                continue
             traces = traces.sort_values(by='ts', ascending=False)
             newest_trace = traces.iloc[0]
             self.record_response_time(replica_id, newest_trace['rtt'], newest_trace['ts'])
