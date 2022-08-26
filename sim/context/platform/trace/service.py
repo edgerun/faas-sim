@@ -1,27 +1,184 @@
+import logging
+from collections import defaultdict
+from typing import Callable, Optional, Dict, List
+
 import pandas as pd
-from faas.context import TraceService, InMemoryTraceService
+from faas.context import TraceService, NodeService, ResponseRepresentation
 from faas.system import FunctionResponse
+from faas.util.point import PointWindow, Point
+from faas.util.rwlock import ReadWriteLock
+
+from sim.context.platform.node.model import SimFunctionNode
+
+logger = logging.getLogger(__name__)
 
 
 class SimTraceService(TraceService):
 
-    def __init__(self, inmemory_trace_service: InMemoryTraceService[FunctionResponse]):
-        self.inmemory_trace_service = inmemory_trace_service
+    """
+    This implementation keeps a dict, whereas the key is the request id, and the list is all traces with this id
+    then, if someone quueries for a function, get all request_ids associated with this function/function-image
+    and fetch for each request_id, from the request_id dict, the list and get the request with the highest exec time.
+    then, set modify the requests, such that the client, replica node as well as function and function image correspond
+    to that, what the callee asked for
+    """
+
+    def __init__(self, window_size: int, node_service: NodeService,
+                 parser: Callable[[FunctionResponse], Optional[ResponseRepresentation]]):
+        self.window_size = window_size
+        self.node_service = node_service
+        self.parser = parser
+        # collect all requests by id, when using a load balancer one call might result in multiple responses
+        self.requests_by_id: Dict[int, List[ResponseRepresentation]] = defaultdict(list)
+        self.requests_per_node: Dict[str, PointWindow[ResponseRepresentation]] = {}
+        self.locks = {}
+        self.request_by_id_lock = ReadWriteLock()
+        # TODO does not support new nodes during experiments
+        for node in node_service.get_nodes():
+            self.locks[node.name] = ReadWriteLock()
+
 
     def get_traces_api_gateway(self, node_name: str, start: float, end: float,
                                response_status: int = None) -> pd.DataFrame:
-        """contains all traces that were processed in the cluster of the given node"""
-        return self.inmemory_trace_service.get_traces_api_gateway(node_name, start, end,
-                                                                  response_status)
-
-    def get_traces_for_function(self, function: str, start: float, end: float, zone: str = None,
-                                response_status: int = None):
-        return self.inmemory_trace_service.get_traces_for_function(function, start, end, zone, response_status)
-
-    def get_traces_for_function_image(self, function: str, function_image: str, start: float, end: float,
-                                      zone: str = None, response_status: int = None):
-        return self.inmemory_trace_service.get_traces_for_function_image(function, function_image, start, end, zone,
-                                                                         response_status)
+        gateway = self.node_service.find(node_name)
+        if gateway is None:
+            nodes = self.node_service.get_nodes_by_name()
+            raise ValueError(f"Node {node_name} not found, currently stored: {nodes}")
+        zone = gateway.cluster
+        nodes = self.node_service.find_nodes_in_zone(zone)
+        if len(nodes) == 0:
+            logger.info(f'No nodes found in zone {zone}')
+        request_ids = self._get_request_ids_for_nodes(nodes, start, end, response_status)
+        requests = self._get_requests(request_ids)
+        return requests
 
     def add_trace(self, response: FunctionResponse):
-        self.inmemory_trace_service.add_trace(response)
+        with self.locks[response.node.name].lock.gen_wlock():
+            node = response.node.name
+            window = self.requests_per_node.get(node, None)
+            if window is None:
+                self.requests_per_node[node] = PointWindow(self.window_size)
+            self.requests_per_node[node].append(Point(response.request.start, self.parser(response)))
+
+        with self.request_by_id_lock.lock.gen_wlock():
+            self.requests_by_id[response.request_id].append(self.parser(response))
+
+    def _get_request_ids_for_nodes(self, nodes: List[SimFunctionNode], start: float, end: float, response_status:int=None) -> List[int]:
+        requests = defaultdict(list)
+
+        for node in nodes:
+            with self.locks[node.name].lock.gen_rlock():
+                node_requests = self.requests_per_node.get(node.name)
+                if node_requests is None or node_requests.size() == 0:
+                    continue
+
+                for req in node_requests.value():
+                    for key, value in req.__dict__.items():
+                        requests[key].append(value)
+        df = pd.DataFrame(data=requests).sort_values(by='ts')
+        df.index = pd.DatetimeIndex(pd.to_datetime(df['ts'], unit='s'))
+
+        df = df[df['ts'] >= start]
+        df = df[df['ts'] <= end]
+        if response_status is not None:
+            df = df[df['status'] == response_status]
+            logger.info(f'After filtering out non status: {len(df)}')
+        return df['request_id'].tolist()
+
+    def _get_request_ids(self, start: float, end: float, zone: str = None,
+                                response_status: int = None, function_name: str=None, function_image:str=None) -> List[int]:
+        if zone is not None:
+            nodes = self.node_service.find_nodes_in_zone(zone)
+        else:
+            nodes = self.node_service.get_nodes()
+        requests = defaultdict(list)
+        for node in nodes:
+            node_name = node.name
+            with self.locks[node_name].lock.gen_rlock():
+                node_requests = self.requests_per_node.get(node_name)
+                if node_requests is None or node_requests.size() == 0:
+                    continue
+
+                for req in node_requests.value():
+                    if function_name is not None and req.val.function != function_name:
+                        continue
+                    for key, value in req.val.__dict__.items():
+                        requests[key].append(value)
+
+        df = pd.DataFrame(data=requests)
+        if len(df) == 0:
+            return []
+        df = df.sort_values(by='ts')
+        df.index = pd.DatetimeIndex(pd.to_datetime(df['ts'], unit='s'))
+
+        logger.info(f'Before filtering {len(df)} traces for function {function_name}')
+        df = df[df['ts'] >= start]
+        df = df[df['ts'] <= end]
+        df = df.reset_index(drop=True)
+        if function_image is not None:
+            df = df[df['function_image'] == function_image]
+
+        logger.info(f'After filtering {len(df)} traces left for function {function_name}')
+        if response_status is not None:
+            df = df[df['status'] == response_status]
+            logger.info(f'After filtering out non status: {len(df)}')
+        return df['request_id'].tolist()
+
+    def _get_requests(self, request_ids: List[int]) -> Optional[pd.DataFrame]:
+        with self.request_by_id_lock.lock.gen_rlock():
+            request_data = defaultdict(list)
+
+            for request_id in request_ids:
+                requests = self.requests_by_id[request_id]
+                max_rtt = 0
+                max_response = None
+                last_sent = 0
+                last_response = None
+                for request in requests:
+                    if request.rtt > max_rtt:
+                        max_rtt = request.rtt
+                        max_response = request
+                    if request.sent > last_sent:
+                        last_response = request
+                        last_sent = request.sent
+
+                representation = ResponseRepresentation(
+                    ts=max_response.ts,
+                    function=last_response.function,
+                    function_image=last_response.function_image,
+                    replica_id=last_response.replica_id,
+                    node=last_response.node,
+                    rtt=max_response.rtt,
+                    done=max_response.done,
+                    sent=max_response.sent,
+                    origin_zone=max_response.origin_zone,
+                    dest_zone=last_response.dest_zone,
+                    client=max_response.client,
+                    status=last_response.status,
+                    request_id=request_id
+                )
+
+                for key, value in representation.__dict__.items():
+                    request_data[key].append(value)
+
+            df = pd.DataFrame(data=request_data)
+            if len(df) == 0:
+                return None
+            df = df.sort_values(by='ts')
+            df.index = pd.DatetimeIndex(pd.to_datetime(df['ts'], unit='s'))
+            df = df.reset_index(drop=True)
+            return df
+
+    def get_traces_for_function(self, function_name: str, start: float, end: float, zone: str = None,
+                                response_status: int = None) -> Optional[pd.DataFrame]:
+        request_ids = self._get_request_ids(start,end,zone,response_status, function_name=function_name)
+        request_df = self._get_requests(request_ids)
+        return request_df
+
+
+    def get_traces_for_function_image(self, function: str, function_image: str, start: float, end: float,
+                                      zone: str = None,
+                                      response_status: int = None) -> Optional[pd.DataFrame]:
+        request_ids = self._get_request_ids(start, end, zone, response_status, function, function_image)
+        request_df = self._get_requests(request_ids)
+        return request_df

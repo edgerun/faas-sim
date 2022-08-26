@@ -9,17 +9,19 @@ from sim.context.platform.trace.service import SimTraceService
 
 def create_trace_service(window_size: int, node_service: NodeService[SimFunctionNode]):
     parser = create_parse_request_factory(node_service)
-    trace_service = InMemoryTraceService[FunctionResponse](window_size, node_service, parser)
-    return SimTraceService(trace_service)
+    return SimTraceService(window_size, node_service, parser)
 
 
 def create_parse_request_factory(node_service: NodeService[SimFunctionNode]):
     def parse_request(response: FunctionResponse) -> Optional[ResponseRepresentation]:
         sent = response.request.start
-        done = response.end
+        done = response.t_end
         rtt = done - sent
-        client_cluster = node_service.find(response.request.client).cluster
-        dest_cluster = node_service.find(response.replica.node.cluster).cluster
+        if response.request.client is not None:
+            client_cluster = node_service.find(response.request.client).cluster
+        else:
+            client_cluster = 'N/A'
+        dest_cluster = response.replica.node.cluster
         return ResponseRepresentation(
             ts=done,
             function=response.replica.function.name,
@@ -33,6 +35,7 @@ def create_parse_request_factory(node_service: NodeService[SimFunctionNode]):
             dest_zone=dest_cluster,
             client=response.client,
             status=response.code,
+            request_id=response.request_id
         )
 
     return parse_request
