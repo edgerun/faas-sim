@@ -123,9 +123,14 @@ class DefaultFaasSystem(FaasSystem):
         response: FunctionResponse = yield from self.simulate_function_invocation(self.env, replica, request)
 
         t_end = self.env.now
+        kwargs = {
+            'status': response.code
+        }
+        if request.client is not None:
+            kwargs['client'] = request.client
 
         self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_received, t_start,
-                                        t_end, replica.replica_id, request.request_id, status=response.code)
+                                        t_end, replica.replica_id, request.request_id, **kwargs)
         return response
 
     def remove(self, fn: SimFunctionDeployment):
@@ -324,7 +329,7 @@ class DefaultFaasSystem(FaasSystem):
         self.env.metrics.log_function_deployment_lifecycle(deployment, 'suspend')
 
     def simulate_function_invocation(self, env: Environment, replica: SimFunctionReplica,
-                                     request: FunctionRequest) -> FunctionResponse:
+                                     request: FunctionRequest) -> Generator[None, None, FunctionResponse]:
         t_start = env.now
         env.metrics.log_start_exec(request, replica)
 
