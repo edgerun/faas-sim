@@ -32,9 +32,9 @@ class ForkingWatchdog(Watchdog):
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
         None, None, FunctionSimulatorResponse]:
         replica.node.current_requests.add(request)
-        t_fet_start = env.now
+        ts_fet_start = env.now
 
-        logger.debug('[simtime=%.2f] invoking function %s on node %s', t_fet_start, request, replica.node.name)
+        logger.debug('[simtime=%.2f] invoking function %s on node %s', ts_fet_start, request, replica.node.name)
 
         yield from self.claim_resources(env, replica, request)
 
@@ -42,17 +42,17 @@ class ForkingWatchdog(Watchdog):
 
         yield from self.release_resources(env, replica, request)
 
-        t_fet_end = env.now
-        fet = t_fet_end - t_fet_start
-        env.metrics.log_fet(replica, request, t_fet_start=t_fet_start, t_fet_end=t_fet_end)
+        ts_fet_end = env.now
+        fet = ts_fet_end - ts_fet_start
+        env.metrics.log_fet(replica, request, ts_fet_start=ts_fet_start, ts_fet_end=ts_fet_end)
 
         replica.node.current_requests.remove(request)
         return FunctionSimulatorResponse(
             body=response.body,
             size=response.size,
             code=response.code,
-            t_wait=t_fet_start,
-            t_exec=t_fet_start,
+            ts_wait=ts_fet_start,
+            ts_exec=ts_fet_start,
             fet=fet
         )
 
@@ -70,11 +70,11 @@ class HTTPWatchdog(Watchdog):
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
         None, None, FunctionSimulatorResponse]:
         token = self.queue.request()
-        t_wait_start = env.now
+        ts_wait_start = env.now
         yield token
 
-        t_fet_start = env.now
-        logger.debug('[simtime=%.2f] invoking function %s on node %s', t_fet_start, request, replica.node.name)
+        ts_fet_start = env.now
+        logger.debug('[simtime=%.2f] invoking function %s on node %s', ts_fet_start, request, replica.node.name)
 
         replica.node.current_requests.add(request)
 
@@ -84,11 +84,12 @@ class HTTPWatchdog(Watchdog):
 
         yield from self.release_resources(env, replica, request)
 
-        t_fet_end = env.now
+        ts_fet_end = env.now
 
         replica.node.current_requests.remove(request)
-        fet = t_fet_end - t_fet_start
-        env.metrics.log_fet(replica, request, t_fet_start=t_fet_start, t_fet_end=t_fet_end)
+        fet = ts_fet_end - ts_fet_start
+        env.metrics.log_fet(replica, request, ts_fet_start=ts_fet_start, ts_fet_end=ts_fet_end,
+                            ts_wait_start=ts_wait_start)
 
         self.queue.release(token)
 
@@ -96,7 +97,7 @@ class HTTPWatchdog(Watchdog):
             body=response.body,
             size=response.size,
             code=response.code,
-            t_wait=t_wait_start,
-            t_exec=t_fet_start,
+            ts_wait=ts_wait_start,
+            ts_exec=ts_fet_start,
             fet=fet
         )

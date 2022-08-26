@@ -73,9 +73,9 @@ class FunctionSimulatorResponse:
     # response status code
     code: int
     # timestamp of waiting to be executed
-    t_wait: float
+    ts_wait: float
     # timestamp of starting execution
-    t_exec: float
+    ts_exec: float
     # raw function execution time, without wait
     fet: float
 
@@ -233,7 +233,7 @@ class FunctionSimulator(abc.ABC):
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
         None, None, Optional[FunctionSimulatorResponse]]:
         yield env.timeout(0)
-        return FunctionSimulatorResponse(request.body, 150, 200, 0)
+        return FunctionSimulatorResponse(request.body, 150, 200, 0, 0, 0)
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
         yield env.timeout(0)

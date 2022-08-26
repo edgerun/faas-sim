@@ -81,26 +81,27 @@ class SimMetrics(Metrics):
     def log_scaling(self, function_name, replicas, **kwargs):
         self.log('scale', replicas, function_name=function_name, **kwargs)
 
-    def log_invocation(self, function_name, function_image, node_name, t_received, t_start, t_end, replica_id,
+    def log_invocation(self, function_name, function_image, node_name, ts_received, ts_start, ts_end, replica_id,
                        request_id,
                        **kwargs):
         function = self.env.faas.get_function_index()[function_image]
         mem = function.get_resource_requirements().get('memory')
 
         self.log('invocations',
-                 {'t_wait': t_received - t_start, 't_received': t_received, 't_exec': t_end - t_start, 't_end': t_end,
-                  't_start': t_start, 'memory': mem, **kwargs},
+                 {'t_wait': ts_received - ts_start, 'ts_received': ts_received, 't_exec': ts_end - ts_start,
+                  'ts_end': ts_end,
+                  'ts_start': ts_start, 'memory': mem, **kwargs},
                  function_name=function_name,
                  function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)
 
-    def log_fet(self, replica: SimFunctionReplica, request: FunctionRequest, t_fet_start, t_fet_end,
+    def log_fet(self, replica: SimFunctionReplica, request: FunctionRequest, ts_fet_start, ts_fet_end,
                 **kwargs):
         function_name = replica.fn_name
         function_image = replica.image
         node_name = replica.node.name
         replica_id = replica.replica_id
         request_id = request.request_id
-        self.log('fets', {'t_fet_start': t_fet_start, 't_fet_end': t_fet_end, **kwargs},
+        self.log('fets', {'ts_fet_start': ts_fet_start, 'ts_fet_end': ts_fet_end, **kwargs},
                  function_name=function_name,
                  function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)
 
@@ -216,10 +217,10 @@ class SimMetrics(Metrics):
         requests_by_id = defaultdict(list)
         for record in self.records:
             if record.measurement == 'invocations':
-                for k,v in record.fields.items():
+                for k, v in record.fields.items():
                     if k == 'request_id':
                         requests_by_id[v].append(record)
-                for k,v in record.tags.items():
+                for k, v in record.tags.items():
                     if k == 'request_id':
                         requests_by_id[v].append(record)
         data = list()
@@ -234,15 +235,15 @@ class SimMetrics(Metrics):
                     # this is the invocation of the client to load balancer
                     max_rtt = record.fields['t_exec']
                     max_response = record
-                if record.fields['t_start'] > last_start:
+                if record.fields['ts_start'] > last_start:
                     # this is the last invocation from load balancer to actual replica
-                    last_start = record.fields['t_start']
+                    last_start = record.fields['ts_start']
                     last_response = record
             t_wait = max_response.fields['t_wait']
-            t_received = max_response.fields['t_received']
+            ts_received = max_response.fields['ts_received']
             t_exec = last_response.fields['t_exec']
-            t_end = last_response.fields['t_end']
-            t_start =max_response.fields['t_start']
+            ts_end = last_response.fields['ts_end']
+            ts_start = max_response.fields['ts_start']
             memory = last_response.fields['memory']
             status = max_response.fields['status']
             if max_response.fields.get('client'):
@@ -256,13 +257,13 @@ class SimMetrics(Metrics):
             replica_id = last_response.tags['replica_id']
             request_id = last_response.tags['request_id']
 
-            r  = dict()
+            r = dict()
             r['time'] = max_response.time
             r['t_wait'] = t_wait
-            r['t_received'] = t_received
-            r['t_exec'] = t_exec
-            r['t_end'] = t_end
-            r['t_start'] = t_start
+            r['t_received'] = ts_received
+            r['ts_exec'] = t_exec
+            r['ts_end'] = ts_end
+            r['ts_start'] = ts_start
             r['memory'] = memory
             r['status'] = status
             r['client'] = client
@@ -281,7 +282,6 @@ class SimMetrics(Metrics):
         df.index = pd.DatetimeIndex(pd.to_datetime(df['time']))
         del df['time']
         return df
-
 
     def extract_dataframe(self, measurement: str):
         if measurement == 'traces':

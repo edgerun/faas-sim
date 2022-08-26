@@ -118,10 +118,10 @@ class AIPythonHTTPSimulator(FunctionSimulator):
 
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         token = self.queue.request()
-        t_wait_start = env.now
+        ts_wait_start = env.now
         yield token  # wait for access
-        t_wait_end = env.now
-        t_fet_start = env.now
+        ts_wait_end = env.now
+        ts_fet_start = env.now
         # because of GIL and Threads, we can easily estimate the additional time caused by concurrent requests to the
         # same Function
         factor = max(1, self.scale(self.queue.count, self.queue.capacity))
@@ -141,10 +141,10 @@ class AIPythonHTTPSimulator(FunctionSimulator):
             yield env.timeout(fet)
             if 'preprocessing' in image or 'training' in image:
                 yield from simulate_data_upload(env, replica)
-            t_fet_end = env.now
-            env.metrics.log_fet(request.name, replica.image, replica.node.name, t_fet_start, t_fet_end,
-                                replica.replica_id, request.request_id, t_wait_start=t_wait_start, t_wait_end=t_wait_end)
-            replica.node.set_end(request.request_id, t_fet_end)
+            ts_fet_end = env.now
+            env.metrics.log_fet(request.name, replica.image, replica.node.name, ts_fet_start, ts_fet_end,
+                                replica.replica_id, request.request_id, ts_wait_start=ts_wait_start, ts_wait_end=ts_wait_end)
+            replica.node.set_end(request.request_id, ts_fet_end)
         except KeyError:
             pass
 
@@ -171,10 +171,10 @@ class InterferenceAwarePythonHttpSimulator(FunctionSimulator):
 
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         token = self.queue.request()
-        t_wait_start = env.now
+        ts_wait_start = env.now
         yield token  # wait for access
-        t_wait_end = env.now
-        t_fet_start = env.now
+        ts_wait_end = env.now
+        ts_fet_start = env.now
         # because of GIL and Threads, we can easily estimate the additional time caused by concurrent requests to the
         # same Function
         factor = max(1, self.scale(self.queue.count, self.queue.capacity))
@@ -200,11 +200,11 @@ class InterferenceAwarePythonHttpSimulator(FunctionSimulator):
             yield env.timeout(delay)
             if 'preprocessing' in image or 'training' in image:
                 yield from simulate_data_upload(env, replica)
-            t_fet_end = env.now
-            env.metrics.log_fet(request.name, replica.image, replica.node.name, t_fet_start, t_fet_end,
-                                t_wait_start, t_wait_end, degradation,
+            ts_fet_end = env.now
+            env.metrics.log_fet(request.name, replica.image, replica.node.name, ts_fet_start, ts_fet_end,
+                                ts_wait_start, ts_wait_end, degradation,
                                 replica.replica_id)
-            replica.node.set_end(request.request_id, t_fet_end)
+            replica.node.set_end(request.request_id, ts_fet_end)
         except KeyError:
             pass
 

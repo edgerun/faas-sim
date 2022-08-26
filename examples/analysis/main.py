@@ -36,7 +36,7 @@ def main():
         'fets_df': sim.env.metrics.extract_dataframe('fets')
     }
 
-    logger.info('Mean exec time %d', dfs['invocations_df']['t_exec'].mean())
+    logger.info('Mean exec time %d', dfs['invocations_df']['ts_exec'].mean())
 
 
 if __name__ == '__main__':

@@ -93,7 +93,7 @@ class DefaultFaasSystem(FaasSystem):
             logger.warning('invoking non-existing function %s', request.name)
             return
 
-        t_received = self.env.now
+        ts_received = self.env.now
         if request.replica is None:
             replicas = self.get_replicas(request.name, state=FunctionReplicaState.RUNNING)
             if not replicas:
@@ -119,18 +119,18 @@ class DefaultFaasSystem(FaasSystem):
 
         logger.debug('dispatching request %s:%d to %s', request.name, request.request_id, replica.node.name)
 
-        t_start = self.env.now
+        ts_start = self.env.now
         response: FunctionResponse = yield from self.simulate_function_invocation(self.env, replica, request)
 
-        t_end = self.env.now
+        ts_end = self.env.now
         kwargs = {
             'status': response.code
         }
         if request.client is not None:
             kwargs['client'] = request.client
 
-        self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, t_received, t_start,
-                                        t_end, replica.replica_id, request.request_id, **kwargs)
+        self.env.metrics.log_invocation(request.name, replica.image, replica.node.name, ts_received, ts_start,
+                                        ts_end, replica.replica_id, request.request_id, **kwargs)
         return response
 
     def remove(self, fn: SimFunctionDeployment):
@@ -330,7 +330,7 @@ class DefaultFaasSystem(FaasSystem):
 
     def simulate_function_invocation(self, env: Environment, replica: SimFunctionReplica,
                                      request: FunctionRequest) -> Generator[None, None, FunctionResponse]:
-        t_start = env.now
+        ts_start = env.now
         env.metrics.log_start_exec(request, replica)
 
         # simulate transfer of request from invoker to function
@@ -349,23 +349,23 @@ class DefaultFaasSystem(FaasSystem):
                 return 500
 
         simulator: FunctionSimulator = replica.simulator
-        # if sim response is None, this will be used for t_exec and t_wait
-        t_wait = env.now
-        t_exec = env.now
+        # if sim response is None, this will be used for ts_exec and ts_wait
+        ts_wait = env.now
+        ts_exec = env.now
         sim_response: Optional[FunctionSimulatorResponse] = yield from simulator.invoke(env, replica, request)
-        t_exec_end = env.now
+        ts_exec_end = env.now
         code = 200
         size = None
         body = ''
         # default fet calculation, only considered when sim response is None
-        fet = t_exec_end - t_exec
+        fet = ts_exec_end - ts_exec
 
         if sim_response is not None:
             code = sim_response.code
             size = sim_response.size
             body = sim_response.body
-            t_wait = sim_response.t_wait
-            t_exec = sim_response.t_exec
+            ts_wait = sim_response.ts_wait
+            ts_exec = sim_response.ts_exec
             fet = sim_response.fet
 
             if request.client is not None and sim_response.size is not None:
@@ -386,7 +386,7 @@ class DefaultFaasSystem(FaasSystem):
         else:
             logger.debug(f'{request.request_id} go None response.')
         env.metrics.log_stop_exec(request, replica)
-        t_end = env.now
+        ts_end = env.now
 
         response = FunctionResponse(
             request,
@@ -395,12 +395,12 @@ class DefaultFaasSystem(FaasSystem):
             name=request.name,
             body=body,
             code=code,
-            t_start=t_start,
-            t_end=t_end,
+            ts_start=ts_start,
+            ts_end=ts_end,
             replica=replica,
             node=replica.node,
-            t_wait=t_wait,
-            t_exec=t_exec,
+            ts_wait=ts_wait,
+            ts_exec=ts_exec,
             size=size,
             fet=fet
         )

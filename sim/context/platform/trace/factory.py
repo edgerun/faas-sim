@@ -15,7 +15,7 @@ def create_trace_service(window_size: int, node_service: NodeService[SimFunction
 def create_parse_request_factory(node_service: NodeService[SimFunctionNode]):
     def parse_request(response: FunctionResponse) -> Optional[ResponseRepresentation]:
         sent = response.request.start
-        done = response.t_end
+        done = response.ts_end
         rtt = done - sent
         if response.request.client is not None:
             client_cluster = node_service.find(response.request.client).cluster

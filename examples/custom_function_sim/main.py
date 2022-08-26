@@ -53,7 +53,7 @@ class MyFunctionSimulator(FunctionSimulator):
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         # you would probably either create one simulator per function, or use a generalized simulator, this is just
         # to demonstrate how the simulators are used to encapsulate simulator behavior.
-        t_wait = env.now
+        ts_wait = env.now
 
         logger.info('[simtime=%.2f] invoking function %s on node %s', env.now, request, replica.node.name)
 
@@ -63,7 +63,7 @@ class MyFunctionSimulator(FunctionSimulator):
         node = replica.node
 
         node.current_requests.add(request)
-        t_exec = env.now
+        ts_exec = env.now
         if replica.function.name == 'python-pi':
             if replica.node.name.startswith('rpi3'):  # those are nodes we created in basic.example_topology()
                 yield env.timeout(20)  # invoking this function takes 20 seconds on a raspberry pi
@@ -75,9 +75,9 @@ class MyFunctionSimulator(FunctionSimulator):
             yield env.timeout(0)
 
         # log function execution time (FET)
-        t_end = env.now
-        env.metrics.log_fet(replica, request, t_exec, t_end)
-        fet = t_end - t_exec
+        ts_end = env.now
+        env.metrics.log_fet(replica, request, ts_exec, ts_end)
+        fet = ts_end - ts_exec
         # also, you have to release them at the end
         env.resource_state.remove_resource(replica, 'cpu', cpu_millis)
         node.current_requests.remove(request)
@@ -86,8 +86,8 @@ class MyFunctionSimulator(FunctionSimulator):
             body=request.body,
             size=150,
             code=200,
-            t_wait=t_wait,
-            t_exec=t_exec,
+            ts_wait=ts_wait,
+            ts_exec=ts_exec,
             fet=fet
         )
 
