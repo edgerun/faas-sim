@@ -82,7 +82,6 @@ class ForwardingClientSimulator(FunctionSimulator):
 
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
         None, None, Optional[FunctionResponse]]:
-        now = env.now
         try:
             container: ForwardingClientFunctionContainer = replica.container
             ia_generator = container.ia_generator
@@ -95,7 +94,7 @@ class ForwardingClientSimulator(FunctionSimulator):
                     ia = next(ia_generator)
                     request = FunctionRequest(
                         container.lb_fn.name,
-                        now,
+                        env.now,
                         client=replica.node.name,
                         size=container.size,
                         body=container.fn.name
@@ -107,7 +106,7 @@ class ForwardingClientSimulator(FunctionSimulator):
                     ia = next(ia_generator)
                     request = FunctionRequest(
                         container.lb_fn.name,
-                        now,
+                        env.now,
                         client=replica.node.name,
                         size=container.size,
                         body=container.fn.name
