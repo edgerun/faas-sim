@@ -1,11 +1,17 @@
 import logging
 import logging
+import os.path
 import time
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
 from typing import List, Callable, Any
 
+import pandas as pd
 from ether.util import parse_size_string
+from faas.context import NodeService
 from faas.system import FunctionContainer, FunctionImage, Function, \
-    ScalingConfiguration
+    ScalingConfiguration, FunctionNode
 from faas.util.constant import controller_role_label, hostname_label, client_role_label, zone_label, function_label, \
     api_gateway_type_label
 from skippy.core.scheduler import Scheduler
@@ -34,7 +40,6 @@ from sim.requestgen import SimpleFunctionRequestFactory, expovariate_arrival_pro
     constant_rps_profile
 
 logger = logging.getLogger(__name__)
-
 
 
 def create_scheduler(env: Environment):
@@ -283,6 +288,7 @@ def execute_benchmark():
     sim = Simulation(topology, benchmark)
     lb_process = LoadBalancerUpdateProcess(reconcile_interval=5)
     balancer = 'localized-lrt-balancer'
+
     def create_load_balancer(env: Environment, fn: FunctionContainer):
         if 'rr-balancer' == balancer:
             return RoundRobinLoadBalancer(env)
@@ -295,7 +301,6 @@ def execute_benchmark():
         elif 'localized-rr-balancer' == fn.fn_image.image:
             cluster = fn.labels[zone_label]
             return LocalizedRoundRobinBalancer(env, cluster)
-
 
     # override the SimulatorFactory factory
     sim.env.benchmark = benchmark
@@ -313,15 +318,51 @@ def execute_benchmark():
     return duration, sim
 
 
+def save_nodes(folder: str, sim: Simulation):
+    service: NodeService[FunctionNode] = sim.env.context.node_service
+    data = defaultdict(list)
+    keys = ['name', 'arch','cpus','ram','netspeed','labels','allocatable','cluster','state']
+    for node in service.get_nodes():
+        for k in keys:
+            data[k].append(node.__dict__[k])
+
+    df = pd.DataFrame(data=data)
+    file_name = f'{folder}/nodes.csv'
+    df.to_csv(file_name, index=False)
+
+
+def save_results(exp_id: str, root_folder: str, sim: Simulation):
+    dfs = extract_dfs(sim)
+
+    path = f'{root_folder}/{exp_id}'
+    if os.path.exists(path):
+        raise ValueError(f'Path {path} already exists. Stop saving results.')
+    Path(path).mkdir(parents=True, exist_ok=False)
+    for name, df in dfs.items():
+        file_name = f'{path}/{name}.csv'
+        df.to_csv(file_name)
+
+    save_nodes(path, sim)
+
+    return path
+
+
 def main():
     logging.basicConfig(level=logging.DEBUG)
     logger.info('Start decentralized load balancers example.')
+    exp_id = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+    root_folder = 'results'
     duration, sim = execute_benchmark()
     env = sim.env
     dfs = extract_dfs(sim)
+
     logger.info(f'Time passed in simulation: {env.now}, wall time passed: {duration}')
     logger.info('Mean exec time %d', dfs['invocations_df']['t_exec'].mean())
     logger.info(f'Fets invocations: {len(dfs["fets_df"])}')
+
+    logger.info(f'Saving results')
+    results = save_results(exp_id, root_folder, sim)
+    logger.info(f'Results saved under {results}')
 
     logger.info('End decentralized load balancers example.')
 
