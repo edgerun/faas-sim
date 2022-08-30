@@ -16,6 +16,9 @@ class Benchmark:
     # the benchmark contains generators for users, functions, initial deployments, deployments over time,
     # requests over time
 
+    # this metadata object can be filled with experiment settings etc. and will be saved with the experiment
+    metadata: Dict = {}
+
     def setup(self, env: Environment):
         pass
 

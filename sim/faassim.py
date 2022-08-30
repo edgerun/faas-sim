@@ -1,5 +1,7 @@
+import datetime
 import logging
 import time
+import uuid
 from typing import Any
 
 from faas.system.core import FunctionContainer, FunctionRequest
@@ -13,6 +15,7 @@ from sim.faas import SimFunctionReplica, FunctionSimulator, SimulatorFactory
 from sim.faas.kvstorage import InMemoryKeyValueStorage
 from sim.faas.system import DefaultFaasSystem
 from sim.factory.flow import SafeFlowFactory
+from sim.logging import SimulatedClock
 from sim.metrics import SimMetrics, RuntimeLogger
 from sim.resource import ResourceState, ResourceMonitor
 from sim.skippy import SimulationClusterContext
@@ -39,6 +42,9 @@ class Simulation:
                     type(self.benchmark).__name__, len(self.topology.nodes))
 
         env = self.env
+        now_strftime = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+        uuid.uuid4()
+        exp_id = f'{now_strftime}-{str(uuid.uuid4())[:4]}'
 
         env.benchmark = self.benchmark
         env.topology = self.topology
@@ -64,8 +70,12 @@ class Simulation:
         p = env.process(self.benchmark.run(env))
 
         logger.info('executing simulation')
+        start_ts = time.time()
         env.run(until=p)
-
+        end_ts = time.time()
+        env.metrics.log('experiment',
+                        {'EXP_ID': exp_id, 'START': start_ts, 'END': end_ts, 'CREATED': then, 'STATUS': 'FINISHED',
+                         'metadata': self.benchmark.metadata})
         logger.info('simulation ran %.2fs sim, %.2fs wall', env.now, (time.time() - then))
 
     def init_environment(self, env):
@@ -79,7 +89,7 @@ class Simulation:
             env.faas = self.create_faas_system(env)
 
         if not env.metrics:
-            env.metrics = SimMetrics(env, RuntimeLogger())
+            env.metrics = SimMetrics(env, RuntimeLogger(SimulatedClock(env)))
 
         if not env.cluster:
             env.cluster = SimulationClusterContext(env)
