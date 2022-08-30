@@ -39,32 +39,44 @@ class SimMetrics(Metrics):
         """
         Logs the functions name, related container images and their metadata
         """
-        # TODO log metadata/handle function definitions
-        # use log_function_definition
-        record = {'name': fn.name}
-        self.log('function_deployments', record, type='deploy')
+        record = {'name': fn.name, 'scale_min': fn.scaling_configuration.scale_min,
+                  'scale_max': fn.scaling_configuration.scale_max,
+                  'scale_factor': fn.scaling_configuration.scale_factor,
+                  'scale_zero': fn.scaling_configuration.scale_zero}
+        self.log('function_deployments', record)
 
     def log_function_definition(self, fn: SimFunctionDeployment):
+        record = {'name': fn.fn.name, 'labels': fn.fn.labels}
+        self.log('functions', record)
+
+    def log_function_image_definitions(self, fn: SimFunctionDeployment):
+        for function_image in fn.fn.fn_images:
+            record = {'function_name': fn.name, 'image': function_image.image}
+            self.log('function_images', record)
+
+    def log_function_container_definitions(self, fn: SimFunctionDeployment):
         """
         Logs the functions name, related container images and their metadata
         """
+
         cluster: ClusterContext = self.env.cluster
         for fn_container in fn.fn_containers:
-            record = {'name': fn.name, 'image': fn_container.image, 'sizes': {}}
+            record = {'name': fn.name, 'image': fn_container.image, 'sizes': {},
+                      'resource_requirements': fn_container.get_resource_requirements(), 'labels': fn_container.labels}
 
             image_state = cluster.retrieve_image_state(fn_container.fn_image.image)
             for arch, size in image_state.size.items():
                 record['sizes'][f'size_{arch}'] = size
 
-            self.log('functions', record)
+            self.log('function_containers', record)
 
     def log_function_replica(self, replica: SimFunctionReplica, **kwargs):
+        cpu_req = replica.container.get_resource_requirements()['cpu']
+        memory_req = replica.container.get_resource_requirements()['memory']
         for container in replica.pod.spec.containers:
-            record = {'name': replica.function.name, 'pod': replica.pod.name, 'image': container.image}
-            # TODO fix clustercontext, maybe this is unnecessary as log_function_definition already logs the image
-            # image_state = self.env.cluster.image_states[container.image]
-            # for arch, size in image_state.size.items():
-            #     record[f'size_{arch}'] = size
+            record = {'name': replica.function.name, 'pod': replica.pod.name, 'image': container.image,
+                      'cpu_request': cpu_req, 'state': replica.state.name,
+                      'memory_req': memory_req, 'labels': replica.labels}
 
             self.log('function_replicas', record, replica_id=replica.replica_id, **kwargs)
 
@@ -136,24 +148,30 @@ class SimMetrics(Metrics):
 
     def log_deploy(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'deploy', function_name=replica.function.name, node_name=replica.node.name,
-                 replica_id=replica.replica_id)
+                 image=replica.image, replica_id=replica.replica_id)
 
     def log_startup(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'startup', function_name=replica.function.name, node_name=replica.node.name,
-                 replica_id=replica.replica_id)
+                 image=replica.image, replica_id=replica.replica_id)
 
     def log_setup(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'setup', function_name=replica.function.name, node_name=replica.node.name,
-                 replica_id=replica.replica_id)
+                 image=replica.image, replica_id=replica.replica_id)
 
     def log_finish_deploy(self, replica: SimFunctionReplica):
         self.log('replica_deployment', 'finish', function_name=replica.function.name, node_name=replica.node.name,
-                 replica_id=replica.replica_id)
+                 image=replica.image, replica_id=replica.replica_id)
 
     def log_teardown(self, replica: SimFunctionReplica):
         name = replica.fn_name
         node_name = replica.node.name
-        self.log('replica_deployment', 'teardown', function_name=name, node_name=node_name,
+        self.log('replica_deployment', 'teardown', function_name=name, node_name=node_name, image=replica.image,
+                 replica_id=replica.replica_id)
+
+    def log_delete(self, replica: SimFunctionReplica):
+        name = replica.fn_name
+        node_name = replica.node.name
+        self.log('replica_deployment', 'delete', function_name=name, node_name=node_name, image=replica.image,
                  replica_id=replica.replica_id)
 
     def log_function_deployment_lifecycle(self, fn: SimFunctionDeployment, event: str):
@@ -180,27 +198,6 @@ class SimMetrics(Metrics):
         self.log('schedule', 'finish', function_name=replica.function.name, image=replica.container.image,
                  node_name=node_name,
                  successful=node_name != 'None', replica_id=replica.replica_id)
-
-    def log_function_deploy(self, replica: SimFunctionReplica):
-        fn = replica.container
-        image = replica.image
-        name = replica.fn_name
-        self.log('function_deployment', 'deploy', name=name, image=image, function_id=id(fn),
-                 node=replica.node.name)
-
-    def log_function_suspend(self, replica: SimFunctionReplica):
-        fn = replica.container
-        image = replica.image
-        name = replica.fn_name
-        self.log('function_deployment', 'suspend', name=name, image=image, function_id=id(fn),
-                 node=replica.node.name)
-
-    def log_function_remove(self, replica: SimFunctionReplica):
-        fn = replica.function
-        image = replica.image
-        name = replica.fn_name
-        self.log('function_deployment', 'remove', name=name, image=image, function_id=id(fn),
-                 node=replica.node.name)
 
     def get(self, name, **tags):
         return self.logger.get(name, **tags)
@@ -260,7 +257,7 @@ class SimMetrics(Metrics):
             r = dict()
             r['time'] = max_response.time
             r['t_wait'] = t_wait
-            r['t_received'] = ts_received
+            r['ts_received'] = ts_received
             r['ts_exec'] = t_exec
             r['ts_end'] = ts_end
             r['ts_start'] = ts_start

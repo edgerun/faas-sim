@@ -69,6 +69,8 @@ class DefaultFaasSystem(FaasSystem):
         self.deployment_service.add(fd)
         self.env.metrics.log_function_definition(fd)
         self.env.metrics.log_function_deployment(fd)
+        self.env.metrics.log_function_image_definitions(fd)
+        self.env.metrics.log_function_container_definitions(fd)
         self.env.metrics.log_function_deployment_lifecycle(fd, 'deploy')
         logger.info('deploying function %s with scale_min=%d', fd.name, fd.scaling_config.scale_min)
         yield from self.scale_up(fd.name, fd.scaling_config.scale_min)
@@ -81,8 +83,8 @@ class DefaultFaasSystem(FaasSystem):
         """
         replica = self.create_replica(fd, fn)
         self.replica_service.add_function_replica(replica)
-        self.env.metrics.log_queue_schedule(replica)
         self.env.metrics.log_function_replica(replica)
+        self.env.metrics.log_queue_schedule(replica)
         yield self.scheduler_queue.put((replica, services))
 
     def invoke(self, request: FunctionRequest):
@@ -273,7 +275,6 @@ class DefaultFaasSystem(FaasSystem):
             # self.functions_definitions[replica.image] += 1
             # self.replica_count[replica.fn_name] += 1
 
-            self.env.metrics.log_function_deploy(replica)
             # start a new process to simulate starting of pod
 
             # TODO Replica must still be PENDING and in the simulate_function_start is has to be set to running
@@ -310,7 +311,7 @@ class DefaultFaasSystem(FaasSystem):
 
         # set the state to DELETE
         self.replica_service.delete_function_replica(replica.replica_id)
-
+        env.metrics.log_delete(replica)
         env.metrics.log('allocation', {
             'cpu': 1 - (node.allocatable.cpu_millis / node.ether_node.capacity.cpu_millis),
             'mem': 1 - (node.allocatable.memory / node.ether_node.capacity.memory)
