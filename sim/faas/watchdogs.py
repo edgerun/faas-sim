@@ -31,7 +31,7 @@ class ForkingWatchdog(Watchdog):
 
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
         None, None, FunctionSimulatorResponse]:
-        replica.node.current_requests.add(request)
+        env.context.request_service.add_request(request)
         ts_fet_start = env.now
 
         logger.debug('[simtime=%.2f] invoking function %s on node %s', ts_fet_start, request, replica.node.name)
@@ -46,7 +46,7 @@ class ForkingWatchdog(Watchdog):
         fet = ts_fet_end - ts_fet_start
         env.metrics.log_fet(replica, request, ts_fet_start=ts_fet_start, ts_fet_end=ts_fet_end)
 
-        replica.node.current_requests.remove(request)
+        env.context.request_service.remove_request(request.request_id)
         return FunctionSimulatorResponse(
             body=response.body,
             size=response.size,
@@ -76,7 +76,7 @@ class HTTPWatchdog(Watchdog):
         ts_fet_start = env.now
         logger.debug('[simtime=%.2f] invoking function %s on node %s', ts_fet_start, request, replica.node.name)
 
-        replica.node.current_requests.add(request)
+        env.context.request_service.add_request(request)
 
         yield from self.claim_resources(env, replica, request)
 
@@ -86,7 +86,7 @@ class HTTPWatchdog(Watchdog):
 
         ts_fet_end = env.now
 
-        replica.node.current_requests.remove(request)
+        env.context.request_service.remove_request(request)
         fet = ts_fet_end - ts_fet_start
         env.metrics.log_fet(replica, request, ts_fet_start=ts_fet_start, ts_fet_end=ts_fet_end,
                             ts_wait_start=ts_wait_start)

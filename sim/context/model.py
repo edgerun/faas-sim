@@ -4,6 +4,7 @@ from sim.context.platform.deployment.service import SimFunctionDeploymentService
 from sim.context.platform.network.service import SimNetworkService
 from sim.context.platform.node.model import SimFunctionNode
 from sim.context.platform.replica.service import SimFunctionReplicaService
+from sim.context.platform.request.service import RequestService
 from sim.context.platform.telemetry.service import SimTelemetryService
 from sim.context.platform.trace.service import SimTraceService
 
@@ -16,3 +17,4 @@ class SimPlatformContext(PlatformContext):
     telemetry_service: SimTelemetryService
     trace_service: SimTraceService
     zone_service: ZoneService
+    request_service: RequestService = None

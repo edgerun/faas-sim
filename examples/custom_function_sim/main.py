@@ -4,6 +4,7 @@ from faas.system.core import FunctionContainer, FunctionRequest
 
 import examples.basic.main as basic
 import sim.docker as docker
+from sim.context.platform.request.service import RequestService
 from sim.core import Environment
 from sim.faas import FunctionSimulator, SimFunctionReplica, SimulatorFactory
 from sim.faas.core import FunctionSimulatorResponse
@@ -62,7 +63,9 @@ class MyFunctionSimulator(FunctionSimulator):
         env.resource_state.put_resource(replica, 'cpu', cpu_millis)
         node = replica.node
 
-        node.current_requests.add(request)
+        request_service: RequestService = env.context.request_service
+        request_service.add_request(request)
+
         ts_exec = env.now
         if replica.function.name == 'python-pi':
             if replica.node.name.startswith('rpi3'):  # those are nodes we created in basic.example_topology()
@@ -80,7 +83,7 @@ class MyFunctionSimulator(FunctionSimulator):
         fet = ts_end - ts_exec
         # also, you have to release them at the end
         env.resource_state.remove_resource(replica, 'cpu', cpu_millis)
-        node.current_requests.remove(request)
+        request_service.remove_request(request.request_id)
 
         return FunctionSimulatorResponse(
             body=request.body,

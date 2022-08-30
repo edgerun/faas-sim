@@ -1,13 +1,21 @@
 import logging
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import List
 
 import numpy as np
+from faas.system import FunctionReplica
 
 from .oracle.oracle import ResourceOracle
 
 
-def create_degradation_model_input(calls: List, start_ts, end_ts, node_name: str,
+@dataclass
+class DegradationTrace:
+    replica: FunctionReplica
+    start: float
+    end: float
+
+def create_degradation_model_input(calls: List[DegradationTrace], start_ts, end_ts, node_name: str,
                                    ram_capacity: float,
                                    resource_oracle: ResourceOracle) -> np.ndarray:
     # input of model is an array with 34 elements
@@ -35,23 +43,23 @@ def create_degradation_model_input(calls: List, start_ts, end_ts, node_name: str
     if len(calls) == 0:
         return np.array([])
     ram = 0
-    seen_pods = set()
+    seen_replicas = set()
     resources = defaultdict(lambda: defaultdict(list))
     for call in calls:
-        function = call.replica.function
-        pod_name = call.replica.pod.name
+        function = call.replica.function.name
+        replica_id = call.replica.replica_id
         call_resources = resource_oracle.get_resources(node_name, function)
         if call_resources:
             raise ValueError(f"Can't find resources for node '{node_name}' for function {function}")
         for resource_type in resources_types:
-            resources[pod_name][resource_type].append(call_resources[resource_type])
+            resources[replica_id][resource_type].append(call_resources[resource_type])
         if len(call_resources) == 0:
             logging.debug(f'Function {function.name} has no resources for node {node_name}')
             continue
 
-        if pod_name not in seen_pods:
-            ram += call.replica.pod.spec.containers[0].resources.requests['memory']
-            seen_pods.add(pod_name)
+        if replica_id not in seen_replicas:
+            ram += call.replica.container.get_resource_requirements()['memory']
+            seen_replicas.add(replica_id)
         last_start = start_ts if start_ts >= call.start else call.start
 
         if call.end is not None:
@@ -62,11 +70,11 @@ def create_degradation_model_input(calls: List, start_ts, end_ts, node_name: str
         overlap = first_end - last_start
 
         for resource in resources_types:
-            resources[pod_name][resource].append(overlap * call_resources[resource])
+            resources[replica_id][resource].append(overlap * call_resources[resource])
 
     sums = defaultdict(list)
     for resource_type in resources_types:
-        for pod_name, resources_of_pod in resources.items():
+        for replica_id, resources_of_pod in resources.items():
             resource_sum = np.sum(resources_of_pod[resource_type])
             sums[resource_type].append(resource_sum)
 

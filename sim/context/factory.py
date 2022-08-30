@@ -3,6 +3,7 @@ from sim.context.platform.deployment.factory import create_deployment_service
 from sim.context.platform.network.factory import create_network_service
 from sim.context.platform.node.factory import create_node_service
 from sim.context.platform.replica.factory import create_replica_service
+from sim.context.platform.request.factory import create_request_service
 from sim.context.platform.telemetry.factory import create_telemetry_service
 from sim.context.platform.trace.factory import create_trace_service
 from sim.context.platform.zone.factory import create_zone_service
@@ -26,7 +27,9 @@ def create_platform_context(env: Environment) -> SimPlatformContext:
 
     zone_service = create_zone_service(node_service.get_zones())
 
-    return SimPlatformContext(
+    request_service = create_request_service(env)
+
+    context =  SimPlatformContext(
         deployment_service=deployment_service,
         network_service=network_service,
         node_service=node_service,
@@ -35,3 +38,5 @@ def create_platform_context(env: Environment) -> SimPlatformContext:
         trace_service=trace_service,
         zone_service=zone_service
     )
+    context.request_service = request_service
+    return context

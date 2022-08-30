@@ -4,7 +4,9 @@ import numpy as np
 from faas.system import FunctionNode
 from sklearn.base import RegressorMixin
 
-from sim.degradation import create_degradation_model_input
+from sim.context.platform.request.service import RequestService
+from sim.core import Environment
+from sim.degradation import create_degradation_model_input, DegradationTrace
 from sim.oracle.oracle import ResourceOracle
 
 
@@ -13,8 +15,6 @@ class SimFunctionNode(FunctionNode):
         Holds simulation specific runtime knowledge about a node. For example, what docker images it has already pulled.
         """
     docker_images: Set
-    current_requests: Set
-    all_requests: List[any]
     performance_degradation: Optional[RegressorMixin]
 
     def __init__(self, fn_node: FunctionNode) -> None:
@@ -24,14 +24,10 @@ class SimFunctionNode(FunctionNode):
         self.ether_node = None
         self.skippy_node = None
         self.docker_images = set()
-        self.current_requests = set()
-        self.all_requests = []
         self.performance_degradation = None
-        self.buffer_size = 0
-        self.buffer_limit = 50
         self.cache = {}
 
-    def estimate_degradation(self, resource_oracle: ResourceOracle,
+    def estimate_degradation(self, env: Environment,resource_oracle: ResourceOracle,
                              start_ts: int, end_ts: int) -> float:
         if self.performance_degradation is not None:
             rounded_start = round(start_ts, 1)
@@ -40,9 +36,9 @@ class SimFunctionNode(FunctionNode):
             if get is not None:
                 return get
 
-            calls = self.get_calls_in_timeframe(start_ts, end_ts)
+            calls = self.get_calls_in_timeframe(env, self.name, start_ts, end_ts)
             x = create_degradation_model_input(calls, start_ts, end_ts, self.name,
-                                               self.capacity.memory, resource_oracle)
+                                               self.ether_node.capacity.memory, resource_oracle)
 
             if len(x) == 0:
                 # in case no other calls happened
@@ -53,39 +49,19 @@ class SimFunctionNode(FunctionNode):
             return y
         return 0
 
-    def clean_up(self):
-        if self.buffer_size >= self.buffer_limit:
-            remove_candidates = [x for x in self.all_requests if x.end is not None]
-            not_remove = set()
-            for req in self.all_requests:
-                if req.end is not None:
-                    continue
-                for past_request in remove_candidates:
-                    if req.start < past_request.end:
-                        not_remove.add(past_request)
-            for req in not_remove:
-                remove_candidates.remove(req)
-            for req in remove_candidates:
-                self.all_requests.remove(req)
-            self.buffer_size = self.buffer_size - len(remove_candidates)
-        self.buffer_size += 1
-
-    def set_end(self, request_id, end):
-        for call in self.all_requests:
-            if call.request_id == request_id:
-                call.end = end
-
-        self.clean_up()
-
-    def get_calls_in_timeframe(self, start_ts, end_ts) -> List:
+    def get_calls_in_timeframe(self, env: Environment, node: str, start_ts: float, end_ts: float) -> List[DegradationTrace]:
         calls = []
-        for call in self.all_requests:
-            if call.start <= start_ts:
-                # add only calls that are either not finished or have finished afterwards
-                if call.end is None or call.end > start_ts:
-                    calls.append(call)
+        request_service: RequestService = env.context.request_service
+        for inflight_request in request_service.get_inflight_request(node):
+            trace = DegradationTrace(inflight_request.replica, inflight_request.start, end_ts)
+            end_ts = request_service.get_end_ts(inflight_request.request_id)
+            if inflight_request.start <= start_ts:
+                if end_ts is None or end_ts > start_ts:
+                    calls.append(inflight_request)
+
             else:
                 # all calls that started afterwards but before the end are relevant
-                if call.start < end_ts:
-                    calls.append(call)
+                if inflight_request.start < end_ts:
+                    calls.append(trace)
+
         return calls

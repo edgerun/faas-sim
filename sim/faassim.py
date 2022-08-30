@@ -9,6 +9,7 @@ from skippy.core.scheduler import Scheduler
 
 from sim.benchmark import Benchmark
 from sim.context.factory import create_platform_context
+from sim.context.platform.request.service import RequestService
 from sim.core import Environment, timeout_listener
 from sim.docker import ContainerRegistry, pull as docker_pull
 from sim.faas import SimFunctionReplica, FunctionSimulator, SimulatorFactory
@@ -158,10 +159,14 @@ class ModeledExecutionSimMixin:
         # 2) check the utilization of the node the replica is running on
         # 3) transform distribution parameters with degradation function depending on utilization
         # 4) sample from that distribution
+        request_service: RequestService = env.context.request_service
+        request_service.add_request(request)
+        inflight_requests = request_service.get_inflight_request(replica.node.name)
         logger.info('invoking %s on %s (%d in parallel)', request.name, replica.node.name,
-                    len(replica.node.current_requests))
+                    len(inflight_requests))
 
         yield env.timeout(1)
+        request_service.remove_request(request.request_id)
 
 
 class SimpleFunctionSimulator(ModeledExecutionSimMixin, DockerDeploySimMixin, DummySimulator):

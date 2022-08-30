@@ -17,6 +17,7 @@ from ..context.platform.deployment.model import SimFunctionDeployment
 from ..context.platform.deployment.service import SimFunctionDeploymentService
 from ..context.platform.node.model import SimFunctionNode
 from ..context.platform.replica.service import SimFunctionReplicaService
+from ..context.platform.request.service import RequestService
 from ..context.platform.trace.service import SimTraceService
 from ..factory.flow import FlowFactory
 
@@ -40,6 +41,10 @@ class DefaultFaasSystem(FaasSystem):
     @property
     def replica_service(self) -> SimFunctionReplicaService:
         return self.env.context.replica_service
+
+    @property
+    def request_service(self) -> RequestService:
+        return self.env.context.request_service
 
     @property
     def deployment_service(self) -> SimFunctionDeploymentService:
@@ -353,7 +358,9 @@ class DefaultFaasSystem(FaasSystem):
         # if sim response is None, this will be used for ts_exec and ts_wait
         ts_wait = env.now
         ts_exec = env.now
+        request.replica = replica
         sim_response: Optional[FunctionSimulatorResponse] = yield from simulator.invoke(env, replica, request)
+
         ts_exec_end = env.now
         code = 200
         size = None
