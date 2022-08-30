@@ -6,7 +6,8 @@ import simpy
 from ether.util import parse_size_string
 from faas.system import FunctionRequest, FunctionResponse, FunctionContainer, FunctionImage, Function, \
     ScalingConfiguration
-from faas.util.constant import client_role_label, hostname_label, worker_role_label, function_label
+from faas.util.constant import client_role_label, hostname_label, worker_role_label, function_label, pod_type_label, \
+    function_type_label
 from skippy.core.scheduler import Scheduler
 
 from examples.decentralized_loadbalancers.topology import testbed_topology
@@ -157,13 +158,14 @@ def prepare_resnet_inference_deployment():
     # Run time
 
     resnet_cpu_container = FunctionContainer(resnet_inference_cpu, SimResourceConfiguration(),
-                                             {worker_role_label: "true", function_label: resnet_inference})
+                                             {worker_role_label: "true", function_label: resnet_inference,
+                                              pod_type_label: function_type_label})
 
     resnet_fd = SimFunctionDeployment(
         resnet_fn,
         [resnet_cpu_container],
         SimScalingConfiguration(),
-        DeploymentRanking([inference_cpu])
+        DeploymentRanking([resnet_cpu_container])
     )
 
     return resnet_fd
@@ -181,13 +183,14 @@ def prepare_resnet_training_deployment():
     # Run time
 
     resnet_cpu_container = FunctionContainer(resnet_training_cpu, SimResourceConfiguration(),
-                                             labels={function_label: resnet_training, worker_role_label: 'true'})
+                                             labels={function_label: resnet_training, worker_role_label: 'true',
+                                                     pod_type_label: function_type_label})
 
     resnet_fd = SimFunctionDeployment(
         resnet_fn,
         [resnet_cpu_container],
         SimScalingConfiguration(),
-        DeploymentRanking([training_cpu])
+        DeploymentRanking([resnet_cpu_container])
     )
 
     return resnet_fd
@@ -378,14 +381,17 @@ def execute_benchmark():
 def extract_dfs(sim):
     return {
         'allocation_df': sim.env.metrics.extract_dataframe('allocation'),
+        'experiment_df': sim.env.metrics.extract_dataframe('experiment'),
         'invocations_df': sim.env.metrics.extract_dataframe('invocations'),
         'traces_df': sim.env.metrics.extract_dataframe('traces'),
         'scale_df': sim.env.metrics.extract_dataframe('scale'),
         'schedule_df': sim.env.metrics.extract_dataframe('schedule'),
         'replica_deployment_df': sim.env.metrics.extract_dataframe('replica_deployment'),
         'function_deployments_df': sim.env.metrics.extract_dataframe('function_deployments'),
-        'function_deployment_df': sim.env.metrics.extract_dataframe('function_deployment'),
         'function_deployment_lifecycle_df': sim.env.metrics.extract_dataframe('function_deployment_lifecycle'),
+        'function_containers_df':  sim.env.metrics.extract_dataframe('function_containers'),
+        'function_images_df':  sim.env.metrics.extract_dataframe('function_images'),
+        'function_replicas_df': sim.env.metrics.extract_dataframe('function_replicas'),
         'functions_df': sim.env.metrics.extract_dataframe('functions'),
         'flow_df': sim.env.metrics.extract_dataframe('flow'),
         'network_df': sim.env.metrics.extract_dataframe('network'),

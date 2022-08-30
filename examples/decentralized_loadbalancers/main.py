@@ -3,7 +3,6 @@ import logging
 import os.path
 import time
 from collections import defaultdict
-from datetime import datetime
 from pathlib import Path
 from typing import List, Callable, Any
 
@@ -13,7 +12,7 @@ from faas.context import NodeService
 from faas.system import FunctionContainer, FunctionImage, Function, \
     ScalingConfiguration, FunctionNode
 from faas.util.constant import controller_role_label, hostname_label, client_role_label, zone_label, function_label, \
-    api_gateway_type_label
+    api_gateway_type_label, pod_type_label
 from skippy.core.scheduler import Scheduler
 
 from examples.decentralized_clients.main import get_resnet50_inference_cpu_image_properties, \
@@ -75,7 +74,8 @@ def create_load_balancer_deployment(lb_id: str, type: str, host: str, cluster: s
 
     fn_container = FunctionContainer(lb_image, SimResourceConfiguration(),
                                      {function_label: api_gateway_type_label, controller_role_label: 'true',
-                                      hostname_label: host, zone_label: cluster})
+                                      hostname_label: host, zone_label: cluster,
+                                      pod_type_label: api_gateway_type_label})
 
     lb_container = LoadBalancerFunctionContainer(fn_container)
 
@@ -83,7 +83,7 @@ def create_load_balancer_deployment(lb_id: str, type: str, host: str, cluster: s
         lb_fn,
         [lb_container],
         SimScalingConfiguration(ScalingConfiguration(scale_min=1, scale_max=1, scale_zero=False)),
-        DeploymentRanking([lb_image_name])
+        DeploymentRanking([fn_container])
     )
 
     return lb_fd
@@ -115,6 +115,7 @@ class DecentralizedLoadBalancerTrainInferenceBenchmark(Benchmark):
         self.balancer = 'load-balancer'
         self.clients = clients
         self.load_balancer_hosts = load_balancers_hosts
+        self.metadata = {'benchmark': 'DecentralizedLoadBalancerTrainInferenceBenchmark'}
 
     def setup(self, env: Environment):
         containers: docker.ContainerRegistry = env.container_registry
@@ -143,6 +144,9 @@ class DecentralizedLoadBalancerTrainInferenceBenchmark(Benchmark):
         load_balancer_deployment = prepare_load_balancer_deployments('load-balancer', self.load_balancer_hosts)
         client_deployments = self.prepare_client_deployments_for_experiment(load_balancer_deployment,
                                                                             function_deployments)
+        self.metadata['function_deployments'] = [f.name for f in function_deployments]
+        self.metadata['client_deployments'] = [f.name for f in client_deployments]
+        self.metadata['load_balancer_deployments'] = [f.name for f in load_balancer_deployment]
 
         deployments.extend(function_deployments)
         deployments.extend(client_deployments)
@@ -207,7 +211,7 @@ def prepare_client_deployment(client_id: str, host: str, ia_generator, max_reque
         client_fn,
         [client_container],
         SimScalingConfiguration(ScalingConfiguration(scale_min=1, scale_max=1, scale_zero=False)),
-        DeploymentRanking([client_image_name])
+        DeploymentRanking([client_container])
     )
     return client_fd
 
@@ -321,7 +325,7 @@ def execute_benchmark():
 def save_nodes(folder: str, sim: Simulation):
     service: NodeService[FunctionNode] = sim.env.context.node_service
     data = defaultdict(list)
-    keys = ['name', 'arch','cpus','ram','netspeed','labels','allocatable','cluster','state']
+    keys = ['name', 'arch', 'cpus', 'ram', 'netspeed', 'labels', 'allocatable', 'cluster', 'state']
     for node in service.get_nodes():
         for k in keys:
             data[k].append(node.__dict__[k])
@@ -331,9 +335,9 @@ def save_nodes(folder: str, sim: Simulation):
     df.to_csv(file_name, index=False)
 
 
-def save_results(exp_id: str, root_folder: str, sim: Simulation):
+def save_results(root_folder: str, sim: Simulation):
     dfs = extract_dfs(sim)
-
+    exp_id = dfs['experiment_df']['EXP_ID'].iloc[0]
     path = f'{root_folder}/{exp_id}'
     if os.path.exists(path):
         raise ValueError(f'Path {path} already exists. Stop saving results.')
@@ -343,14 +347,12 @@ def save_results(exp_id: str, root_folder: str, sim: Simulation):
         df.to_csv(file_name)
 
     save_nodes(path, sim)
-
     return path
 
 
 def main():
     logging.basicConfig(level=logging.DEBUG)
     logger.info('Start decentralized load balancers example.')
-    exp_id = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
     root_folder = 'results'
     duration, sim = execute_benchmark()
     env = sim.env
@@ -361,7 +363,7 @@ def main():
     logger.info(f'Fets invocations: {len(dfs["fets_df"])}')
 
     logger.info(f'Saving results')
-    results = save_results(exp_id, root_folder, sim)
+    results = save_results(root_folder, sim)
     logger.info(f'Results saved under {results}')
 
     logger.info('End decentralized load balancers example.')
