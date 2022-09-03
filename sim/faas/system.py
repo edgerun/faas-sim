@@ -9,10 +9,10 @@ from faas.context import NodeService
 from faas.system.core import FunctionContainer, FunctionRequest, FunctionReplicaState, FaasSystem, FunctionResponse
 
 from sim.core import Environment
-from sim.faas import RoundRobinLoadBalancer, SimFunctionReplica
+from sim.faas import SimFunctionReplica
 from sim.net import LowBandwidthException
 from sim.skippy import create_function_pod
-from .core import FunctionSimulator, FunctionSimulatorResponse
+from .core import FunctionSimulator, FunctionSimulatorResponse, GlobalSimRoundRobinLoadBalancer
 from ..context.platform.deployment.model import SimFunctionDeployment
 from ..context.platform.deployment.service import SimFunctionDeploymentService
 from ..context.platform.node.model import SimFunctionNode
@@ -36,7 +36,7 @@ class DefaultFaasSystem(FaasSystem):
         self.scheduler_queue = simpy.Store(env)
 
         # TODO let users inject SimLoadBalancer
-        self.load_balancer = RoundRobinLoadBalancer(env)
+        self.load_balancer = GlobalSimRoundRobinLoadBalancer(env)
 
     @property
     def replica_service(self) -> SimFunctionReplicaService:

@@ -1,5 +1,5 @@
 from .core import FunctionResourceCharacterization, FunctionCharacterization, \
-    SimFunctionReplica, SimLoadBalancer, RoundRobinLoadBalancer, \
+    SimFunctionReplica, SimLoadBalancer, GlobalSimLoadBalancer, LocalizedSimLoadBalancer, \
     FunctionSimulator, SimulatorFactory
 from .system import DefaultFaasSystem, simulate_data_download, simulate_data_upload
 from .watchdogs import ForkingWatchdog, HTTPWatchdog
@@ -10,8 +10,8 @@ name = 'faas'
 __all__ = [
     'Environment',
     'SimFunctionReplica',
-    'SimLoadBalancer',
-    'RoundRobinLoadBalancer',
+    'LocalizedSimLoadBalancer',
+    'GlobalSimLoadBalancer',
     'FunctionSimulator',
     'SimulatorFactory',
     'simulate_data_download',

@@ -2,19 +2,15 @@ import abc
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Generator
+from typing import Dict, Optional, Generator, List
 
 from ether.core import Node as EtherNode
-from faas.context import PlatformContext
-from faas.system.core import FunctionRequest, LoadBalancer, FunctionContainer, \
-    ResourceConfiguration
-from faas.util.constant import function_label, zone_label, api_gateway_type_label
+from faas.system.core import FunctionRequest, FunctionContainer, \
+    ResourceConfiguration, FunctionDeployment
+from faas.util.constant import function_label, api_gateway_type_label, zone_label
 from skippy.core.model import ResourceRequirements
 
-from sim.context.platform.deployment.model import SimFunctionDeployment
-from sim.context.platform.deployment.service import SimFunctionDeploymentService
 from sim.context.platform.replica.model import SimFunctionReplica
-from sim.context.platform.replica.service import SimFunctionReplicaService
 from sim.core import Environment
 from sim.oracle.oracle import FetOracle, ResourceOracle
 
@@ -112,80 +108,67 @@ class SimResourceConfiguration(ResourceConfiguration):
         return SimResourceConfiguration(ResourceRequirements.from_str(memory, cpu))
 
 
-class SimLoadBalancer(LoadBalancer):
+class SimLoadBalancer:
     env: Environment
 
     def __init__(self, env) -> None:
-        super().__init__()
         self.env = env
 
+    def get_running_replicas(self, function: str) -> List[SimFunctionReplica]: ...
+
+    def get_functions(self) -> List[FunctionDeployment]: ...
+
+    def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
+        raise NotImplementedError
+
+
+class GlobalSimLoadBalancer(SimLoadBalancer):
+
+    def __init__(self, env: Environment):
+        super(GlobalSimLoadBalancer, self).__init__(env)
+
     def get_running_replicas(self, function: str) -> List[SimFunctionReplica]:
-        replica_service: SimFunctionReplicaService = self.env.context.replica_service
+        replica_service = self.env.context.replica_service
         return replica_service.get_function_replicas_of_deployment(function, running=True)
 
-    def get_functions(self) -> List[SimFunctionDeployment]:
-        deployment_service: SimFunctionDeploymentService = self.env.context.deployment_service
+    def get_functions(self) -> List[FunctionDeployment]:
+        deployment_service = self.env.context.deployment_service
         functions = [d for d in deployment_service.get_deployments() if
                      d.labels.get(function_label) and d.labels.get(function_label) != api_gateway_type_label]
         return functions
 
-    def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
-        raise NotImplementedError
 
-
-class ContextLoadBalancer(SimLoadBalancer):
-    def __init__(self, env) -> None:
-        super().__init__(env)
-        self.env = env
-
-    def get_running_replicas(self, function: str) -> List[SimFunctionReplica]:
-        env: Environment = self.env
-        context: PlatformContext = env.context
-        replicas = context.replica_service.find_function_replicas_with_labels(labels={
-            function_label: function
-        }, running=True)
-        return replicas
-
-    def get_functions(self) -> List[SimFunctionDeployment]:
-        env: Environment = self.env
-        context: PlatformContext = env.context
-        deployments = context.deployment_service.get_deployments()
-        return [deployment for deployment in deployments]
-
-    def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
-        raise NotImplementedError
-
-
-class LocalizedContextLoadBalancer(SimLoadBalancer):
+class LocalizedSimLoadBalancer(SimLoadBalancer):
 
     def __init__(self, env: Environment, cluster: str):
-        super().__init__(env)
+        super(LocalizedSimLoadBalancer, self).__init__(env)
         self.cluster = cluster
 
+    def get_functions(self) -> List[FunctionDeployment]:
+        deployment_service = self.env.context.deployment_service
+        functions = [d for d in deployment_service.get_deployments() if
+                     d.labels.get(function_label) and d.labels.get(function_label) != api_gateway_type_label]
+        return functions
+
     def get_running_replicas(self, function: str) -> List[SimFunctionReplica]:
-        env: Environment = self.env
-        context: PlatformContext = env.context
-        replicas = context.replica_service.find_function_replicas_with_labels(labels={
+        replicas = self.env.context.replica_service.find_function_replicas_with_labels(labels={
             function_label: function}, node_labels={zone_label: self.cluster}, running=True)
-        logger.debug('here')
-        all_load_balancers = context.replica_service.find_function_replicas_with_labels(labels={
+
+        all_load_balancers = self.env.context.replica_service.find_function_replicas_with_labels(labels={
             function_label: api_gateway_type_label
         })
         other_load_balancers = [l for l in all_load_balancers if l.labels[zone_label] != self.cluster]
         for lb in other_load_balancers:
             other_cluster = lb.labels[zone_label]
-            other_replicas = context.replica_service.find_function_replicas_with_labels(labels={
+            other_replicas = self.env.context.replica_service.find_function_replicas_with_labels(labels={
                 function_label: function,
             }, node_labels={zone_label: other_cluster}, running=True)
             if len(other_replicas) > 0:
                 replicas.append(lb)
         return replicas
 
-    def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
-        raise NotImplementedError()
 
-
-class LocalizedRoundRobinBalancer(LocalizedContextLoadBalancer):
+class LocalizedSimRoundRobinBalancer(LocalizedSimLoadBalancer):
 
     def __init__(self, env, cluster):
         super().__init__(env, cluster)
@@ -203,7 +186,7 @@ class LocalizedRoundRobinBalancer(LocalizedContextLoadBalancer):
         return replica
 
 
-class RoundRobinLoadBalancer(SimLoadBalancer):
+class GlobalSimRoundRobinLoadBalancer(GlobalSimLoadBalancer):
 
     def __init__(self, env) -> None:
         super().__init__(env)

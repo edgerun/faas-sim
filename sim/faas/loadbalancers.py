@@ -1,16 +1,20 @@
 import abc
 import logging
-from typing import Generator, Optional, List, Any
+import random
+from collections import Counter, defaultdict
+from typing import Generator, Optional, Any, Dict
+from typing import List, Callable
 
 import simpy
 from faas.system import FunctionRequest, FunctionResponse, FunctionContainer
+from faas.system.loadbalancer import LoadBalancer
 from faas.util.constant import function_label
 from faas.util.rwlock import ReadWriteLock
 
 from sim.context.platform.deployment.model import SimFunctionDeployment
 from sim.core import Environment
-from sim.faas import FunctionSimulator, SimFunctionReplica
-from sim.faas.core import SimLoadBalancer
+from sim.faas import FunctionSimulator, SimFunctionReplica, SimLoadBalancer
+from sim.faas import LocalizedSimLoadBalancer
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +139,15 @@ class BaseLoadBalancerSimulator(FunctionSimulator, abc.ABC):
         )
 
 
+class UpdateableLoadBalancer(SimLoadBalancer):
+
+    def update(self, weights: Dict[str, Dict[str, float]]):
+        """
+        This method is automatically called and should update the weights of this loadbalancer accordingly
+        """
+        ...
+
+
 class LoadBalancerSimulator(BaseLoadBalancerSimulator):
 
     def __init__(self, lb: SimLoadBalancer):
@@ -156,32 +169,163 @@ class LoadBalancerSimulator(BaseLoadBalancerSimulator):
             headers=request.headers
         )
 
-class UpdateableLoadBalancer(abc.ABC):
 
-    def update(self, env: Environment):
-        """
-        This method is automatically called and should update the weights of this loadbalancer
-        """
-        ...
+class UpdateableLoadBalancerSimulator(BaseLoadBalancerSimulator):
+
+    def __init__(self, lb: UpdateableLoadBalancer):
+        self.lb = lb
+
+    def next_replica(self, env: Environment, replica: SimFunctionReplica,
+                     request: FunctionRequest) -> SimFunctionReplica:
+        modified_request = self.copy_request(replica.node.name, request)
+        return self.lb.next_replica(modified_request)
+
+    def copy_request(self, host: str, request: FunctionRequest) -> FunctionRequest:
+        return FunctionRequest(
+            request.body,
+            start=request.start,
+            size=request.size,
+            request_id=request.request_id,
+            body=request.body,
+            client=host,
+            headers=request.headers
+        )
+
 
 class LoadBalancerUpdateProcess():
 
     def __init__(self, reconcile_interval: int):
-        self.load_balancers: List[UpdateableLoadBalancer] = []
+        self.load_balancers: List[LoadBalancer] = []
         self.reconcile_interval = reconcile_interval
         self.rw_lock = ReadWriteLock()
 
     def run(self, env: Environment) -> Generator[simpy.events.Event, Any, Any]:
         for lb in self.load_balancers:
-            lb.update(env)
+            lb.update()
         while True:
             yield env.timeout(self.reconcile_interval)
             logger.debug(f'Update load balancer weights')
             for lb in self.load_balancers:
                 try:
-                    lb.update(env)
+                    lb.update()
                 except Exception as e:
                     logger.error(e)
 
-    def add(self, lb: UpdateableLoadBalancer):
+    def add(self, lb: LoadBalancer):
         self.load_balancers.append(lb)
+
+
+"""
+Basically all of this code stems from the jacob-thesis branch.
+Thanks, @jjnp for this implementation.
+"""
+
+
+class WRRProvider(abc.ABC):
+    replica_ids: List[str]
+
+    @abc.abstractmethod
+    def next_id(self) -> str:
+        pass
+
+
+class SmoothWeightedRoundRobinProvider(WRRProvider):
+    def __init__(self, weights: Dict[str, float], scaling: float = 2.5):
+        self.current_values: Dict[str, float] = defaultdict(lambda: 0)
+        self.scaling = scaling
+        if len(weights) > 0:
+            self.max_weight = max(weights.values())
+            self.weight_sum = sum(weights.values())
+        else:
+            self.max_weight = 0
+            self.weight_sum = 0
+        self.weights = weights
+        self.replica_ids = list(weights.keys())
+        if len(weights) > 0:
+            for replica_id in weights.keys():
+                self.current_values[replica_id] = 0
+
+    def next_id(self) -> str:
+        for replica_id, weight in self.weights.items():
+            self.current_values[replica_id] += weight
+        chosen_id = max(self.current_values, key=self.current_values.get)
+        self.current_values[chosen_id] -= self.weight_sum
+        return chosen_id
+
+
+class DefaultWRRProvider(WRRProvider):
+    def __init__(self, weights: Dict[str, float], scaling: float = 1.0):
+        self.gcd = 1
+        self.scaling = scaling
+        self.replica_ids = list(weights.keys())
+        random.shuffle(self.replica_ids)
+        self.weights = dict()
+        self.cw = 0
+        self.last = -1
+        self.n = len(weights)
+        self.max_weight = 1
+        self.weights = weights
+
+    def __str__(self):
+        return str(self.weights)
+
+    def _calculate_gcd(self) -> int:
+        weights = self.weights.values()
+        max_gcd = min(weights)
+        gcd = 1
+        for i in range(max_gcd, 0, -1):
+            valid = True
+            for w in weights:
+                if w % i != 0:
+                    valid = False
+                    break
+            if valid and i > 1:
+                gcd = i
+                break
+        # print(f'GCD calclated is: {gcd}')
+        return gcd
+
+    def next_id(self) -> str:
+        while True:
+            self.last = (self.last + 1) % self.n
+            if self.last == 0:
+                self.cw -= self.gcd
+                if self.cw <= 0:
+                    self.cw = self.max_weight
+            if self.weights[self.replica_ids[self.last]] >= self.cw:
+                return self.replica_ids[self.last]
+
+    @staticmethod
+    def update_weights(weights: Dict[str, float]):
+        return DefaultWRRProvider(weights)
+
+
+class WrrLoadBalancer(UpdateableLoadBalancer, LocalizedSimLoadBalancer):
+    # TODOs
+    # [x] Check for new functions and new replicas + integrate them
+    # [x] Integrate new replicas in a smarter way (currently we just reset the metrics provider)
+    # [x] pay attention to node state (running, etc.)
+
+    def __init__(self, env: Environment, cluster: str) -> None:
+        super().__init__(env, cluster)
+        self.count = Counter()
+        self.create_wrr: Callable[[Dict[str, float]], WRRProvider] = lambda rts: SmoothWeightedRoundRobinProvider(rts)
+        self.wrr_providers: Dict[str, WRRProvider] = dict()
+
+    def next_replica(self, request: FunctionRequest) -> Optional[SimFunctionReplica]:
+        managed_replicas = self.get_running_replicas(request.name)
+        if len(managed_replicas) == 0:
+            return None
+        return self._replica_by_id(request.name, self.wrr_providers[request.name].next_id())
+
+    def update(self, weights: Dict[str, Dict[str, float]]):
+        managed_functions = self.get_functions()
+        for function in managed_functions:
+            function_name = function.name
+            self.wrr_providers[function_name] = self.create_wrr(weights[function_name])
+
+    def _replica_by_id(self, function: str, replica_id: str) -> Optional[SimFunctionReplica]:
+        for r in self.get_running_replicas(function):
+            if r.replica_id == replica_id:
+                return r
+        return None
