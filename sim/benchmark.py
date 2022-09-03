@@ -11,6 +11,7 @@ from sim.core import Environment
 from sim.docker import ImageProperties
 from sim.requestgen import function_trigger, FunctionRequestFactory
 
+logger = logging.getLogger(__name__)
 
 class Benchmark:
     # the benchmark contains generators for users, functions, initial deployments, deployments over time,
@@ -27,7 +28,7 @@ class Benchmark:
 
 
 class BenchmarkBase(Benchmark):
-    def __init__(self, images: List[Tuple[str, str, str]], deployments: List[SimFunctionDeployment],
+    def __init__(self, images: List[ImageProperties], deployments: List[SimFunctionDeployment],
                  arrival_profiles: Dict[str, Generator], fn_request_factories: Dict[str, FunctionRequestFactory],
                  duration: int = None):
         self.duration = duration  # in seconds
@@ -49,8 +50,8 @@ class BenchmarkBase(Benchmark):
 
     def register_images(self, env: Environment):
         containers: docker.ContainerRegistry = env.container_registry
-        for image, size, arch in self.images:
-            containers.put(ImageProperties(image, parse_size_string(size), arch=arch))
+        for properties in self.images:
+            containers.put(properties)
 
         for name, tag_dict in containers.images.items():
             for tag, images in tag_dict.items():
@@ -65,7 +66,10 @@ class BenchmarkBase(Benchmark):
         ps = []
         logging.info('executing requests')
         for deployment in self.deployments:
-            fn_request_factory = self.fn_request_factories[deployment.name]
+            fn_request_factory = self.fn_request_factories.get(deployment.name)
+            if fn_request_factory is None:
+                logger.info(f'No request factory for {deployment.name}')
+                continue
             try:
                 ia_generator = self.arrival_profiles[deployment.name]
                 if self.duration is None:
@@ -90,7 +94,7 @@ class BenchmarkBase(Benchmark):
 
 class DegradationBenchmarkBase(BenchmarkBase):
 
-    def __init__(self, images: List[Tuple[str, str, str]], deployments: List[SimFunctionDeployment],
+    def __init__(self, images: List[ImageProperties], deployments: List[SimFunctionDeployment],
                  arrival_profiles: Dict[str, Generator], fn_request_factories: Dict[str, FunctionRequestFactory],
                  duration: int = None, model_folder='./data'):
         super().__init__(images, deployments, arrival_profiles, fn_request_factories, duration)

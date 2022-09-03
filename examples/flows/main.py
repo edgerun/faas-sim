@@ -2,7 +2,7 @@ import logging
 import time
 
 import examples.basic.main as basic
-from examples.util.clients import find_clients
+from sim.util.client import find_clients
 from examples.watchdogs.main import TrainInferenceBenchmark, AIFunctionSimulatorFactory
 from sim.faassim import Simulation
 from sim.factory.flow import SafeFlowFactory, UninterruptingFlowFactory, FlowFactory
