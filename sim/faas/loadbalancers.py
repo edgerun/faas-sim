@@ -3,7 +3,7 @@ import logging
 import random
 from collections import Counter, defaultdict
 from typing import Generator, Optional, Any, Dict
-from typing import List, Callable
+from typing import List
 
 import simpy
 from faas.system import FunctionRequest, FunctionResponse, FunctionContainer
@@ -295,9 +295,28 @@ class DefaultWRRProvider(WRRProvider):
             if self.weights[self.replica_ids[self.last]] >= self.cw:
                 return self.replica_ids[self.last]
 
-    @staticmethod
-    def update_weights(weights: Dict[str, float]):
-        return DefaultWRRProvider(weights)
+
+class WrrProviderFactory():
+
+    def create(self, weights: Dict[str, float]) -> WRRProvider: ...
+
+
+class SmoothWeightedRoundRobinProviderFactory(WrrProviderFactory):
+
+    def __init__(self, scaling: float = 1.0):
+        self.scaling = scaling
+
+    def create(self, weights: Dict[str, float]) -> WRRProvider:
+        return SmoothWeightedRoundRobinProvider(weights, self.scaling)
+
+
+class DefaultWrrProviderFactory(WrrProviderFactory):
+
+    def __init__(self, scaling: float = 1.0):
+        self.scaling = scaling
+
+    def create(self, weights: Dict[str, float]) -> WRRProvider:
+        return DefaultWRRProvider(weights, self.scaling)
 
 
 class WrrLoadBalancer(UpdateableLoadBalancer, LocalizedSimLoadBalancer):
@@ -306,10 +325,10 @@ class WrrLoadBalancer(UpdateableLoadBalancer, LocalizedSimLoadBalancer):
     # [x] Integrate new replicas in a smarter way (currently we just reset the metrics provider)
     # [x] pay attention to node state (running, etc.)
 
-    def __init__(self, env: Environment, cluster: str) -> None:
+    def __init__(self, env: Environment, cluster: str, wrr_factory: WrrProviderFactory) -> None:
         super().__init__(env, cluster)
         self.count = Counter()
-        self.create_wrr: Callable[[Dict[str, float]], WRRProvider] = lambda rts: SmoothWeightedRoundRobinProvider(rts)
+        self.wrr_factory = wrr_factory
         self.wrr_providers: Dict[str, WRRProvider] = dict()
 
     def next_replica(self, request: FunctionRequest) -> Optional[SimFunctionReplica]:
@@ -322,7 +341,7 @@ class WrrLoadBalancer(UpdateableLoadBalancer, LocalizedSimLoadBalancer):
         managed_functions = self.get_functions()
         for function in managed_functions:
             function_name = function.name
-            self.wrr_providers[function_name] = self.create_wrr(weights[function_name])
+            self.wrr_providers[function_name] = self.wrr_factory.create(weights[function_name])
 
     def _replica_by_id(self, function: str, replica_id: str) -> Optional[SimFunctionReplica]:
         for r in self.get_running_replicas(function):
