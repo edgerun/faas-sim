@@ -1,13 +1,15 @@
 import abc
 import logging
 import random
+import statistics
 from collections import Counter, defaultdict
 from typing import Generator, Optional, Any, Dict
 from typing import List
 
+import numpy as np
 import simpy
-from faas.system import FunctionRequest, FunctionResponse, FunctionContainer
-from faas.system.loadbalancer import LoadBalancer
+from faas.system import FunctionRequest, FunctionResponse, FunctionContainer, FunctionReplica
+from faas.system.loadbalancer import LoadBalancerOptimizer
 from faas.util.constant import function_label
 from faas.util.rwlock import ReadWriteLock
 
@@ -109,6 +111,8 @@ class BaseLoadBalancerSimulator(FunctionSimulator, abc.ABC):
     def invoke(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
         None, None, Optional[FunctionResponse]]:
         next_replica = self.next_replica(env, replica, request)
+        if next_replica is None:
+            raise ValueError(f"Can't find replica for request: {request}, body: {request.body}, name: {request.name}")
         host = replica.node.name
         proxy_request = self._create_proxy_request(env, host, next_replica, request)
         response = yield from env.faas.invoke(proxy_request)
@@ -191,11 +195,12 @@ class UpdateableLoadBalancerSimulator(BaseLoadBalancerSimulator):
             headers=request.headers
         )
 
-
-class LoadBalancerUpdateProcess():
+# TODO I think this can be pulled up into the faas project and this  process should register an observer and
+#      call the added optimizers respectively
+class LoadBalancerOptimizerUpdateProcess():
 
     def __init__(self, reconcile_interval: int):
-        self.load_balancers: List[LoadBalancer] = []
+        self.load_balancers: List[LoadBalancerOptimizer] = []
         self.reconcile_interval = reconcile_interval
         self.rw_lock = ReadWriteLock()
 
@@ -211,7 +216,7 @@ class LoadBalancerUpdateProcess():
                 except Exception as e:
                     logger.error(e)
 
-    def add(self, lb: LoadBalancer):
+    def add(self, lb: LoadBalancerOptimizer):
         self.load_balancers.append(lb)
 
 
@@ -224,9 +229,11 @@ Thanks, @jjnp for this implementation.
 class WRRProvider(abc.ABC):
     replica_ids: List[str]
 
-    @abc.abstractmethod
-    def next_id(self) -> str:
-        pass
+    def next_id(self) -> str: ...
+
+    def add_replica(self, replica: FunctionReplica): ...
+
+    def remove_replica(self, replica: FunctionReplica): ...
 
 
 class SmoothWeightedRoundRobinProvider(WRRProvider):
@@ -244,6 +251,26 @@ class SmoothWeightedRoundRobinProvider(WRRProvider):
         if len(weights) > 0:
             for replica_id in weights.keys():
                 self.current_values[replica_id] = 0
+
+    def add_replica(self, replica: FunctionReplica):
+        replica_id = replica.replica_id
+        if len(self.current_values) < 1:
+            self.current_values[replica_id] = 0
+            self.weights[replica_id] = 10.0
+            self.weight_sum = 10
+            self.replica_ids.append(replica_id)
+            return
+        self.current_values[replica_id] = 0
+        # self.current_values[replica_id] = float(np.mean(list(self.current_values.values())))
+        self.weights[replica_id] = float(np.mean(list(self.weights.values())))
+        self.weight_sum += self.weights[replica_id]
+
+    def remove_replica(self, replica: FunctionReplica):
+        replica_id = replica.replica_id
+        self.weight_sum -= self.weights[replica_id]
+        del self.current_values[replica_id]
+        del self.weights[replica_id]
+        self.replica_ids = list(self.weights.keys())
 
     def next_id(self) -> str:
         for replica_id, weight in self.weights.items():
@@ -284,6 +311,26 @@ class DefaultWRRProvider(WRRProvider):
                 break
         # print(f'GCD calclated is: {gcd}')
         return gcd
+
+    def add_replica(self, replica_id: str):
+
+        # use the median weight for the added replica. no special reason
+        if len(self.weights.values()) > 0:
+            w = int(round(statistics.median(list(self.weights.values()))))
+        else:
+            w = 10
+        self.weights[replica_id] = w
+        self.replica_ids.append(replica_id)
+        self.n += 1
+        self.gcd = self._calculate_gcd()
+
+    def remove_replica(self, replica_id: str):
+        self.replica_ids.remove(replica_id)
+        del self.weights[replica_id]
+        if self.last >= len(self.replica_ids):
+            self.last = -1
+        self.n -= 1
+        self.gcd = self._calculate_gcd()
 
     def next_id(self) -> str:
         while True:
@@ -330,21 +377,44 @@ class WrrLoadBalancer(UpdateableLoadBalancer, LocalizedSimLoadBalancer):
         self.count = Counter()
         self.wrr_factory = wrr_factory
         self.wrr_providers: Dict[str, WRRProvider] = dict()
+        self.lock = ReadWriteLock()
 
     def next_replica(self, request: FunctionRequest) -> Optional[SimFunctionReplica]:
-        managed_replicas = self.get_running_replicas(request.name)
-        if len(managed_replicas) == 0:
-            return None
-        return self._replica_by_id(request.name, self.wrr_providers[request.name].next_id())
+        with self.lock.lock.gen_rlock():
+            managed_replicas = self.get_running_replicas(request.name)
+            if len(managed_replicas) == 0:
+                return None
+            return self._replica_by_id(request.name, self.wrr_providers[request.name].next_id())
 
     def update(self, weights: Dict[str, Dict[str, float]]):
-        managed_functions = self.get_functions()
-        for function in managed_functions:
-            function_name = function.name
-            self.wrr_providers[function_name] = self.wrr_factory.create(weights[function_name])
+        with self.lock.lock.gen_wlock():
+            managed_functions = self.get_functions()
+            for function in managed_functions:
+                function_name = function.name
+                self.wrr_providers[function_name] = self.wrr_factory.create(weights[function_name])
 
     def _replica_by_id(self, function: str, replica_id: str) -> Optional[SimFunctionReplica]:
         for r in self.get_running_replicas(function):
             if r.replica_id == replica_id:
                 return r
         return None
+
+    def remove_replica(self, function: str, replica: FunctionReplica):
+        with self.lock.lock.gen_wlock():
+            if self.wrr_providers.get(function) is None:
+                self.wrr_providers[function] = self.wrr_factory.create({})
+            else:
+                self.wrr_providers[function].remove_replica(replica)
+
+    def add_replica(self, function: str, replica: FunctionReplica):
+        with self.lock.lock.gen_wlock():
+            if self.wrr_providers.get(function) is None:
+                self.wrr_providers[function] = self.wrr_factory.create({})
+                self.wrr_providers[function].add_replica(replica)
+            else:
+                self.wrr_providers[function].add_replica(replica)
+
+
+
+
+

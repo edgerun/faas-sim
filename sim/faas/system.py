@@ -451,7 +451,7 @@ def simulate_function_start(env: Environment, replica: SimFunctionReplica):
     logger.debug('deploying function %s to %s', replica.function.name, replica.node.name)
     env.metrics.log_deploy(replica)
     yield from sim.deploy(env, replica)
-    replica.state = FunctionReplicaState.PENDING
+    env.context.replica_service.set_state(replica, FunctionReplicaState.PENDING)
     env.metrics.log_startup(replica)
     logger.debug('starting function %s on %s', replica.function.name, replica.node.name)
     yield from sim.startup(env, replica)
@@ -460,7 +460,7 @@ def simulate_function_start(env: Environment, replica: SimFunctionReplica):
     env.metrics.log_setup(replica)
     yield from sim.setup(env, replica)  # FIXME: this is really domain-specific startup
     env.metrics.log_finish_deploy(replica)
-    replica.state = FunctionReplicaState.RUNNING
+    env.context.replica_service.set_state(replica, FunctionReplicaState.RUNNING)
 
 
 def simulate_data_download(env: Environment, replica: SimFunctionReplica):

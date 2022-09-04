@@ -1,7 +1,8 @@
 from typing import Union, List, Optional, Dict, Callable
 
 from faas.context import FunctionReplicaService, InMemoryFunctionReplicaService
-from faas.system import FunctionReplicaState
+from faas.context.observer.api import Observer
+from faas.system import FunctionReplicaState, FunctionReplica
 
 from sim.context.platform.replica.model import SimFunctionReplica
 
@@ -10,6 +11,7 @@ class SimFunctionReplicaService(FunctionReplicaService[SimFunctionReplica]):
 
     def __init__(self, replica_service: InMemoryFunctionReplicaService[SimFunctionReplica]):
         self.replica_service = replica_service
+        self.observers: List[Observer] = []
 
     def find_by_predicate(self, predicate: Callable[[SimFunctionReplica], bool], running: bool = True,
                           state: FunctionReplicaState = None) -> \
@@ -51,3 +53,10 @@ class SimFunctionReplicaService(FunctionReplicaService[SimFunctionReplica]):
     def scale_up(self, function_name: str, add: Union[int, List[SimFunctionReplica]]) -> List[SimFunctionReplica]:
         added = self.replica_service.scale_up(function_name, add)
         return added
+
+    def register(self, observer: Observer):
+        self.replica_service.register(observer)
+
+    def set_state(self, replica: FunctionReplica, state: FunctionReplicaState):
+        self.replica_service.set_state(replica, state)
+

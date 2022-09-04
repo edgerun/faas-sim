@@ -6,7 +6,7 @@ from typing import Dict, Optional, Generator, List
 
 from ether.core import Node as EtherNode
 from faas.system.core import FunctionRequest, FunctionContainer, \
-    ResourceConfiguration, FunctionDeployment
+    ResourceConfiguration, FunctionDeployment, FunctionReplica
 from faas.util.constant import function_label, api_gateway_type_label, zone_label
 from skippy.core.model import ResourceRequirements
 
@@ -121,6 +121,12 @@ class SimLoadBalancer:
     def next_replica(self, request: FunctionRequest) -> SimFunctionReplica:
         raise NotImplementedError
 
+    def remove_replica(self, function: str, replica: FunctionReplica):
+        raise NotImplementedError()
+
+    def add_replica(self, function:str, replica: FunctionReplica):
+        raise NotImplementedError()
+
 
 class GlobalSimLoadBalancer(SimLoadBalancer):
 
@@ -185,6 +191,12 @@ class LocalizedSimRoundRobinBalancer(LocalizedSimLoadBalancer):
 
         return replica
 
+    def remove_replica(self, replica: FunctionReplica):
+        pass
+
+    def add_replica(self, replica: FunctionReplica):
+        pass
+
 
 class GlobalSimRoundRobinLoadBalancer(GlobalSimLoadBalancer):
 
@@ -200,6 +212,12 @@ class GlobalSimRoundRobinLoadBalancer(GlobalSimLoadBalancer):
         replica = replicas[i]
 
         return replica
+
+    def remove_replica(self, replica: FunctionReplica):
+        pass
+
+    def add_replica(self, replica: FunctionReplica):
+        pass
 
 
 class FunctionSimulator(abc.ABC):
