@@ -73,7 +73,7 @@ class SimTraceService(TraceService):
                     continue
 
                 for req in node_requests.value():
-                    for key, value in req.__dict__.items():
+                    for key, value in req.get_value().__dict__.items():
                         requests[key].append(value)
         df = pd.DataFrame(data=requests).sort_values(by='ts')
         df.index = pd.DatetimeIndex(pd.to_datetime(df['ts'], unit='s'))
@@ -83,7 +83,7 @@ class SimTraceService(TraceService):
         if response_status is not None:
             df = df[df['status'] == response_status]
             logger.info(f'After filtering out non status: {len(df)}')
-        return df['request_id'].tolist()
+        return df['request_id'].unique().tolist()
 
     def _get_request_ids(self, start: float, end: float, zone: str = None,
                                 response_status: int = None, function_name: str=None, function_image:str=None) -> List[int]:
@@ -122,7 +122,7 @@ class SimTraceService(TraceService):
         if response_status is not None:
             df = df[df['status'] == response_status]
             logger.info(f'After filtering out non status: {len(df)}')
-        return df['request_id'].tolist()
+        return df['request_id'].unique().tolist()
 
     def _get_requests(self, request_ids: List[int]) -> Optional[pd.DataFrame]:
         with self.request_by_id_lock.lock.gen_rlock():
