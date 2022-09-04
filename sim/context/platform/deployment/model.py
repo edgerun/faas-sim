@@ -7,7 +7,7 @@ class SimScalingConfiguration:
     scaling_config: ScalingConfiguration
 
     def __init__(self, scaling_config: ScalingConfiguration = None):
-        self.scaling_config = ScalingConfiguration()
+        self.scaling_config = scaling_config
         if scaling_config is None:
             self.scaling_config = ScalingConfiguration()
 
