@@ -19,7 +19,7 @@ from sim.benchmark import Benchmark
 from sim.core import Environment
 from sim.faas import FunctionSimulator, SimulatorFactory
 from sim.faas.core import Node, LocalizedSimRoundRobinBalancer, GlobalSimRoundRobinLoadBalancer
-from sim.faas.loadbalancers import ForwardingClientSimulator, LoadBalancerSimulator, LoadBalancerUpdateProcess
+from sim.faas.loadbalancers import ForwardingClientSimulator, LoadBalancerSimulator, LoadBalancerOptimizerUpdateProcess
 from sim.faassim import Simulation
 from sim.predicates import PodHostEqualsNode
 from sim.requestgen import SimpleFunctionRequestFactory
@@ -127,7 +127,7 @@ def execute_benchmark():
 
     # prepare simulation with topology and benchmark from basic example
     sim = Simulation(topology, benchmark)
-    lb_process = LoadBalancerUpdateProcess(reconcile_interval=5)
+    lb_process = LoadBalancerOptimizerUpdateProcess(reconcile_interval=5)
     balancer = 'localized-rr-balancer'
 
     def create_load_balancer(env: Environment, fn: FunctionContainer):
