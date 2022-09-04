@@ -248,8 +248,9 @@ class SmoothWeightedRoundRobinProvider(WRRProvider):
             self.weight_sum = 0
         self.weights = weights
         self.replica_ids = list(weights.keys())
+        random.shuffle(self.replica_ids)
         if len(weights) > 0:
-            for replica_id in weights.keys():
+            for replica_id in self.replica_ids:
                 self.current_values[replica_id] = 0
 
     def add_replica(self, replica: FunctionReplica):
@@ -312,8 +313,8 @@ class DefaultWRRProvider(WRRProvider):
         # print(f'GCD calclated is: {gcd}')
         return gcd
 
-    def add_replica(self, replica_id: str):
-
+    def add_replica(self, replica: FunctionReplica):
+        replica_id = replica.replica_id
         # use the median weight for the added replica. no special reason
         if len(self.weights.values()) > 0:
             w = int(round(statistics.median(list(self.weights.values()))))
@@ -324,7 +325,8 @@ class DefaultWRRProvider(WRRProvider):
         self.n += 1
         self.gcd = self._calculate_gcd()
 
-    def remove_replica(self, replica_id: str):
+    def remove_replica(self, replica: FunctionReplica):
+        replica_id = replica.replica_id
         self.replica_ids.remove(replica_id)
         del self.weights[replica_id]
         if self.last >= len(self.replica_ids):
