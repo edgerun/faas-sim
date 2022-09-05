@@ -1,5 +1,5 @@
 edgerun-skippy-core>=0.2.0.dev1
-edgerun-ether>=0.4.0.dev3
+edgerun-ether>=0.4.0.dev4
 simpy==3.0.11
 scipy>=1.4.1
 numpy==1.22.0
