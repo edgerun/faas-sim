@@ -1,6 +1,7 @@
 import os
 from collections import defaultdict
 from pathlib import Path
+from typing import Dict
 
 import pandas as pd
 from faas.context import NodeService
@@ -22,8 +23,7 @@ def save_nodes(folder: str, sim: Simulation):
     df.to_csv(file_name, index=False)
 
 
-def save_results(root_folder: str, sim: Simulation):
-    dfs = extract_dfs(sim)
+def save_results(root_folder: str, dfs: Dict[str, pd.DataFrame], sim: Simulation):
     exp_id = dfs['experiment_df']['EXP_ID'].iloc[0]
     path = f'{root_folder}/{exp_id}'
     if os.path.exists(path):
