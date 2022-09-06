@@ -157,7 +157,7 @@ class TrainInferenceBenchmark(Benchmark):
             resnet_fn,
             [resnet_cpu_container],
             SimScalingConfiguration(),
-            DeploymentRanking([training_cpu])
+            DeploymentRanking([resnet_cpu_container])
         )
 
         return resnet_fd
@@ -179,7 +179,7 @@ class TrainInferenceBenchmark(Benchmark):
             resnet_fn,
             [resnet_cpu_container],
             SimScalingConfiguration(),
-            DeploymentRanking([inference_cpu])
+            DeploymentRanking([resnet_cpu_container])
         )
 
         return resnet_fd
