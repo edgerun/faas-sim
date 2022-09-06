@@ -100,7 +100,7 @@ class Simulation:
 
         if not env.resource_state:
             # TODO let the users inject resources
-            env.resource_state = ResourceState(['cpu', 'memory'])
+            env.resource_state = ResourceState(env, ['cpu', 'memory'])
 
         if not env.resource_monitor:
             # TODO let users inject reconcile interval

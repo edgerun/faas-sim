@@ -1,5 +1,5 @@
 import logging
-from typing import Generator
+from typing import Generator, List
 
 from faas.system.core import FunctionRequest
 
@@ -28,12 +28,15 @@ class TrainingFunctionSim(ForkingWatchdog):
         yield env.timeout(1)  # simulate docker startup
 
     def claim_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
-        env.resource_state.put_resource(replica, 'cpu', 0.7)
-        env.resource_state.put_resource(replica, 'memory', 0.3)
+        cpu_index = env.resource_state.put_resource(replica, 'cpu', 0.7)
+        memory_index = env.resource_state.put_resource(replica, 'memory', 0.3)
         yield env.timeout(0)
+        return [cpu_index, memory_index]
 
-    def release_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
-        env.resource_state.remove_resource(replica, 'cpu', 0.2)
+
+    def release_resources(self, env: Environment, replica: SimFunctionReplica, resource_indices: List[int]):
+        for idx in resource_indices:
+            env.resource_state.remove_resource(replica, idx)
         yield env.timeout(0)
 
     def execute(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[

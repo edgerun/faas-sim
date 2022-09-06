@@ -117,26 +117,34 @@ class SimMetrics(Metrics):
                  function_name=function_name,
                  function_image=function_image, node=node_name, replica_id=replica_id, request_id=request_id)
 
-    def log_function_resource_utilization(self, replica: SimFunctionReplica, utilization: ResourceUtilization):
+    def log_function_resource_utilization(self, replica: SimFunctionReplica, utilization: pd.DataFrame):
         node = replica.node
-        copy = utilization.copy()
-        resources = self.__calculate_util(node.ether_node.capacity, copy)
-        self.log('function_utilization', resources, node=node.name, replica_id=replica.replica_id)
+        resources = utilization['resource'].unique()
+        for resource in resources:
+            mean = utilization[utilization['resource'] == resource]['value'].mean()
+            if mean is not None and len(utilization) > 0:
+                self.log('function_utilization', mean, resource=resource, node=node.name, replica_id=replica.replica_id)
 
-    def log_resource_utilization(self, node_name: str, capacity: Capacity, utilization: ResourceUtilization):
-        resources = self.__calculate_util(capacity, utilization)
-        self.log('node_utilization', resources, node=node_name)
+    def log_resource_utilization(self, node_name: str, capacity: Capacity, utilization: pd.DataFrame):
+        if len(utilization) != 0:
+            resources = utilization['resource'].unique()
+            for resource in resources:
+                mean = utilization[utilization['resource'] == resource]['value'].mean()
+                self.log('node_utilization', mean, resource=resource, node=node_name)
 
     def __calculate_util(self, capacity, utilization):
-        update = {
-            'cpu_util': utilization.get_resource('cpu') / capacity.cpu_millis if utilization.get_resource(
-                'cpu') is not None else 0,
-            'mem_util': utilization.get_resource('memory') / capacity.memory if utilization.get_resource(
-                'memory') is not None else 0
-        }
-        resources = utilization.list_resources()
-        resources.update(update)
-        return resources
+        # update = {
+        #     'cpu_util': utilization.get_resource('cpu') / capacity.cpu_millis if utilization.get_resource(
+        #         'cpu') is not None else 0,
+        #     'mem_util': utilization.get_resource('memory') / capacity.memory if utilization.get_resource(
+        #         'memory') is not None else 0
+        # }
+        # resources = utilization.list_resources()
+        # resources.update(update)
+        # cpu = utilization[utilization['resource'] == 'cpu']
+        # return cpu['value'].mean()
+        # TODO update me to use the dataframe
+        pass
 
     def log_start_exec(self, request: FunctionRequest, replica: SimFunctionReplica, **kwargs):
         self.invocations[replica.function.name] += 1

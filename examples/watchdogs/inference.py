@@ -1,4 +1,4 @@
-from typing import Generator
+from typing import Generator, List
 
 from faas.system.core import FunctionRequest
 
@@ -38,11 +38,13 @@ class InferenceFunctionSim(HTTPWatchdog):
 
     def claim_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
         # no setup time, no memory because everything is cached - only cpu usage
-        env.resource_state.put_resource(replica, 'cpu', 0.2)
+        cpu_resource_index = env.resource_state.put_resource(replica, 'cpu', 0.2)
+        memory_resource_index = env.resource_state.put_resource(replica, 'memory', 50)
         yield env.timeout(0)
-
-    def release_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
-        env.resource_state.remove_resource(replica, 'cpu', 0.2)
+        return [cpu_resource_index, memory_resource_index]
+    def release_resources(self, env: Environment, replica: SimFunctionReplica, resource_indices: List[int]):
+        for resource_index in resource_indices:
+            env.resource_state.remove_resource(replica, resource_index)
         yield env.timeout(0)
 
     def execute(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[

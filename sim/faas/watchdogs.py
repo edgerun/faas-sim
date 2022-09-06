@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Generator
+from typing import Generator, List
 
 import simpy
 
@@ -19,9 +19,10 @@ class WatchdogResponse:
 
 class Watchdog(FunctionSimulator):
 
-    def claim_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest): ...
+    def claim_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
+        simpy.Event, None, List[int]]: ...
 
-    def release_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest): ...
+    def release_resources(self, env: Environment, replica: SimFunctionReplica, resource_indices: List[int]): ...
 
     def execute(self, env: Environment, replica: SimFunctionReplica,
                 request: FunctionRequest) -> Generator[None, None, WatchdogResponse]: ...
@@ -36,11 +37,11 @@ class ForkingWatchdog(Watchdog):
 
         logger.debug('[simtime=%.2f] invoking function %s on node %s', ts_fet_start, request, replica.node.name)
 
-        yield from self.claim_resources(env, replica, request)
+        resource_indices = yield from self.claim_resources(env, replica, request)
 
         response: WatchdogResponse = yield from self.execute(env, replica, request)
 
-        yield from self.release_resources(env, replica, request)
+        yield from self.release_resources(env, replica, resource_indices)
 
         ts_fet_end = env.now
         fet = ts_fet_end - ts_fet_start
@@ -78,11 +79,11 @@ class HTTPWatchdog(Watchdog):
 
         env.context.request_service.add_request(request)
 
-        yield from self.claim_resources(env, replica, request)
+        resource_indices = yield from self.claim_resources(env, replica, request)
 
         response: WatchdogResponse = yield from self.execute(env, replica, request)
 
-        yield from self.release_resources(env, replica, request)
+        yield from self.release_resources(env, replica, resource_indices)
 
         ts_fet_end = env.now
 

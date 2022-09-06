@@ -7,7 +7,7 @@ from faas.util.rwlock import ReadWriteLock
 
 from sim.context.platform.replica.model import SimFunctionReplica
 from sim.core import Environment
-from sim.resource import NodeResourceWindow, ReplicaResourceWindow, ResourceUtilization
+from sim.resource import NodeResourceWindow, ReplicaResourceWindow
 
 
 class SimTelemetryService(TelemetryService):
@@ -76,13 +76,16 @@ class SimTelemetryService(TelemetryService):
             for resource_window in resource_windows:
                 if start is None or resource_window.time > start:
                     if end is None or resource_window.time < end:
-                        util: ResourceUtilization = resource_window.resources
-                        value = util.get_resource(resource)
+                        util: pd.DataFrame = resource_window.resources
+                        util = util[util['resource'] == resource]['value'].mean()
                         data['ts'].append(resource_window.time)
                         data['replica_id'].append(fn_replica_id)
                         node = self._replicas[fn_replica_id].node.name
                         data['node'].append(node)
-                        data['value'].append(value)
+                        data['value'].append(util)
+                        data['resource'].append(resource)
+            df = pd.DataFrame(data=data)
+            return df
 
     def get_node_cpu(self, node: str, start: int = None, end: int = None) -> Optional[pd.DataFrame]:
         return self.get_node_resource(node, 'cpu', start, end)
@@ -97,8 +100,13 @@ class SimTelemetryService(TelemetryService):
             for node_window in node_windows:
                 if start is None or node_window.time > start:
                     if end is None or node_window.time < end:
-                        value = node_window.resources.total_utilization.get_resource(resource)
+                        value: pd.DataFrame = node_window.resources
+                        value = value[value['resource'] == resource]
+                        value = value['value'].mean()
                         data['ts'].append(node_window.time)
                         node = self._replicas[node].node.name
                         data['node'].append(node)
                         data['value'].append(value)
+                        data['resource'].append(resource)
+            return pd.DataFrame(data=data)
+
