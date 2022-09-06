@@ -25,6 +25,7 @@ from sim.predicates import PodHostEqualsNode
 from sim.requestgen import SimpleFunctionRequestFactory
 from sim.util.client import find_clients
 from sim.util.experiment import save_results, extract_dfs
+from sim.util.loadbalancer import find_lbs
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +114,6 @@ class DecentralizedLoadBalancerTrainInferenceBenchmark(Benchmark):
             yield p
 
 
-def find_lbs(topology):
-    return [x for x in topology.get_nodes() if x.labels.get(controller_role_label) is not None]
 
 
 def execute_benchmark():
@@ -166,7 +165,7 @@ def main():
     logger.info(f'Fets invocations: {len(dfs["fets_df"])}')
 
     logger.info(f'Saving results')
-    results = save_results(root_folder, sim)
+    results = save_results(root_folder, dfs, sim)
     logger.info(f'Results saved under {results}')
 
     logger.info('End decentralized load balancers example.')

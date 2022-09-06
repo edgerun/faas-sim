@@ -1,18 +1,18 @@
 import logging
 import time
 
-import examples.basic.main as basic
-from sim.util.client import find_clients
+from examples.decentralized_loadbalancers.topology import testbed_topology
 from examples.watchdogs.main import TrainInferenceBenchmark, AIFunctionSimulatorFactory
 from sim.faassim import Simulation
 from sim.factory.flow import SafeFlowFactory, UninterruptingFlowFactory, FlowFactory
 from sim.requestgen import SimpleFunctionRequestFactory
+from sim.util.client import find_clients
 
 logger = logging.getLogger(__name__)
 
 
 def execute_benchmark(flow_factory: FlowFactory):
-    topology = basic.example_topology()
+    topology = testbed_topology()
 
     clients = find_clients(topology)
 

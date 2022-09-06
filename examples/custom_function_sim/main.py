@@ -60,8 +60,7 @@ class MyFunctionSimulator(FunctionSimulator):
 
         # for full flexibility you decide the resources used
         cpu_millis = replica.node.ether_node.capacity.cpu_millis * 0.1
-        env.resource_state.put_resource(replica, 'cpu', cpu_millis)
-        node = replica.node
+        resource_index = env.resource_state.put_resource(replica, 'cpu', cpu_millis)
 
         request_service: RequestService = env.context.request_service
         request_service.add_request(request)
@@ -82,7 +81,7 @@ class MyFunctionSimulator(FunctionSimulator):
         env.metrics.log_fet(replica, request, ts_exec, ts_end)
         fet = ts_end - ts_exec
         # also, you have to release them at the end
-        env.resource_state.remove_resource(replica, 'cpu', cpu_millis)
+        env.resource_state.remove_resource(replica, resource_index)
         request_service.remove_request(request.request_id)
 
         return FunctionSimulatorResponse(

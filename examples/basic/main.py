@@ -140,7 +140,7 @@ class ExampleBenchmark(Benchmark):
             resnet_fn,
             [resnet_cpu_container, resnet_gpu_container],
             SimScalingConfiguration(),
-            DeploymentRanking([inference_gpu, inference_cpu])
+            DeploymentRanking([resnet_gpu_container, resnet_cpu_container])
         )
 
         return resnet_fd
