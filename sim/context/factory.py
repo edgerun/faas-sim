@@ -17,7 +17,7 @@ def create_platform_context(env: Environment) -> SimPlatformContext:
 
     node_service = create_node_service(env, env.topology)
 
-    replica_service = create_replica_service(node_service, deployment_service)
+    replica_service = create_replica_service(node_service, deployment_service, env)
 
     # TODO let users inject windowsize for telemetry service
     telemetry_service = create_telemetry_service(120, env)
@@ -29,7 +29,7 @@ def create_platform_context(env: Environment) -> SimPlatformContext:
 
     request_service = create_request_service(env)
 
-    context =  SimPlatformContext(
+    context = SimPlatformContext(
         deployment_service=deployment_service,
         network_service=network_service,
         node_service=node_service,

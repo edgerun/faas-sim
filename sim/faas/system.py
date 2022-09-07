@@ -1,7 +1,7 @@
 import logging
 import time
 import uuid
-from typing import Dict, List, Generator, Optional
+from typing import Dict, List, Generator, Optional, Union
 
 import simpy
 from ether.util import parse_size_string
@@ -147,78 +147,22 @@ class DefaultFaasSystem(FaasSystem):
                                               f.fn_name == fn.name]
         yield from self.scale_down(fn.name, len(replicas))
 
-    def scale_down(self, fn_name: str, remove: int):
-        replica_count = len(self.get_replicas(fn_name, state=FunctionReplicaState.RUNNING))
-        if replica_count == 0:
-            return
-        replica_count -= remove
-        if replica_count <= 0:
-            remove = remove + replica_count
+    def scale_down(self, fn_name: str, remove: Union[int, List[SimFunctionReplica]]):
+        removed = self.replica_service.scale_down(fn_name, remove)
+        for removed_replica in removed:
+            yield from self._remove_replica(removed_replica)
+        return removed
 
-        scale_min = self.deployment_service.get_by_name(fn_name).scaling_config.scale_min
-        if replica_count - remove < scale_min:
-            remove = replica_count - scale_min
-
-        if replica_count - remove <= 0 or remove == 0:
-            return
-
-        logger.info(f'scale down {fn_name} by {remove}')
-        replicas = self.choose_replicas_to_remove(fn_name, remove)
-        self.env.metrics.log_scaling(fn_name, -remove)
-        for replica in replicas:
-            yield from self._remove_replica(replica)
-
-    def choose_replicas_to_remove(self, fn_name: str, n: int):
-        # TODO implement more sophisticated, currently just picks last ones deployed
-        running_replicas = self.get_replicas(fn_name, state=FunctionReplicaState.RUNNING)
-        return running_replicas[len(running_replicas) - n:]
-
-    def scale_up(self, fn_name: str, replicas: int):
+    def scale_up(self, fn_name: str, add: Union[int, List[SimFunctionReplica]]):
         fd = self.deployment_service.get_by_name(fn_name)
-        config = fd.scaling_config
-        ranking = fd.ranking
+        replicas = self.replica_service.scale_up(fd.name, add)
+        for replica in replicas:
+            self.replica_service.add_function_replica(replica)
+            self.env.metrics.log_function_replica(replica)
+            self.env.metrics.log_queue_schedule(replica)
+            yield self.scheduler_queue.put((replica, fd.get_services()))
+        self.env.metrics.log_scaling(fd.name, len(replicas))
 
-        scale = replicas
-        fn_replicas = self.get_replicas(fn_name, state=FunctionReplicaState.RUNNING)
-        replica_count = len(fn_replicas)
-
-        if replica_count >= config.scale_max:
-            logger.debug('Function %s wanted to scale up, but maximum number of replicas reached', fn_name)
-            return
-
-        # check whether request would exceed maximum number of containers for the function and reduce to scale to max
-        if replica_count + replicas > config.scale_max:
-            reduce = replica_count + replicas - config.scale_max
-            scale = replicas - reduce
-
-        if scale == 0:
-            return
-        actually_scaled = 0
-        for index, service in enumerate(fd.get_services()):
-            # check whether service has capacity, otherwise continue
-            leftover_scale = scale
-            max_replicas = int(ranking.function_factor[service.image] * config.scale_max)
-            fn_container_count = len([f for f in fn_replicas if f.container.image == service.image])
-            # check if scaling all new pods would exceed the maximum number of replicas for this function container
-            if max_replicas * config.scale_max < leftover_scale + fn_container_count:
-
-                # calculate how many pods of this service can be deployed while satisfying the max function factor
-                reduce = max_replicas - fn_container_count
-                if reduce < 0:
-                    # all replicas used
-                    continue
-                leftover_scale = leftover_scale - reduce
-            if leftover_scale > 0:
-                for _ in range(leftover_scale):
-                    yield from self.deploy_replica(fd, fd.get_container(service.image), fd.get_containers()[index:])
-                    actually_scaled += 1
-                    scale -= 1
-
-        self.env.metrics.log_scaling(fd.name, actually_scaled)
-
-        if scale > 0:
-            logger.debug("Function %s wanted to scale, but not all requested replicas were deployed: %s", fn_name,
-                         str(scale))
 
     def next_replica(self, request) -> SimFunctionReplica:
         return self.load_balancer.next_replica(request)

@@ -5,11 +5,13 @@ from faas.context.observer.api import Observer
 from faas.system import FunctionReplicaState, FunctionReplica
 
 from sim.context.platform.replica.model import SimFunctionReplica
+from sim.core import Environment
 
 
 class SimFunctionReplicaService(FunctionReplicaService[SimFunctionReplica]):
 
-    def __init__(self, replica_service: InMemoryFunctionReplicaService[SimFunctionReplica]):
+    def __init__(self, replica_service: InMemoryFunctionReplicaService[SimFunctionReplica], env: Environment):
+        self.env = env
         self.replica_service = replica_service
         self.observers: List[Observer] = []
 
@@ -52,6 +54,9 @@ class SimFunctionReplicaService(FunctionReplicaService[SimFunctionReplica]):
 
     def scale_up(self, function_name: str, add: Union[int, List[SimFunctionReplica]]) -> List[SimFunctionReplica]:
         added = self.replica_service.scale_up(function_name, add)
+        for replica in added:
+            # this simulator dictates the behavior of the replica
+            replica.simulator = self.env.simulator_factory.create(self.env, replica.container)
         return added
 
     def register(self, observer: Observer):
