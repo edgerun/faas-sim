@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Callable
 
 from faas.context import ResponseRepresentation, NodeService, InMemoryTraceService
 from faas.system import FunctionResponse
@@ -7,9 +7,9 @@ from sim.context.platform.node.model import SimFunctionNode
 from sim.context.platform.trace.service import SimTraceService
 
 
-def create_trace_service(window_size: int, node_service: NodeService[SimFunctionNode]):
+def create_trace_service(window_size: int, node_service: NodeService[SimFunctionNode], now: Callable[[], float]):
     parser = create_parse_request_factory(node_service)
-    return SimTraceService(window_size, node_service, parser)
+    return SimTraceService(now, window_size, node_service, parser)
 
 
 def create_parse_request_factory(node_service: NodeService[SimFunctionNode]):

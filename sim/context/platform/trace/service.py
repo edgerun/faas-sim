@@ -23,8 +23,9 @@ class SimTraceService(TraceService):
     to that, what the callee asked for
     """
 
-    def __init__(self, window_size: int, node_service: NodeService,
+    def __init__(self,now: Callable[[],float], window_size: int, node_service: NodeService,
                  parser: Callable[[FunctionResponse], Optional[ResponseRepresentation]]):
+        self.now = now
         self.window_size = window_size
         self.node_service = node_service
         self.parser = parser
@@ -32,14 +33,27 @@ class SimTraceService(TraceService):
         self.requests_by_id: Dict[int, List[ResponseRepresentation]] = defaultdict(list)
         self.requests_per_node: Dict[str, PointWindow[ResponseRepresentation]] = {}
         self.locks = {}
+        self.last_purge = 0
         self.request_by_id_lock = ReadWriteLock()
         # TODO does not support new nodes during experiments
         for node in node_service.get_nodes():
             self.locks[node.name] = ReadWriteLock()
 
+    def _purge(self, till_ts: float):
+        for node, point_window in self.requests_per_node.items():
+            with self.locks[node].lock.gen_wlock():
+                point_window.purge(till_ts)
+
+    def purge(self):
+        now = self.now()
+        duration_since_last_purge = now - self.last_purge
+        if duration_since_last_purge > self.window_size:
+            self._purge(now - self.window_size)
+            self.last_purge = now
 
     def get_traces_api_gateway(self, node_name: str, start: float, end: float,
                                response_status: int = None) -> pd.DataFrame:
+        self.purge()
         gateway = self.node_service.find(node_name)
         if gateway is None:
             nodes = self.node_service.get_nodes_by_name()
@@ -53,6 +67,8 @@ class SimTraceService(TraceService):
         return requests
 
     def add_trace(self, response: FunctionResponse):
+        self.purge()
+
         with self.locks[response.node.name].lock.gen_wlock():
             node = response.node.name
             window = self.requests_per_node.get(node, None)
@@ -173,6 +189,8 @@ class SimTraceService(TraceService):
 
     def get_traces_for_function(self, function_name: str, start: float, end: float, zone: str = None,
                                 response_status: int = None) -> Optional[pd.DataFrame]:
+        self.purge()
+
         request_ids = self._get_request_ids(start,end,zone,response_status, function_name=function_name)
         request_df = self._get_requests(request_ids)
         return request_df
@@ -181,6 +199,8 @@ class SimTraceService(TraceService):
     def get_traces_for_function_image(self, function: str, function_image: str, start: float, end: float,
                                       zone: str = None,
                                       response_status: int = None) -> Optional[pd.DataFrame]:
+        self.purge()
+
         request_ids = self._get_request_ids(start, end, zone, response_status, function, function_image)
         request_df = self._get_requests(request_ids)
         return request_df
