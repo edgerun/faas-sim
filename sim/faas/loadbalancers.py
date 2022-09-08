@@ -386,7 +386,14 @@ class WrrLoadBalancer(UpdateableLoadBalancer, LocalizedSimLoadBalancer):
             managed_replicas = self.get_running_replicas(request.name)
             if len(managed_replicas) == 0:
                 return None
-            return self._replica_by_id(request.name, self.wrr_providers[request.name].next_id())
+            replica = None
+            while replica is None:
+                # if this repats it means that in the mean time the replica was shut down, therefore repeat
+                replica = self._replica_by_id(request.name, self.wrr_providers[request.name].next_id())
+
+            return replica
+
+
 
     def update(self, weights: Dict[str, Dict[str, float]]):
         with self.lock.lock.gen_wlock():
