@@ -5,6 +5,7 @@ from typing import Generator, List
 import simpy
 
 from .core import FunctionSimulator, FunctionRequest, SimFunctionReplica, FunctionSimulatorResponse
+from ..context.platform.request.service import RequestService
 from ..core import Environment
 
 logger = logging.getLogger(__name__)
@@ -19,6 +20,9 @@ class WatchdogResponse:
 
 class Watchdog(FunctionSimulator):
 
+    def __init__(self, teardown_wait_interval: int = 5):
+        self.teardown_wait_interval = teardown_wait_interval
+
     def claim_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest) -> Generator[
         simpy.Event, None, List[int]]: ...
 
@@ -26,6 +30,11 @@ class Watchdog(FunctionSimulator):
 
     def execute(self, env: Environment, replica: SimFunctionReplica,
                 request: FunctionRequest) -> Generator[None, None, WatchdogResponse]: ...
+
+    def teardown(self, env: Environment, replica: SimFunctionReplica):
+        request_service: RequestService = env.context.request_service
+        while request_service.get_inflight_requests_of_replica(replica) == 0:
+            yield env.timeout(self.teardown_wait_interval)
 
 
 class ForkingWatchdog(Watchdog):
@@ -61,7 +70,8 @@ class ForkingWatchdog(Watchdog):
 class HTTPWatchdog(Watchdog):
     queue: simpy.Resource
 
-    def __init__(self, workers: int):
+    def __init__(self, workers: int, teardown_wait_interval: int = 5):
+        super(HTTPWatchdog, self).__init__(teardown_wait_interval)
         self.workers = workers
         self.queue = None
 
