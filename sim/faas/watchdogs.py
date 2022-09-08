@@ -33,8 +33,9 @@ class Watchdog(FunctionSimulator):
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
         request_service: RequestService = env.context.request_service
-        while request_service.get_inflight_requests_of_replica(replica) == 0:
+        while len(request_service.get_inflight_requests_of_replica(replica)) != 0:
             yield env.timeout(self.teardown_wait_interval)
+        yield env.timeout(0)
 
 
 class ForkingWatchdog(Watchdog):
