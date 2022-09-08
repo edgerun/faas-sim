@@ -1,7 +1,7 @@
 import abc
 from typing import Union, List, Dict, Optional, Callable
 
-from faas.system import FunctionRequest
+from faas.system import FunctionRequest, FunctionReplica
 from faas.util.rwlock import ReadWriteLock
 
 
@@ -11,7 +11,9 @@ class RequestService(abc.ABC):
 
     def remove_request(self, request_id: Union[str, int]): ...
 
-    def get_inflight_request(self, node: str) -> List[FunctionRequest]: ...
+    def get_inflight_request(self, node: str, now: float = None) -> List[FunctionRequest]: ...
+
+    def get_inflight_requests_of_replica(self, replica: FunctionReplica, now: float = None): ...
 
     def get_end_ts(self, request_id: Union[str, int]) -> Optional[float]: ...
 
@@ -63,4 +65,12 @@ class SimpleRequestService(RequestService):
                 if self.start_ts[key] < now:
                     # make sure that we only include traces that have started before now
                     requests.append(request)
+        return requests
+
+    def get_inflight_requests_of_replica(self, replica: FunctionReplica, now: float = None):
+        node_requests = self.get_inflight_request(replica.node.name, now)
+        requests = []
+        for request in node_requests:
+            if request.replica.replica_id == replica.replica_id:
+                requests.append(request)
         return requests
