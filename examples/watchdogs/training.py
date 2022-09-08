@@ -57,4 +57,4 @@ class TrainingFunctionSim(ForkingWatchdog):
         )
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
-        yield env.timeout(0)
+        yield from super(TrainingFunctionSim, self).teardown(env, replica)
