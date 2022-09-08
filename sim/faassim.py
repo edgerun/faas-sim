@@ -104,7 +104,7 @@ class Simulation:
 
         if not env.resource_monitor:
             # TODO let users inject reconcile interval
-            env.resource_monitor = ResourceMonitor(env, 1)
+            env.resource_monitor = ResourceMonitor(env, 5)
 
         if not env.flow_factory:
             env.flow_factory = SafeFlowFactory()
