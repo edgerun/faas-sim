@@ -262,8 +262,8 @@ class DefaultFaasSystem(FaasSystem):
         self.replica_service.delete_function_replica(replica.replica_id)
         env.metrics.log_delete(replica)
         env.metrics.log('allocation', {
-            'cpu': 1 - (node.allocatable.cpu_millis / node.ether_node.capacity.cpu_millis),
-            'mem': 1 - (node.allocatable.memory / node.ether_node.capacity.memory)
+            'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+            'mem': 1 - (node.allocatable.memory / node.capacity.memory)
         }, node=node.name)
 
     def suspend(self, function_name: str):
