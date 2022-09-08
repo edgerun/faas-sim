@@ -2,7 +2,7 @@ import abc
 import logging
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, Optional, Generator, List
+from typing import Dict, Optional, Generator, List, Any
 
 from ether.core import Node as EtherNode
 from faas.system.core import FunctionRequest, FunctionContainer, \
@@ -80,7 +80,9 @@ class SimResourceConfiguration(ResourceConfiguration):
     requests: ResourceRequirements
     limits: Optional[ResourceRequirements]
 
-    def __init__(self, requests: ResourceRequirements = None, limits: ResourceRequirements = None):
+    def __init__(self,  requests: ResourceRequirements = None,
+                 limits: ResourceRequirements = None):
+        super().__init__(requests.requests, limits.requests)
         self.requests = requests if requests is not None else ResourceRequirements()
         self.limits = limits
 
@@ -124,7 +126,7 @@ class SimLoadBalancer:
     def remove_replica(self, function: str, replica: FunctionReplica):
         raise NotImplementedError()
 
-    def add_replica(self, function:str, replica: FunctionReplica):
+    def add_replica(self, function: str, replica: FunctionReplica):
         raise NotImplementedError()
 
 
@@ -191,10 +193,10 @@ class LocalizedSimRoundRobinBalancer(LocalizedSimLoadBalancer):
 
         return replica
 
-    def remove_replica(self, replica: FunctionReplica):
+    def remove_replica(self, function: str, replica: FunctionReplica):
         pass
 
-    def add_replica(self, replica: FunctionReplica):
+    def add_replica(self, function: str, replica: FunctionReplica):
         pass
 
 
@@ -213,10 +215,10 @@ class GlobalSimRoundRobinLoadBalancer(GlobalSimLoadBalancer):
 
         return replica
 
-    def remove_replica(self, replica: FunctionReplica):
+    def remove_replica(self, function: str, replica: FunctionReplica):
         pass
 
-    def add_replica(self, replica: FunctionReplica):
+    def add_replica(self, function: str, replica: FunctionReplica):
         pass
 
 
