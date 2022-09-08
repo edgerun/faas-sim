@@ -21,19 +21,19 @@ class InferenceFunctionSim(HTTPWatchdog):
     def setup(self, env: Environment, replica: SimFunctionReplica):
         super().setup(env, replica)
         # basic cpu usage, in %
-        env.resource_state.put_resource(replica, 'cpu', 0.08)
+        cpu_resource_index = env.resource_state.put_resource(replica, 'cpu', 0.08)
 
         # basic memory consumption, in MB
-        env.resource_state.put_resource(replica, 'memory', 200)
+        memory_resource_index = env.resource_state.put_resource(replica, 'memory', 200)
+
+        self.resource_indices = [cpu_resource_index, memory_resource_index]
 
         yield from simulate_data_download(env, replica)
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
-        # basic cpu usage, in %
-        env.resource_state.remove_resource(replica, 'cpu', 0.08)
-
-        # basic memory consumption, in MB
-        env.resource_state.remove_resource(replica, 'memory', 200)
+        yield from super(InferenceFunctionSim, self).teardown(env, replica)
+        for resource_index in self.resource_indices:
+            env.resource_state.remove_resource(replica, resource_index)
         yield env.timeout(0)
 
     def claim_resources(self, env: Environment, replica: SimFunctionReplica, request: FunctionRequest):
@@ -42,6 +42,7 @@ class InferenceFunctionSim(HTTPWatchdog):
         memory_resource_index = env.resource_state.put_resource(replica, 'memory', 50)
         yield env.timeout(0)
         return [cpu_resource_index, memory_resource_index]
+
     def release_resources(self, env: Environment, replica: SimFunctionReplica, resource_indices: List[int]):
         for resource_index in resource_indices:
             env.resource_state.remove_resource(replica, resource_index)
