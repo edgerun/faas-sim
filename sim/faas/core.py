@@ -239,6 +239,9 @@ class FunctionSimulator(abc.ABC):
         return FunctionSimulatorResponse(request.body, 150, 200, 0, 0, 0)
 
     def teardown(self, env: Environment, replica: SimFunctionReplica):
+        # this method is called upon termination of the function replica
+        # it is responsible to tear down the replica
+        # this may include waiting for requests that are still being processed
         yield env.timeout(0)
 
 
