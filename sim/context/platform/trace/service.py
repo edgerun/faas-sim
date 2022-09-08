@@ -35,6 +35,7 @@ class SimTraceService(TraceService):
         self.locks = {}
         self.last_purge = 0
         self.request_by_id_lock = ReadWriteLock()
+        self.request_cache = {}
         # TODO does not support new nodes during experiments
         for node in node_service.get_nodes():
             self.locks[node.name] = ReadWriteLock()
@@ -42,7 +43,14 @@ class SimTraceService(TraceService):
     def _purge(self, till_ts: float):
         for node, point_window in self.requests_per_node.items():
             with self.locks[node].lock.gen_wlock():
-                point_window.purge(till_ts)
+                purged  = point_window.purge(till_ts)
+                for purge in purged:
+                    purge_id = purge.val.request_id
+                    try:
+                        del self.requests_by_id[purge_id]
+                        del self.request_cache[purge_id]
+                    except KeyError:
+                        pass
 
     def purge(self):
         now = self.now()
@@ -67,8 +75,6 @@ class SimTraceService(TraceService):
         return requests
 
     def add_trace(self, response: FunctionResponse):
-        self.purge()
-
         with self.locks[response.node.name].lock.gen_wlock():
             node = response.node.name
             window = self.requests_per_node.get(node, None)
@@ -107,7 +113,7 @@ class SimTraceService(TraceService):
             nodes = self.node_service.find_nodes_in_zone(zone)
         else:
             nodes = self.node_service.get_nodes()
-        requests = defaultdict(list)
+        requests = set()
         for node in nodes:
             node_name = node.name
             with self.locks[node_name].lock.gen_rlock():
@@ -118,66 +124,105 @@ class SimTraceService(TraceService):
                 for req in node_requests.value():
                     if function_name is not None and req.val.function != function_name:
                         continue
-                    for key, value in req.val.__dict__.items():
-                        requests[key].append(value)
+                    if req.val.ts >= start or req.val.ts <= end:
+                        if function_image is None or req.val.function_image == function_image:
+                            if response_status is None or req.val.status == response_status:
+                                requests.add(req.val.request_id)
+        return list(requests)
 
-        df = pd.DataFrame(data=requests)
-        if len(df) == 0:
-            return []
-        df = df.sort_values(by='ts')
-        df.index = pd.DatetimeIndex(pd.to_datetime(df['ts'], unit='s'))
+    get_values_function_cache = {}
 
-        logger.info(f'Before filtering {len(df)} traces for function {function_name}')
-        df = df[df['ts'] >= start]
-        df = df[df['ts'] <= end]
-        df = df.reset_index(drop=True)
-        if function_image is not None:
-            df = df[df['function_image'] == function_image]
+    def get_values_for_function(self, function: str, start: float, end: float, access: Callable[[ResponseRepresentation], List[float]],
+                                zone: str = None, response_status: int = None):
+        request_ids = self._get_request_ids(start, end, zone, response_status, function)
+        with self.request_by_id_lock.lock.gen_rlock():
+            request_data = []
 
-        logger.info(f'After filtering {len(df)} traces left for function {function_name}')
-        if response_status is not None:
-            df = df[df['status'] == response_status]
-            logger.info(f'After filtering out non status: {len(df)}')
-        return df['request_id'].unique().tolist()
+            for request_id in request_ids:
+                if self.request_cache.get(request_id) is not None:
+                    representation = self.request_cache[request_id]
+                    request_data.append(access(representation))
+                else:
+                    requests = self.requests_by_id[request_id]
+                    max_rtt = 0
+                    max_response = None
+                    last_sent = 0
+                    last_response = None
+                    for request in requests:
+                        if request.rtt > max_rtt:
+                            # this is the invocation of the client to load balancer
+                            max_rtt = request.rtt
+                            max_response = request
+                        if request.sent > last_sent:
+                            # this is the last invocation from load balancer to actual replica
+                            last_response = request
+                            last_sent = request.sent
+
+                    representation = ResponseRepresentation(
+                        ts=max_response.ts,
+                        function=last_response.function,
+                        function_image=last_response.function_image,
+                        replica_id=last_response.replica_id,
+                        node=last_response.node,
+                        rtt=max_response.rtt,
+                        done=max_response.done,
+                        sent=max_response.sent,
+                        origin_zone=max_response.origin_zone,
+                        dest_zone=last_response.dest_zone,
+                        client=max_response.client,
+                        status=max_response.status,
+                        request_id=request_id
+                    )
+
+                    request_data.append(access(representation))
+                    self.request_cache[request_id] = representation
+
+        return request_data
 
     def _get_requests(self, request_ids: List[int]) -> Optional[pd.DataFrame]:
         with self.request_by_id_lock.lock.gen_rlock():
             request_data = defaultdict(list)
 
             for request_id in request_ids:
-                requests = self.requests_by_id[request_id]
-                max_rtt = 0
-                max_response = None
-                last_sent = 0
-                last_response = None
-                for request in requests:
-                    if request.rtt > max_rtt:
-                        # this is the invocation of the client to load balancer
-                        max_rtt = request.rtt
-                        max_response = request
-                    if request.sent > last_sent:
-                        # this is the last invocation from load balancer to actual replica
-                        last_response = request
-                        last_sent = request.sent
+                if self.request_cache.get(request_id) is not None:
+                    representation = self.request_cache[request_id]
+                    for key, value in representation.__dict__.items():
+                        request_data[key].append(value)
+                else:
+                    requests = self.requests_by_id[request_id]
+                    max_rtt = 0
+                    max_response = None
+                    last_sent = 0
+                    last_response = None
+                    for request in requests:
+                        if request.rtt > max_rtt:
+                            # this is the invocation of the client to load balancer
+                            max_rtt = request.rtt
+                            max_response = request
+                        if request.sent > last_sent:
+                            # this is the last invocation from load balancer to actual replica
+                            last_response = request
+                            last_sent = request.sent
 
-                representation = ResponseRepresentation(
-                    ts=max_response.ts,
-                    function=last_response.function,
-                    function_image=last_response.function_image,
-                    replica_id=last_response.replica_id,
-                    node=last_response.node,
-                    rtt=max_response.rtt,
-                    done=max_response.done,
-                    sent=max_response.sent,
-                    origin_zone=max_response.origin_zone,
-                    dest_zone=last_response.dest_zone,
-                    client=max_response.client,
-                    status=max_response.status,
-                    request_id=request_id
-                )
+                    representation = ResponseRepresentation(
+                        ts=max_response.ts,
+                        function=last_response.function,
+                        function_image=last_response.function_image,
+                        replica_id=last_response.replica_id,
+                        node=last_response.node,
+                        rtt=max_response.rtt,
+                        done=max_response.done,
+                        sent=max_response.sent,
+                        origin_zone=max_response.origin_zone,
+                        dest_zone=last_response.dest_zone,
+                        client=max_response.client,
+                        status=max_response.status,
+                        request_id=request_id
+                    )
 
-                for key, value in representation.__dict__.items():
-                    request_data[key].append(value)
+                    for key, value in representation.__dict__.items():
+                        request_data[key].append(value)
+                    self.request_cache[request_id] = representation
 
             df = pd.DataFrame(data=request_data)
             if len(df) == 0:
