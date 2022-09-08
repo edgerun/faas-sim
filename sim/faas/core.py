@@ -82,8 +82,8 @@ class SimResourceConfiguration(ResourceConfiguration):
 
     def __init__(self,  requests: ResourceRequirements = None,
                  limits: ResourceRequirements = None):
-        super().__init__(requests.requests, limits.requests)
         self.requests = requests if requests is not None else ResourceRequirements()
+        super().__init__(self.requests.requests, limits.requests if limits is not None else None)
         self.limits = limits
 
     def get_resource_requirements(self) -> Dict:
