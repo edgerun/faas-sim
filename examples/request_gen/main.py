@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 import ether.scenarios.urbansensing as scenario
+from requestgen import expovariate_arrival_profile, constant_rps_profile
 from skippy.core.utils import parse_size_string
 
 from sim import docker
@@ -11,13 +12,12 @@ from sim.core import Environment
 from sim.docker import ImageProperties
 from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
-from sim.requestgen import function_trigger, constant_rps_profile, expovariate_arrival_profile, \
-    SimpleFunctionRequestFactory
+from sim.requestgen import SimpleFunctionRequestFactory, function_trigger
 from sim.topology import Topology
 
 logger = logging.getLogger(__name__)
 
-from faas.system.core import FunctionContainer, Function, FunctionImage
+from faas.system.core import FunctionContainer, Function, FunctionImage, DeploymentRanking
 
 
 def main():
@@ -99,7 +99,8 @@ class ExampleBenchmark(Benchmark):
         python_pi_fd = SimFunctionDeployment(
             python_pi_fn,
             [python_pi_fn_container],
-            SimScalingConfiguration()
+            SimScalingConfiguration(),
+            deployment_ranking=DeploymentRanking([python_pi_fn_container])
         )
 
         return python_pi_fd
