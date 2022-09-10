@@ -204,7 +204,7 @@ class DefaultFaasSystem(FaasSystem):
                 self.replica_service.delete_function_replica(replica.replica_id)
                 if len(services) > 0:
                     logger.warning('retry scheduling pod %s', pod.name)
-                    yield from self.deploy_replica(replica.function, services[0], services[1:])
+                    yield from self.deploy_replica(replica.function, replica.function.deployment_ranking.get_first(), replica.function.deployment_ranking.containers)
                 else:
                     logger.error('pod %s cannot be scheduled', pod.name)
 
