@@ -229,3 +229,5 @@ pip-selfcheck.json
 
 # Sphinx build
 _build
+
+data/output
