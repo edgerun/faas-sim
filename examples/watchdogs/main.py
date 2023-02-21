@@ -3,6 +3,7 @@ from typing import List
 
 from ether.util import parse_size_string
 from faas.system.core import FunctionContainer, FunctionImage, Function
+from requestgen import expovariate_arrival_profile, constant_rps_profile
 
 import examples.basic.main as basic
 from examples.watchdogs.inference import InferenceFunctionSim
@@ -15,7 +16,7 @@ from sim.docker import ImageProperties
 from sim.faas import SimulatorFactory, FunctionSimulator
 from sim.faas.core import SimResourceConfiguration
 from sim.faassim import Simulation
-from sim.requestgen import expovariate_arrival_profile, constant_rps_profile, function_trigger, FunctionRequestFactory, \
+from sim.requestgen import function_trigger, FunctionRequestFactory, \
     SimpleFunctionRequestFactory
 
 logger = logging.getLogger(__name__)

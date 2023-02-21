@@ -5,7 +5,7 @@ from srds import ParameterizedDistribution as PDist, BoundRejectionSampler, Buff
 from ext.raith21.utils import extract_model_type
 from sim.oracle.oracle import FetOracle, ResourceOracle
 
-
+# TODO move this implementation of FetOracle into the interface definition with the name 'BufferedFetOracle'
 class Raith21FetOracle(FetOracle):
 
     def __init__(self, execution_times: Dict[Tuple[str, str], Tuple[float, float, PDist]]):

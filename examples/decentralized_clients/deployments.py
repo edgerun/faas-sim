@@ -6,12 +6,12 @@ from faas.system import FunctionContainer, FunctionImage, Function, \
     ScalingConfiguration
 from faas.util.constant import client_role_label, hostname_label, worker_role_label, function_label, pod_type_label, \
     function_type_label
+from requestgen import expovariate_arrival_profile, constant_rps_profile
 
 from examples.decentralized_clients.clients import ClientFunctionContainer
 from sim.context.platform.deployment.model import SimFunctionDeployment, SimScalingConfiguration, DeploymentRanking
 from sim.docker import ImageProperties
 from sim.faas.core import SimResourceConfiguration
-from sim.requestgen import expovariate_arrival_profile, constant_rps_profile
 
 logger = logging.getLogger(__name__)
 

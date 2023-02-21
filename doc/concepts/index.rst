@@ -200,7 +200,8 @@ Usage example:
 
 .. code-block:: python
 
-    from sim.requestgen import expovariate_arrival_profile, constant_rps_profile
+
+    from requestgen import expovariate_arrival_profile, constant_rps_profile
 
     env = ...
     gen = expovariate_arrival_profile(constant_rps_profile(20))

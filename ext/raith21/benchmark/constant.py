@@ -1,3 +1,5 @@
+from requestgen import expovariate_arrival_profile, constant_rps_profile
+
 from ext.raith21 import images
 from ext.raith21.fet import ai_execution_time_distributions
 from ext.raith21.oracles import Raith21FetOracle, Raith21ResourceOracle
@@ -5,7 +7,6 @@ from ext.raith21.resources import ai_resources_per_node_image
 from ext.raith21.utils import create_deployments_for_profile
 from sim.benchmark import BenchmarkBase, set_degradation
 from sim.core import Environment
-from sim.requestgen import expovariate_arrival_profile, constant_rps_profile
 
 
 class ConstantBenchmark(BenchmarkBase):
