@@ -296,7 +296,28 @@ class DefaultFaasSystem(FaasSystem):
                     f'A LowBandwidthException occurred when calling {request.name} with the client'
                     f'{request.client} and the destination node {replica.node.name}.'
                     f'The Call is aborted.')
-                return 500
+
+                env.metrics.log_stop_exec(request, replica)
+                ts_end = env.now
+
+                body = 'LowBandwidthException'
+                response = FunctionResponse(
+                    request,
+                    request_id=request.request_id,
+                    client=request.client,
+                    name=request.name,
+                    body=body,
+                    code=500,
+                    ts_start=ts_start,
+                    ts_end=ts_end,
+                    replica=replica,
+                    node=replica.node,
+                    ts_wait=-1,
+                    ts_exec=-1,
+                    size=len(body.encode('utf-8')),
+                    fet=-1
+                )
+                env.context.trace_service.add_trace(response)
 
         simulator: FunctionSimulator = replica.simulator
         # if sim response is None, this will be used for ts_exec and ts_wait
@@ -351,8 +372,8 @@ class DefaultFaasSystem(FaasSystem):
             ts_end=ts_end,
             replica=replica,
             node=replica.node,
-            ts_wait=ts_wait,
-            ts_exec=ts_exec,
+            ts_wait=-1,
+            ts_exec=-1,
             size=size,
             fet=fet
         )
