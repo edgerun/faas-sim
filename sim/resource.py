@@ -199,6 +199,8 @@ class NodeResourceUtilization:
         return util
 
 
+# TODO: include observer that fires in put and remove events. This can enable a metric logging implementation that always
+# has all data and can be used for post-experiment analysis.
 class ResourceState:
     node_resource_utilizations: Dict[str, NodeResourceUtilization]
 
