@@ -93,7 +93,6 @@ class DefaultFaasSystem(FaasSystem):
         yield self.scheduler_queue.put((replica, services))
 
     def invoke(self, request: FunctionRequest):
-        # TODO: how to return a FunctionResponse?
         logger.debug('invoking function %s', request.name)
 
         if not self.deployment_service.exists(request.name):
