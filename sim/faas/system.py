@@ -389,7 +389,6 @@ class DefaultFaasSystem(FaasSystem):
         If it is True, the transfer happened.
         If it is False, the transfer failed due to LowBandwidth
         """
-        # TODO this is missing the load balancer, see TODO at the bottom of file
         env = self.env
         started = env.now
         route = self.env.topology.route_by_node_name(src_name, dest_name)
@@ -484,40 +483,3 @@ def simulate_data_upload(env: Environment, replica: SimFunctionReplica):
         env.metrics.log_network(size, 'data_upload', hop)
     env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_upload')
 
-# TODO the following implementation of jacob's thesis branch should be adopted as it explictly transfers data from the client
-# to the load balancer and from the load balancer to the function - which is how it happens in real life
-# def simulate_function_invocation(env, replica: FunctionReplica, request: FunctionRequest):
-#     """
-#     Adapted version of "simulate function invocation" that also includes network simulation
-#     @param replica: The function replica
-#     @param request: The request to be processed
-#     """
-#     tx_time_cl_lb = 0
-#     tx_time_lb_fx = 0
-#     t_start = self.env.now
-#
-#     if request.load_balancer is not None and hasattr(request, 'client_node') and isinstance(request.load_balancer,
-#                                                                                             LocalizedLoadBalancer):
-#         # right now I used 250kb request payload, which should be a small JPG with the added HTTP overhead
-#         cl_lb_start = self.env.now
-#         yield from self.simulate_request_transfer(request.load_balancer.ether_node.name, request.client_node.name,
-#                                                   250)
-#         tx_time_cl_lb = self.env.now - cl_lb_start
-#         lb_fx_start = self.env.now
-#         yield from self.simulate_request_transfer(request.load_balancer.ether_node.name,
-#                                                   replica.node.ether_node.name,
-#                                                   250)
-#         tx_time_lb_fx = self.env.now - lb_fx_start
-#
-#     # actual function simulation portion
-#     yield from simulate_function_invocation(self.env, replica, request)
-#     t_end = self.env.now
-#
-#     # report the total response time to the load-balancer for weight updates etc.
-#     if request.load_balancer is not None:
-#         if isinstance(request.load_balancer, LeastResponseTimeLoadBalancer):
-#             request.load_balancer.report_response_time(request, replica, t_end - t_start)
-#
-#     if tx_time_cl_lb != 0 and tx_time_lb_fx != 0:
-#         request.tx_time_cl_lb = tx_time_cl_lb
-#         request.tx_time_lb_fx = tx_time_lb_fx
