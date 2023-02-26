@@ -24,6 +24,7 @@ class Environment(simpy.Environment):
         self.container_registry = None
         self.metrics = None
         self.scheduler = None
+        self.load_balancer = None
         self.resource_state = None
         self.resource_monitor = None
         self.flow_factory = None

@@ -35,8 +35,7 @@ class DefaultFaasSystem(FaasSystem):
         self.request_queue = simpy.Store(env)
         self.scheduler_queue = simpy.Store(env)
 
-        # TODO let users inject SimLoadBalancer
-        self.load_balancer = GlobalSimRoundRobinLoadBalancer(env)
+        self.load_balancer = env.load_balancer
 
     @property
     def replica_service(self) -> SimFunctionReplicaService:

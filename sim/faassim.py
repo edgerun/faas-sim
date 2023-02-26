@@ -13,6 +13,7 @@ from sim.context.platform.request.service import RequestService
 from sim.core import Environment, timeout_listener
 from sim.docker import ContainerRegistry, pull as docker_pull
 from sim.faas import SimFunctionReplica, FunctionSimulator, SimulatorFactory
+from sim.faas.core import GlobalSimRoundRobinLoadBalancer
 from sim.faas.kvstorage import InMemoryKeyValueStorage
 from sim.faas.system import DefaultFaasSystem
 from sim.factory.flow import SafeFlowFactory
@@ -116,6 +117,9 @@ class Simulation:
         if not env.kv_storage:
             env.kv_storage = InMemoryKeyValueStorage[Any]()
 
+        if not env.load_balancer:
+            env.load_balancer = self.create_load_balancer(env)
+
     def create_container_registry(self):
         return ContainerRegistry()
 
@@ -127,6 +131,9 @@ class Simulation:
 
     def create_scheduler(self, env):
         return Scheduler(env.cluster)
+
+    def create_load_balancer(self, env):
+        return GlobalSimRoundRobinLoadBalancer(env)
 
 
 class DummySimulator(FunctionSimulator):
