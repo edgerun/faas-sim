@@ -112,7 +112,6 @@ class ExampleBenchmark(Benchmark):
             python_pi_fn,
             [python_pi_fn_container],
             SimScalingConfiguration(),
-            DeploymentRanking([python_pi_fn_container])
         )
 
         return python_pi_fd

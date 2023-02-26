@@ -62,9 +62,9 @@ class SimFunctionDeployment(FunctionDeployment):
         super().__init__(fn, fn_containers, scaling_config, deployment_ranking)
         self.scaling_config = scaling_config
         if deployment_ranking is None:
-            self.ranking = DeploymentRanking(fn_containers)
+            self.deployment_ranking = DeploymentRanking(fn_containers)
         else:
-            self.ranking = deployment_ranking
+            self.deployment_ranking = deployment_ranking
 
     def get_selected_service(self):
         return self.fn.get_image(self.ranking.get_first())
