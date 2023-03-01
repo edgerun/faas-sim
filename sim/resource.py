@@ -85,17 +85,30 @@ class NodeResourceUtilization:
 class ResourceState:
     node_resource_utilizations: Dict[str, NodeResourceUtilization]
 
-    def __init__(self):
+    def __init__(self, env: Environment):
         self.node_resource_utilizations = {}
+        self.env = env
 
     def put_resource(self, function_replica: FunctionReplica, resource: str, value: float):
         node_name = function_replica.node.name
         node_resources = self.get_node_resource_utilization(node_name)
         node_resources.put_resource(function_replica, resource, value)
 
+        utilization = self.get_resource_utilization(function_replica)
+        if utilization.is_empty():
+            return
+
+        self.env.metrics.log_function_resource_utilization(function_replica, utilization)
+
     def remove_resource(self, replica: 'FunctionReplica', resource: str, value: float):
         node_name = replica.node.name
         self.get_node_resource_utilization(node_name).remove_resource(replica, resource, value)
+
+        utilization = self.get_resource_utilization(replica)
+        if utilization.is_empty():
+            return
+
+        self.env.metrics.log_function_resource_utilization(replica, utilization)
 
     def get_resource_utilization(self, replica: 'FunctionReplica') -> 'ResourceUtilization':
         node_name = replica.node.name
@@ -164,24 +177,26 @@ class MetricsServer:
 class ResourceMonitor:
     """Simpy process - continuously collects resource data"""
 
-    def __init__(self, env: Environment, reconcile_interval: int, logging=True):
+    def __init__(self, env: Environment, reconcile_interval: float, logging=True):
         self.env = env
         self.reconcile_interval = reconcile_interval
         self.metric_server: MetricsServer = env.metrics_server
         self.logging = logging
 
     def run(self):
-        faas: FaasSystem = self.env.faas
-        while True:
-            yield self.env.timeout(self.reconcile_interval)
-            now = self.env.now
-            for deployment in faas.get_deployments():
-                for replica in faas.get_replicas(deployment.name, FunctionState.RUNNING):
-                    utilization = self.env.resource_state.get_resource_utilization(replica)
-                    if utilization.is_empty():
-                        continue
-                    # TODO extract logging into own process
-                    if self.logging:
-                        self.env.metrics.log_function_resource_utilization(replica, utilization)
-                    self.metric_server.put(
-                        ResourceWindow(replica, utilization.list_resources(), now))
+        # faas: FaasSystem = self.env.faas
+        # while True:
+        #     yield self.env.timeout(self.reconcile_interval)
+        #     now = self.env.now
+        #     for deployment in faas.get_deployments():
+        #         for replica in faas.get_replicas(deployment.name, FunctionState.RUNNING):
+        #             utilization = self.env.resource_state.get_resource_utilization(replica)
+        #             if utilization.is_empty():
+        #                 continue
+        #             # TODO extract logging into own process
+        #             if self.logging:
+        #                 self.env.metrics.log_function_resource_utilization(replica, utilization)
+        #             self.metric_server.put(
+        #                 ResourceWindow(replica, utilization.list_resources(), now))
+
+        yield self.env.timeout(self.reconcile_interval)

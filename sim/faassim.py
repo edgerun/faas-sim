@@ -63,6 +63,9 @@ class Simulation:
 
         logger.info('simulation ran %.2fs sim, %.2fs wall', env.now, (time.time() - then))
 
+        metrics: Metrics = env.metrics
+        metrics.log('simulation_duration', value={'sim_seconds': env.now, 'wall_seconds': (time.time() - then)})
+
     def init_environment(self, env):
         if not env.simulator_factory:
             env.simulator_factory = env.simulator_factory or self.create_simulator_factory()
@@ -86,10 +89,10 @@ class Simulation:
             env.metrics_server = MetricsServer()
 
         if not env.resource_state:
-            env.resource_state = ResourceState()
+            env.resource_state = ResourceState(env)
 
         if not env.resource_monitor:
-            env.resource_monitor = ResourceMonitor(env, 1)
+            env.resource_monitor = ResourceMonitor(env, 0.2)
 
     def create_container_registry(self):
         return ContainerRegistry()

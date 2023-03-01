@@ -130,6 +130,7 @@ class Environment(simpy.Environment):
         self.resource_monitor = None
         self.background_processes: List[Callable[[Environment], Generator[simpy.events.Event, Any, Any]]] = []
         self.degradation_models: Dict[str, Optional[RegressorMixin]] = {}
+        self.power_models: Dict[str, Optional[RegressorMixin]] = {}
 
     def get_node_state(self, name: str) -> Optional[NodeState]:
         """
