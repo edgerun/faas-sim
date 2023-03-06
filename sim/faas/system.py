@@ -186,6 +186,7 @@ class DefaultFaasSystem(FaasSystem):
             logger.debug('scheduling next replica %s', replica.function.name)
 
             # schedule the required pod
+            # TODO create a scheduler abstraction, otherwise all scheduled pods are processed here, which is not compatible with distributed/decentralized schedulers
             self.env.metrics.log_start_schedule(replica)
             pod = replica.pod
             then = time.time()
