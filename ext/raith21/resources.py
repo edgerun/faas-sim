@@ -1,6 +1,7 @@
 from sim.faas import FunctionResourceCharacterization
 
 # python-pi was made with req=10000, except xeongpu - this one was req=2000, due to the inexplicable slow response
+# RAM is in % relative to the available memory on the host
 ai_resources_per_node_image = {
     ('rockpi', 'faas-workloads/python-pi'): FunctionResourceCharacterization(0.26066751860455545, 0.0, 0,
                                                                              867.0644652888737, 0.02850091195999672),
