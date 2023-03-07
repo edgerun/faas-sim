@@ -2,10 +2,12 @@ from dataclasses import dataclass
 from typing import Dict
 
 from ext.raith21 import images, storage
-from sim.faas import DeploymentRanking, SimFunctionDeployment, SimScalingConfiguration
+
+from sim.context.platform.deployment.model import SimFunctionDeployment, SimScalingConfiguration
+from sim.faas.core import SimResourceConfiguration
 from sim.oracle.oracle import ResourceOracle, FetOracle
 from faas.system.core import FunctionContainer, FunctionRequest, FunctionImage, Function, \
-    KubernetesResourceConfiguration
+     DeploymentRanking
 
 default_resnet_inference_ranking = DeploymentRanking(
     [images.resnet50_inference_gpu_manifest, images.resnet50_inference_cpu_manifest])
@@ -49,13 +51,13 @@ def get_resnet50_inference_deployment(ranking: DeploymentRanking,
         'data.skippy.io/receives-from-storage/path': f'{storage.resnet_model_bucket}/{model}',
     }
 
-    resnet50_cpu_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="150Mi")
+    resnet50_cpu_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="150Mi")
     resnet50_cpu_function = FunctionContainer(
         resnet50_cpu_function_image,
         resource_config=resnet50_cpu_function_requests,
         labels={'watchdog': 'http', 'workers': '4', 'cluster': '4a'})
 
-    resnet50_gpu_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="400Mi")
+    resnet50_gpu_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="400Mi")
     resnet50_gpu_function = FunctionContainer(
         resnet50_gpu_function_image,
         resource_config=resnet50_gpu_function_requests,
@@ -99,7 +101,7 @@ def get_speech_inference_deployment(ranking: DeploymentRanking,
 
     }
 
-    speech_gpu_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="300Mi")
+    speech_gpu_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="300Mi")
     speech_gpu_function = FunctionContainer(
         speech_gpu_function_image,
         resource_config=speech_gpu_function_requests,
@@ -107,7 +109,7 @@ def get_speech_inference_deployment(ranking: DeploymentRanking,
                 'device.edgerun.io/vram': '1500', })
     speech_gpu_function.labels.update(data_storage_gpu)
 
-    speech_tflite_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="100Mi")
+    speech_tflite_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="100Mi")
     speech_tflite_function = FunctionContainer(
         speech_tflite_function_image,
         resource_config=speech_tflite_function_requests,
@@ -147,14 +149,14 @@ def get_mobilenet_inference_deployment(ranking: DeploymentRanking,
         'data.skippy.io/receives-from-storage/path': f'{storage.mobilenet_bucket}/{tpu}',
     }
 
-    mobilenet_tpu_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="100Mi")
+    mobilenet_tpu_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="100Mi")
     mobilenet_tpu_function = FunctionContainer(
         mobilenet_tpu_function_image,
         resource_config=mobilenet_tpu_function_requests,
         labels={'watchdog': 'http', 'workers': '4', 'cluster': '1b', 'device.edgerun.io/accelerator': 'TPU'}
     )
 
-    mobilenet_tflite_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="100Mi")
+    mobilenet_tflite_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="100Mi")
     mobilenet_tflite_function = FunctionContainer(
         mobilenet_tflite_function_image,
         resource_config=mobilenet_tflite_function_requests,
@@ -190,7 +192,7 @@ def get_resnet_training_deployment(ranking: DeploymentRanking,
                                                    resnet_training_cpu_function_image])
 
     # Run time
-    resnet_training_gpu_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="800Mi")
+    resnet_training_gpu_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="800Mi")
     data = storage.resnet_train_bucket_item.name
 
     data_storage_labels = {
@@ -210,7 +212,7 @@ def get_resnet_training_deployment(ranking: DeploymentRanking,
 
     resnet_training_gpu_function.labels.update(data_storage_labels)
 
-    resnet_training_cpu_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="1Gi")
+    resnet_training_cpu_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="1Gi")
     resnet_training_cpu_function = FunctionContainer(
         resnet_training_cpu_function_image,
         resource_config=resnet_training_cpu_function_requests,
@@ -237,7 +239,7 @@ def get_tf_gpu_deployment(ranking: DeploymentRanking, scaling_config: SimScaling
     )
 
     # Run time
-    tf_gpu_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="300Mi")
+    tf_gpu_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="300Mi")
     tf_gpu_function_container = FunctionContainer(
         tf_gpu_function_image,
         resource_config=tf_gpu_function_requests,
@@ -260,7 +262,7 @@ def get_pi_deployment(ranking: DeploymentRanking, scaling_config: SimScalingConf
     pi_function = Function(name=images.pi_function, fn_images=[pi_function_image])
 
     # Run time
-    pi_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="100Mi")
+    pi_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="100Mi")
 
     pi_function_container = FunctionContainer(
         pi_function_image,
@@ -283,7 +285,7 @@ def get_fio_deployment(ranking: DeploymentRanking, scaling_config: SimScalingCon
     fio_function = Function(name=images.fio_function, fn_images=[fio_function_image])
 
     # Run time
-    fio_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m", memory="200Mi")
+    fio_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m", memory="200Mi")
 
     fio_function_container = FunctionContainer(
         fio_function_image,
@@ -316,7 +318,7 @@ def get_resnet_preprocessing_deployment(ranking: DeploymentRanking, scaling_conf
         'data.skippy.io/sends-to-storage/path': f'{storage.resnet_pre_bucket}/preprocessed'
     }
 
-    resnet_preprocessing_function_requests = KubernetesResourceConfiguration.create_from_str(cpu="1000m",
+    resnet_preprocessing_function_requests = SimResourceConfiguration.create_from_str(cpu="1000m",
                                                                                              memory="100Mi")
 
     resnet_preprocessing_function_container = FunctionContainer(

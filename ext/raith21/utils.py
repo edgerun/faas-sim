@@ -2,7 +2,7 @@ from typing import Dict
 
 from ext.raith21 import images
 from ext.raith21.deployments import create_all_deployments
-from sim.faas import SimFunctionDeployment
+from sim.context.platform.deployment.model import SimFunctionDeployment
 from sim.oracle.oracle import FetOracle, ResourceOracle
 
 

@@ -274,6 +274,7 @@ class ResourceMonitor:
         self.logging = logging
 
     def run(self):
+        return
         faas: FaasSystem = self.env.faas
         while True:
             yield self.env.timeout(self.reconcile_interval)

@@ -266,7 +266,7 @@ class SimMetrics(Metrics):
             r['time'] = max_response.time
             r['t_wait'] = t_wait
             r['ts_received'] = ts_received
-            r['ts_exec'] = t_exec
+            r['t_exec'] = t_exec
             r['ts_end'] = ts_end
             r['ts_start'] = ts_start
             r['memory'] = memory

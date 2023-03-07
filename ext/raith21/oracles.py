@@ -2,8 +2,16 @@ from typing import Tuple, Dict, Optional
 
 from srds import ParameterizedDistribution as PDist, BoundRejectionSampler, BufferedSampler
 
-from ext.raith21.utils import extract_model_type
+
 from sim.oracle.oracle import FetOracle, ResourceOracle
+
+def extract_model_type(device: str):
+    if not type(device) is str:
+        return ''
+    try:
+        return device[:device.rindex('_')]
+    except ValueError:
+        return device
 
 # TODO move this implementation of FetOracle into the interface definition with the name 'BufferedFetOracle'
 class Raith21FetOracle(FetOracle):
