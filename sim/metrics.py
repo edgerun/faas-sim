@@ -2,7 +2,7 @@ import glob
 import os.path
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 import pandas as pd
 from ether.core import Capacity
@@ -20,11 +20,29 @@ class FlushingRuntimeLogger(MetricsLogger):
     """This implementation continuously extracts all data into dataframes and flushes the recorded
     logs. While it is not possible extract the dataframes after the simulation finished, it increases the scalability of the simulation by keeping the memory usage constant for the metrics collection."""
 
-    def __init__(self, results_folder: str, buffer_size: int = 100, clock=None) -> None:
+    def __init__(self, results_folder: str, measurement_keys: List[str] = None, buffer_size: int = 100,
+                 clock=None) -> None:
         self.results_folder = results_folder
         self._init_results_folder()
         self.records = list()
         self.buffer_size = buffer_size
+        if measurement_keys is None:
+            self.measurement_keys = ['allocation',
+                                     'invocations',
+                                     'scale',
+                                     'schedule',
+                                     'replica_deployment',
+                                     'function_deployments',
+                                     'function_deployment',
+                                     'function_deployment_lifecycle',
+                                     'functions',
+                                     'flow',
+                                     'network',
+                                     'node_utilization',
+                                     'function_utilization',
+                                     'fets']
+        else:
+            self.measurement_keys = measurement_keys
         self.clock = clock or WallClock()
 
     def _init_results_folder(self):
@@ -61,11 +79,11 @@ class FlushingRuntimeLogger(MetricsLogger):
             self._flush()
 
     def _flush(self):
-        measurement_keys = []
+
         new_measurement_dfs = {}
         old_measurement_dfs = self._read_existing_dfs()
 
-        for measurement in measurement_keys:
+        for measurement in self.measurement_keys:
             df = extract_dataframe(self.records, measurement)
             if old_measurement_dfs is not None:
                 old_df = old_measurement_dfs[measurement]
