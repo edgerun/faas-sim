@@ -24,7 +24,7 @@ class ResourceUtilization:
     __remove: Dict[int, float]
 
     def __init__(self, env: Environment):
-        self.idx = defaultdict(int)
+        self.idx = 0
         self.env = env
         self.__resources = defaultdict(dict)
         self.__add = {}
@@ -33,8 +33,8 @@ class ResourceUtilization:
 
     def put_resource(self, resource: str, value: float) -> int:
         with self.lock.lock.gen_wlock():
-            idx = self.idx[resource]
-            self.idx[resource] += 1
+            idx = self.idx
+            self.idx += 1
         ts = self.env.now
         self.__resources[resource][idx] = ResourceUsage(ts, value)
         self.__add[idx] = ts
