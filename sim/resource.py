@@ -98,10 +98,9 @@ class ResourceUtilization:
                     ratio = duration / time_step
                     value += self.__resources[resource][key].value * ratio
 
-            if value != 0:
-                usage['value'].append(value)
-                usage['ts'].append(step)
-                usage['resource'].append(resource)
+            usage['value'].append(value)
+            usage['ts'].append(step)
+            usage['resource'].append(resource)
             step += time_step
         return pd.DataFrame(data=usage)
 
@@ -162,6 +161,10 @@ class NodeResourceUtilization:
                     data['ts'].append(end)
                     data['value'].append(usage)
                     data['resource'].append(resource)
+                else:
+                    data['ts'].append(end)
+                    data['value'].append(0)
+                    data['resource'].append(resource)
             return pd.DataFrame(data=data)
 
     def list_resource_utilization(self) -> List[Tuple[SimFunctionReplica, ResourceUtilization]]:
@@ -174,11 +177,14 @@ class NodeResourceUtilization:
     def total_utilization(self, start: float, end: float, timestep: float) -> Optional[pd.DataFrame]:
         dfs = []
         for replica, resource_utilization in self.list_resource_utilization():
-            for resource in resource_utilization.list_resources():
+            for resource in self.resources:
                 usage_frame = resource_utilization.get_resource(resource, start, end, timestep)
                 if usage_frame is not None and len(usage_frame) > 0:
                     usage_frame['replica_id'] = replica.replica_id
                     dfs.append(usage_frame)
+                else:
+                    usage = {'value': [0], 'ts': [timestep], 'resource': [resource], 'replica_id': [replica.replica_id]}
+                    dfs.append(pd.DataFrame(usage))
         if len(dfs) > 0:
             df = pd.concat(dfs)
             df = df.groupby(['resource', 'ts']).sum().reset_index()
@@ -278,7 +284,7 @@ class ResourceMonitor:
         while True:
             yield self.env.timeout(self.reconcile_interval)
             now = self.env.now
-            start = now - 1
+            start = now - self.reconcile_interval
             end = now
             state: ResourceState = self.env.resource_state
             replica_service = self.env.context.replica_service
@@ -288,7 +294,7 @@ class ResourceMonitor:
                 replicas: List[SimFunctionReplica] = replica_service.get_function_replicas_of_deployment(
                     deployment.name, running=True)
                 for replica in replicas:
-                    utilization: pd.DataFrame = state.get_average_resource_utilization(replica, start, end)
+                    utilization: pd.DataFrame = state.get_average_resource_utilization(replica, start, end, self.reconcile_interval)
                     if utilization is None or len(utilization) == 0:
                         continue
                     # TODO extract logging into own process
@@ -298,7 +304,7 @@ class ResourceMonitor:
                         ReplicaResourceWindow(replica, utilization, now))
             for node in self.env.topology.get_nodes():
                 resource_utilization: pd.DataFrame = state.get_node_resource_utilization(node.name).total_utilization(
-                    start, end, 1)
+                    start, end, self.reconcile_interval)
                 if resource_utilization is not None:
                     telemetry_service.put_node_resource_utilization(
                         NodeResourceWindow(node.name, resource_utilization, now))
