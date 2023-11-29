@@ -88,7 +88,8 @@ class FlushingRuntimeLogger(MetricsLogger):
             if old_measurement_dfs is not None:
                 old_df = old_measurement_dfs[measurement]
                 if old_df is not None:
-                    new_measurement_dfs[measurement] = pd.concat([old_df, df])
+                    concat = pd.concat([old_df, df])
+                    new_measurement_dfs[measurement] = concat
                 else:
                     new_measurement_dfs[measurement] = df
             else:
@@ -100,14 +101,16 @@ class FlushingRuntimeLogger(MetricsLogger):
 
     def _save_measurements(self, measurement_dfs: Dict[str, pd.DataFrame]):
         for measurement, df in measurement_dfs.items():
-            file_path = f'{self.results_folder}/{measurement}.csv'
-            df.to_csv(file_path)
+            if len(df) > 0:
+                file_path = f'{self.results_folder}/{measurement}.csv'
+                df.to_csv(file_path)
 
     def _read_existing_dfs(self):
         dfs = {}
         for filename in self.measurement_keys:
             try:
-                df = pd.read_csv(f'{filename}.csv')
+                df = pd.read_csv(f'{self.results_folder}/{filename}.csv')
+                df = df.set_index('time')
                 dfs[filename] = df
             except Exception:
                 dfs[filename] = None
