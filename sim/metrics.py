@@ -36,6 +36,7 @@ class FlushingRuntimeLogger(MetricsLogger):
                                      'function_deployment',
                                      'function_deployment_lifecycle',
                                      'functions',
+                                     'traces',
                                      'flow',
                                      'network',
                                      'node_utilization',
