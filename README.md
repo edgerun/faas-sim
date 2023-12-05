@@ -56,6 +56,10 @@ Maintainers
 Related publications
 --------------------
 
+1. Raith, P., Rausch, T., Furutanpey, A., & Dustdar, S. (2023).
+   **faas‐sim: A trace‐driven simulation framework for serverless edge computing platforms.**
+   In *Software: Practice and Experience*. Wiley Online Library.
+   [[Paper](https://onlinelibrary.wiley.com/doi/pdf/10.1002/spe.3277)]
 1. Raith, P. (2021)
    Container Scheduling on Heterogeneous Clusters using Machine Learning-based Workload Characterization.
    *Diploma Thesis*. TU Wien.
