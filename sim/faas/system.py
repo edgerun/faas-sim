@@ -89,7 +89,11 @@ class DefaultFaasSystem(FaasSystem):
         self.replica_service.add_function_replica(replica)
         self.env.metrics.log_function_replica(replica)
         self.env.metrics.log_queue_schedule(replica)
-        yield self.scheduler_queue.put((replica, services))
+        if self.env.schedulers is None:
+            yield self.scheduler_queue.put((replica, services))
+        else:
+            queue = self.env.schedulers.get(replica.labels.get('schedulerName'))
+            yield queue.put((replica, services))
 
     def invoke(self, request: FunctionRequest):
         logger.debug('invoking function %s', request.name)
@@ -158,7 +162,11 @@ class DefaultFaasSystem(FaasSystem):
             self.replica_service.add_function_replica(replica)
             self.env.metrics.log_function_replica(replica)
             self.env.metrics.log_queue_schedule(replica)
-            yield self.scheduler_queue.put((replica, fd.get_services()))
+            if self.env.schedulers is None:
+                yield self.scheduler_queue.put((replica, fd.get_services()))
+            else:
+                queue = self.env.schedulers.get(replica.labels.get('origin_cluster'))
+                yield queue.put((replica, fd.get_services()))
         self.env.metrics.log_scaling(fd.name, len(replicas))
 
 
@@ -168,7 +176,12 @@ class DefaultFaasSystem(FaasSystem):
     def start(self):
         for process in self.env.background_processes:
             self.env.process(process(self.env))
-        self.env.process(self.run_scheduler_worker())
+
+        if self.env.schedulers is None:
+            self.env.process(self.run_scheduler_worker())
+        else:
+            for scheduler, queue in self.env.schedulers.values():
+                self.env.process(self.run_specific_scheduler_worker(scheduler, queue))
 
     def poll_available_replica(self, fn: str, interval=0.5, timeout: int = None):
         replicas = self.get_replicas(fn, state=FunctionReplicaState.RUNNING)
@@ -176,12 +189,21 @@ class DefaultFaasSystem(FaasSystem):
             yield self.env.timeout(interval)
             replicas = self.get_replicas(fn, state=FunctionReplicaState.RUNNING)
 
+    def run_specific_scheduler_worker(self, scheduler, queue):
+        env = self.env
+        yield from self.schedule_loop(env, queue, scheduler)
+
+
     def run_scheduler_worker(self):
         env = self.env
+        scheduler = env.scheduler
+        queue = self.scheduler_queue
+        yield from self.schedule_loop(env, queue, scheduler)
 
+    def schedule_loop(self, env, queue, scheduler):
         while True:
             replica: SimFunctionReplica
-            replica, services = yield self.scheduler_queue.get()
+            replica, services = yield queue.get()
 
             logger.debug('scheduling next replica %s', replica.function.name)
 
@@ -190,7 +212,7 @@ class DefaultFaasSystem(FaasSystem):
             self.env.metrics.log_start_schedule(replica)
             pod = replica.pod
             then = time.time()
-            result = env.scheduler.schedule(pod)
+            result = scheduler.schedule(pod)
             duration = time.time() - then
             self.env.metrics.log_finish_schedule(replica, result)
 
@@ -203,7 +225,8 @@ class DefaultFaasSystem(FaasSystem):
                 self.replica_service.delete_function_replica(replica.replica_id)
                 if len(services) > 0:
                     logger.warning('retry scheduling pod %s', pod.name)
-                    yield from self.deploy_replica(replica.function, replica.function.deployment_ranking.get_first(), replica.function.deployment_ranking.containers)
+                    yield from self.deploy_replica(replica.function, replica.function.deployment_ranking.get_first(),
+                                                   replica.function.deployment_ranking.containers)
                 else:
                     logger.error('pod %s cannot be scheduled', pod.name)
 

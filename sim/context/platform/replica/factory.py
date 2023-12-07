@@ -13,7 +13,7 @@ from sim.core import Environment
 from sim.skippy import create_function_pod
 
 
-class KubernetesFunctionReplicaFactory(FunctionReplicaFactory[SimFunctionDeployment, SimFunctionReplica]):
+class SimFunctionReplicaFactory(FunctionReplicaFactory[SimFunctionDeployment, SimFunctionReplica]):
 
     def create_replica(self, labels: Dict[str, str], fn_container: FunctionContainer,
                        fn_deployment: SimFunctionDeployment) -> SimFunctionReplica:
@@ -37,5 +37,5 @@ class KubernetesFunctionReplicaFactory(FunctionReplicaFactory[SimFunctionDeploym
 def create_replica_service(node_service: NodeService[SimFunctionNode],
                            deployment_service: FunctionDeploymentService[SimFunctionDeployment], env: Environment):
     in_memory_function_service = InMemoryFunctionReplicaService[SimFunctionReplica](node_service, deployment_service,
-                                                                                    KubernetesFunctionReplicaFactory())
+                                                                                    SimFunctionReplicaFactory())
     return SimFunctionReplicaService(in_memory_function_service, env)

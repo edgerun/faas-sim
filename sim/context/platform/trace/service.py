@@ -249,3 +249,51 @@ class SimTraceService(TraceService):
         request_ids = self._get_request_ids(start, end, zone, response_status, function, function_image)
         request_df = self._get_requests(request_ids)
         return request_df
+
+    def get_values_for_function_by_sent(self, function: str, start: float, end: float,
+                                        access: Callable[['ResponseRepresentation'], float], zone: str = None,
+                                        response_status: int = None):
+        request_ids = self._get_request_ids(start, end, zone, response_status, function)
+        with self.request_by_id_lock.lock.gen_rlock():
+                request_data = []
+
+                for request_id in request_ids:
+                    if self.request_cache.get(request_id) is not None:
+                        representation = self.request_cache[request_id]
+                        request_data.append(access(representation))
+                    else:
+                        requests = self.requests_by_id[request_id]
+                        max_rtt = 0
+                        max_response = None
+                        last_sent = 0
+                        last_response = None
+                        for request in requests:
+                            if request.rtt > max_rtt:
+                                # this is the invocation of the client to load balancer
+                                max_rtt = request.rtt
+                                max_response = request
+                            if request.sent > last_sent:
+                                # this is the last invocation from load balancer to actual replica
+                                last_response = request
+                                last_sent = request.sent
+
+                        representation = ResponseRepresentation(
+                            ts=max_response.ts,
+                            function=last_response.function,
+                            function_image=last_response.function_image,
+                            replica_id=last_response.replica_id,
+                            node=last_response.node,
+                            rtt=max_response.rtt,
+                            done=max_response.done,
+                            sent=max_response.sent,
+                            origin_zone=max_response.origin_zone,
+                            dest_zone=last_response.dest_zone,
+                            client=max_response.client,
+                            status=max_response.status,
+                            request_id=request_id
+                        )
+                        if representation.sent >= start and representation.sent <= end:
+                            request_data.append(access(representation))
+                            self.request_cache[request_id] = representation
+
+                return request_data
