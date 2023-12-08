@@ -89,10 +89,10 @@ class DefaultFaasSystem(FaasSystem):
         self.replica_service.add_function_replica(replica)
         self.env.metrics.log_function_replica(replica)
         self.env.metrics.log_queue_schedule(replica)
-        if self.env.schedulers is None:
+        if self.env.local_schedulers is None:
             yield self.scheduler_queue.put((replica, services))
         else:
-            queue = self.env.schedulers.get(replica.labels.get('schedulerName'))
+            queue = self.env.local_schedulers.get(replica.labels.get('schedulerName'))
             yield queue.put((replica, services))
 
     def invoke(self, request: FunctionRequest):
@@ -162,11 +162,18 @@ class DefaultFaasSystem(FaasSystem):
             self.replica_service.add_function_replica(replica)
             self.env.metrics.log_function_replica(replica)
             self.env.metrics.log_queue_schedule(replica)
-            if self.env.schedulers is None:
+            if self.env.local_schedulers is None:
                 yield self.scheduler_queue.put((replica, fd.get_services()))
             else:
-                queue = self.env.schedulers.get(replica.labels.get('origin_cluster'))
-                yield queue.put((replica, fd.get_services()))
+                scheduler_name = replica.labels.get('schedulerName')
+                if scheduler_name == 'global-scheduler':
+                    self.env.global_scheduler[1].put((replica, fd.get_services()))
+                else:
+                    scheduler_queue = self.env.local_schedulers.get(scheduler_name)
+                    if scheduler_queue is None:
+                        pass
+                    else:
+                        yield scheduler_queue[1].put((replica, fd.get_services()))
         self.env.metrics.log_scaling(fd.name, len(replicas))
 
 
@@ -177,11 +184,13 @@ class DefaultFaasSystem(FaasSystem):
         for process in self.env.background_processes:
             self.env.process(process(self.env))
 
-        if self.env.schedulers is None:
+        if self.env.local_schedulers is None:
             self.env.process(self.run_scheduler_worker())
         else:
-            for scheduler, queue in self.env.schedulers.values():
+            for scheduler, queue in self.env.local_schedulers.values():
                 self.env.process(self.run_specific_scheduler_worker(scheduler, queue))
+
+            self.env.process(self.run_global_scheduler_worker(self.env.global_scheduler[0], self.env.global_scheduler[1]))
 
     def poll_available_replica(self, fn: str, interval=0.5, timeout: int = None):
         replicas = self.get_replicas(fn, state=FunctionReplicaState.RUNNING)
@@ -200,50 +209,56 @@ class DefaultFaasSystem(FaasSystem):
         queue = self.scheduler_queue
         yield from self.schedule_loop(env, queue, scheduler)
 
-    def schedule_loop(self, env, queue, scheduler):
+    def run_global_scheduler_worker(self, scheduler, queue):
         while True:
             replica: SimFunctionReplica
             replica, services = yield queue.get()
+            scheduler.schedule(replica)
 
-            logger.debug('scheduling next replica %s', replica.function.name)
+    def schedule_loop(self, env, queue, scheduler):
+            while True:
+                replica: SimFunctionReplica
+                replica, services = yield queue.get()
 
-            # schedule the required pod
-            # TODO create a scheduler abstraction, otherwise all scheduled pods are processed here, which is not compatible with distributed/decentralized schedulers
-            self.env.metrics.log_start_schedule(replica)
-            pod = replica.pod
-            then = time.time()
-            result = scheduler.schedule(pod)
-            duration = time.time() - then
-            self.env.metrics.log_finish_schedule(replica, result)
+                logger.debug('scheduling next replica %s', replica.function.name)
 
-            yield env.timeout(duration)  # include scheduling latency in simulation time
+                # schedule the required pod
+                # TODO create a scheduler abstraction, otherwise all scheduled pods are processed here, which is not compatible with distributed/decentralized schedulers
+                self.env.metrics.log_start_schedule(replica)
+                pod = replica.pod
+                then = time.time()
+                result = scheduler.schedule(pod)
+                duration = time.time() - then
+                self.env.metrics.log_finish_schedule(replica, result)
 
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
+                yield env.timeout(duration)  # include scheduling latency in simulation time
 
-            if not result.suggested_host:
-                self.replica_service.delete_function_replica(replica.replica_id)
-                if len(services) > 0:
-                    logger.warning('retry scheduling pod %s', pod.name)
-                    yield from self.deploy_replica(replica.function, replica.function.deployment_ranking.get_first(),
-                                                   replica.function.deployment_ranking.containers)
-                else:
-                    logger.error('pod %s cannot be scheduled', pod.name)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
 
-                continue
+                if not result.suggested_host:
+                    self.replica_service.delete_function_replica(replica.replica_id)
+                    if len(services) > 0:
+                        logger.warning('retry scheduling pod %s', pod.name)
+                        yield from self.deploy_replica(replica.function, replica.function.deployment_ranking.get_first(),
+                                                       replica.function.deployment_ranking.containers)
+                    else:
+                        logger.error('pod %s cannot be scheduled', pod.name)
 
-            logger.info('pod %s was scheduled to %s', pod.name, result.suggested_host)
+                    continue
 
-            replica.node = self.node_service.find(result.suggested_host.name)
-            node = replica.node.skippy_node
+                logger.info('pod %s was scheduled to %s', pod.name, result.suggested_host)
 
-            env.metrics.log('allocation', {
-                'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
-                'mem': 1 - (node.allocatable.memory / node.capacity.memory)
-            }, node=node.name)
+                replica.node = self.node_service.find(result.suggested_host.name)
+                node = replica.node.skippy_node
 
-            # TODO check if replica is set to RUNNING immediately, actually must be PENDING
-            # self.functions_definitions[replica.image] += 1
+                env.metrics.log('allocation', {
+                    'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+                    'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+                }, node=node.name)
+
+                # TODO check if replica is set to RUNNING immediately, actually must be PENDING
+                # self.functions_definitions[replica.image] += 1
             # self.replica_count[replica.fn_name] += 1
 
             # start a new process to simulate starting of pod
