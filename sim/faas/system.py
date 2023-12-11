@@ -213,7 +213,7 @@ class DefaultFaasSystem(FaasSystem):
         while True:
             replica: SimFunctionReplica
             replica, services = yield queue.get()
-            scheduler.schedule(replica)
+            scheduler.schedule(replica, services)
 
     def schedule_loop(self, env, queue, scheduler):
             while True:
@@ -259,12 +259,12 @@ class DefaultFaasSystem(FaasSystem):
 
                 # TODO check if replica is set to RUNNING immediately, actually must be PENDING
                 # self.functions_definitions[replica.image] += 1
-            # self.replica_count[replica.fn_name] += 1
+                # self.replica_count[replica.fn_name] += 1
 
-            # start a new process to simulate starting of pod
+                # start a new process to simulate starting of pod
 
-            # TODO Replica must still be PENDING and in the simulate_function_start is has to be set to running
-            env.process(simulate_function_start(env, replica))
+                # TODO Replica must still be PENDING and in the simulate_function_start is has to be set to running
+                env.process(simulate_function_start(env, replica))
 
     def create_pod(self, fd: SimFunctionDeployment, fn: FunctionContainer):
         return create_function_pod(fd, fn)

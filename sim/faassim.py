@@ -101,11 +101,11 @@ class Simulation:
 
         if not env.resource_state:
             # TODO let the users inject resources
-            env.resource_state = ResourceState(env, ['cpu', 'memory'])
+            env.resource_state = ResourceState(env, ['cpu', 'ram', 'blkio','net','gpu'])
 
         if not env.resource_monitor:
             # TODO let users inject reconcile interval
-            env.resource_monitor = ResourceMonitor(env, 15)
+            env.resource_monitor = ResourceMonitor(env, 1)
 
         if not env.flow_factory:
             env.flow_factory = SafeFlowFactory()
