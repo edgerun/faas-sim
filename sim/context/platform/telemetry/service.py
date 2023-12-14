@@ -104,9 +104,8 @@ class SimTelemetryService(TelemetryService):
                         value = value[value['resource'] == resource]
                         value = value['value'].mean()
                         data['ts'].append(node_window.time)
-                        node = self._replicas[node].node.name
                         data['node'].append(node)
                         data['value'].append(value)
                         data['resource'].append(resource)
-            return pd.DataFrame(data=data)
-
+            df = pd.DataFrame(data=data)
+            return df
