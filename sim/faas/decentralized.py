@@ -7,6 +7,10 @@ import simpy
 from ether.util import parse_size_string
 from faas.context import NodeService
 from faas.system.core import FunctionContainer, FunctionRequest, FunctionReplicaState, FaasSystem, FunctionResponse
+from faas.system.scheduling.decentralized import GlobalScheduler, LocalScheduler
+from faas.util.constant import zone_label
+from skippy.core.model import SchedulingResult
+from skippy.core.utils import normalize_image_name
 
 from sim.core import Environment
 from sim.faas import SimFunctionReplica
@@ -24,7 +28,7 @@ from ..factory.flow import FlowFactory
 logger = logging.getLogger(__name__)
 
 
-class DefaultFaasSystem(FaasSystem):
+class DecentralizedFaasSystem(FaasSystem):
     """
     A default implementation of the FaasSystem interface using faas-sim concepts.
     """
@@ -89,7 +93,11 @@ class DefaultFaasSystem(FaasSystem):
         self.replica_service.add_function_replica(replica)
         self.env.metrics.log_function_replica(replica)
         self.env.metrics.log_queue_schedule(replica)
-        yield self.scheduler_queue.put((replica, services))
+        if self.env.local_schedulers is None:
+            yield self.scheduler_queue.put((replica, services))
+        else:
+            queue = self.env.local_schedulers.get(replica.labels.get('schedulerName'))
+            yield queue.put((replica, services))
 
     def invoke(self, request: FunctionRequest):
         logger.debug('invoking function %s', request.name)
@@ -158,9 +166,19 @@ class DefaultFaasSystem(FaasSystem):
             self.replica_service.add_function_replica(replica)
             self.env.metrics.log_function_replica(replica)
             self.env.metrics.log_queue_schedule(replica)
-            yield self.scheduler_queue.put((replica, fd.get_services()))
+            if self.env.local_schedulers is None:
+                yield self.scheduler_queue.put((replica, fd.get_services()))
+            else:
+                scheduler_name = replica.labels.get('schedulerName')
+                if scheduler_name == 'global-scheduler':
+                    self.env.global_scheduler[1].put((replica, fd.get_services()))
+                else:
+                    scheduler_queue = self.env.local_schedulers.get(scheduler_name)
+                    if scheduler_queue is None:
+                        pass
+                    else:
+                        yield scheduler_queue[1].put((replica, fd.get_services()))
         self.env.metrics.log_scaling(fd.name, len(replicas))
-
 
     def next_replica(self, request) -> SimFunctionReplica:
         return self.load_balancer.next_replica(request)
@@ -168,7 +186,15 @@ class DefaultFaasSystem(FaasSystem):
     def start(self):
         for process in self.env.background_processes:
             self.env.process(process(self.env))
-        self.env.process(self.run_scheduler_worker())
+
+        if self.env.local_schedulers is None:
+            self.env.process(self.run_scheduler_worker())
+        else:
+            for scheduler, queue in self.env.local_schedulers.values():
+                self.env.process(self.run_specific_scheduler_worker(scheduler, queue))
+
+            self.env.process(
+                self.run_global_scheduler_worker(self.env.global_scheduler[0], self.env.global_scheduler[1]))
 
     def poll_available_replica(self, fn: str, interval=0.5, timeout: int = None):
         replicas = self.get_replicas(fn, state=FunctionReplicaState.RUNNING)
@@ -176,12 +202,35 @@ class DefaultFaasSystem(FaasSystem):
             yield self.env.timeout(interval)
             replicas = self.get_replicas(fn, state=FunctionReplicaState.RUNNING)
 
+    def run_specific_scheduler_worker(self, scheduler, queue):
+        env = self.env
+        yield from self.schedule_loop(env, queue, scheduler)
+
     def run_scheduler_worker(self):
         env = self.env
+        scheduler = env.scheduler
+        queue = self.scheduler_queue
+        yield from self.schedule_loop(env, queue, scheduler)
 
+    def run_global_scheduler_worker(self, scheduler: GlobalScheduler, queue):
         while True:
             replica: SimFunctionReplica
-            replica, services = yield self.scheduler_queue.get()
+            replica, services = yield queue.get()
+
+            then = time.time()
+            local_scheduler, cluster = scheduler.find_cluster(replica)
+            duration = time.time() - then
+            yield self.env.timeout(duration)
+
+            replica.container.labels[zone_label] = cluster
+            replica.labels[zone_label] = cluster
+            replica.pod.spec.labels[zone_label] = cluster
+            self.env.local_schedulers[local_scheduler][1].put((replica, services))
+
+    def schedule_loop(self, env, queue, scheduler: LocalScheduler):
+        while True:
+            replica: SimFunctionReplica
+            replica, services = yield queue.get()
 
             logger.debug('scheduling next replica %s', replica.function.name)
 
@@ -190,16 +239,10 @@ class DefaultFaasSystem(FaasSystem):
             self.env.metrics.log_start_schedule(replica)
             pod = replica.pod
             then = time.time()
-            result = env.scheduler.schedule(pod)
+            result = scheduler.schedule(replica)
             duration = time.time() - then
-            self.env.metrics.log_finish_schedule(replica, result)
-
             yield env.timeout(duration)  # include scheduling latency in simulation time
-
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
-
-            if not result.suggested_host:
+            if not result:
                 self.replica_service.delete_function_replica(replica.replica_id)
                 if len(services) > 0:
                     logger.warning('retry scheduling pod %s', pod.name)
@@ -210,9 +253,26 @@ class DefaultFaasSystem(FaasSystem):
 
                 continue
 
-            logger.info('pod %s was scheduled to %s', pod.name, result.suggested_host)
+            node_service: NodeService = env.context.node_service
+            function_node = node_service.find(result)
 
-            replica.node = self.node_service.find(result.suggested_host.name)
+            # Add a list of images needed to pull to the result (before manipulating the state with #place_pod_on_node
+            needed_images = []
+            host_images = self.env.cluster.images_on_nodes[result]
+            for container in pod.spec.containers:
+                if normalize_image_name(container.image) not in host_images:
+                    needed_images.append(normalize_image_name(container.image))
+
+            self.env.cluster.place_pod_on_node(pod, function_node.skippy_node)
+
+            self.env.metrics.log_finish_schedule(replica, SchedulingResult(function_node, 1, needed_images))
+
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug('Pod scheduling took %.2f ms, and yielded %s', duration * 1000, result)
+
+            logger.info('pod %s was scheduled to %s', pod.name, result)
+
+            replica.node = self.node_service.find(result)
             node = replica.node.skippy_node
 
             env.metrics.log('allocation', {
@@ -483,4 +543,3 @@ def simulate_data_upload(env: Environment, replica: SimFunctionReplica):
     for hop in route.hops:
         env.metrics.log_network(size, 'data_upload', hop)
     env.metrics.log_flow(size, env.now - started, route.source, route.destination, 'data_upload')
-
