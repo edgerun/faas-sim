@@ -97,7 +97,7 @@ class ForwardingClientSimulator(FunctionSimulator):
         except StopIteration:
             logger.debug(f'{replica.function.name} gen has finished')
         except Exception as e:
-            logger.error(e)
+            logger.exception(e)
         finally:
             return None
 
