@@ -1,8 +1,6 @@
 import logging
 import os
-from typing import List, Tuple, Dict, Generator
-
-from ether.util import parse_size_string
+from typing import List, Dict, Generator
 
 from ext.raith21 import loader
 from sim import docker
@@ -50,12 +48,13 @@ class BenchmarkBase(Benchmark):
 
     def register_images(self, env: Environment):
         containers: docker.ContainerRegistry = env.container_registry
-        for properties in self.images:
-            containers.put(properties)
+        if len(containers.images) == 0:
+            for properties in self.images:
+                containers.put(properties)
 
-        for name, tag_dict in containers.images.items():
-            for tag, images in tag_dict.items():
-                logging.info('%s, %s, %s', name, tag, images)
+            for name, tag_dict in containers.images.items():
+                for tag, images in tag_dict.items():
+                    logging.info('%s, %s, %s', name, tag, images)
 
     def run(self, env: Environment):
         for deployment in self.deployments:
