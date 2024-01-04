@@ -74,7 +74,7 @@ class ForwardingClientSimulator(FunctionSimulator):
                     request = FunctionRequest(
                         container.lb_fn.name,
                         env.now,
-                        client=replica.node.name,
+                        client=replica.replica_id,
                         size=container.size,
                         body=container.fn.name
                     )
@@ -86,7 +86,7 @@ class ForwardingClientSimulator(FunctionSimulator):
                     request = FunctionRequest(
                         container.lb_fn.name,
                         env.now,
-                        client=replica.node.name,
+                        client=replica.replica_id,
                         size=container.size,
                         body=container.fn.name
                     )
@@ -113,7 +113,7 @@ class BaseLoadBalancerSimulator(FunctionSimulator, abc.ABC):
         next_replica = self.next_replica(env, replica, request)
         if next_replica is None:
             raise ValueError(f"Can't find replica for request: {request}, body: {request.body}, name: {request.name}")
-        host = replica.node.name
+        host = replica.replica_id
         proxy_request = self._create_proxy_request(env, host, next_replica, request)
         response = yield from env.faas.invoke(proxy_request)
         # TODO might be interesting to insert here some headers (i.e., when the load balancer received the request,...)
@@ -159,7 +159,7 @@ class LoadBalancerSimulator(BaseLoadBalancerSimulator):
 
     def next_replica(self, env: Environment, replica: SimFunctionReplica,
                      request: FunctionRequest) -> SimFunctionReplica:
-        modified_request = self.copy_request(replica.node.name, request)
+        modified_request = self.copy_request(replica.replica_id, request)
         return self.lb.next_replica(modified_request)
 
     def copy_request(self, host: str, request: FunctionRequest) -> FunctionRequest:
@@ -181,7 +181,7 @@ class UpdateableLoadBalancerSimulator(BaseLoadBalancerSimulator):
 
     def next_replica(self, env: Environment, replica: SimFunctionReplica,
                      request: FunctionRequest) -> SimFunctionReplica:
-        modified_request = self.copy_request(replica.node.name, request)
+        modified_request = self.copy_request(replica.replica_id, request)
         return self.lb.next_replica(modified_request)
 
     def copy_request(self, host: str, request: FunctionRequest) -> FunctionRequest:

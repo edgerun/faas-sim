@@ -344,8 +344,11 @@ class DecentralizedFaasSystem(FaasSystem):
         env.metrics.log_start_exec(request, replica)
 
         # simulate transfer of request from invoker to function
+        replica_service: SimFunctionReplicaService = env.context.replica_service
         if request.client is not None and request.size is not None:
-            src_name = request.client
+            src_replica_replica_id = request.client
+            src_replica = replica_service.get_function_replica_by_id(src_replica_replica_id)
+            src_name = src_replica.node.name
             dest_name = replica.node.name
             size_kb = request.size
             success = yield from self.simulate_request_transfer(self.env.flow_factory, request.name, request.request_id,
@@ -403,8 +406,12 @@ class DecentralizedFaasSystem(FaasSystem):
 
             if request.client is not None and sim_response.size is not None:
                 # simulate transfer of response from function to invoker
-                src_name = replica.node.name
-                dest_name = request.client
+                src_replica_replica_id = replica.replica_id
+                src_replica = replica_service.get_function_replica_by_id(src_replica_replica_id)
+                src_name = src_replica.node.name
+                dest_client_replica_id = request.client
+                dest_client_replica = replica_service.get_function_replica_by_id(dest_client_replica_id)
+                dest_name = dest_client_replica.node.name
                 size_kb = sim_response.size
                 success = yield from self.simulate_request_transfer(self.env.flow_factory, request.name,
                                                                     request.request_id,
@@ -432,8 +439,8 @@ class DecentralizedFaasSystem(FaasSystem):
             ts_end=ts_end,
             replica=replica,
             node=replica.node,
-            ts_wait=-1,
-            ts_exec=-1,
+            ts_wait=ts_wait,
+            ts_exec=ts_exec,
             size=size,
             fet=fet
         )
