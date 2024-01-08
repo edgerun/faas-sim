@@ -23,7 +23,7 @@ def create_platform_context(env: Environment) -> SimPlatformContext:
     telemetry_service = create_telemetry_service(120, env)
 
     # TODO let users inject windowsize for trace service
-    trace_service = create_trace_service(60, node_service, lambda: env.now)
+    trace_service = create_trace_service(60, node_service, replica_service, lambda: env.now)
 
     zone_service = create_zone_service(node_service.get_zones())
 
