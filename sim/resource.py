@@ -240,6 +240,9 @@ class ResourceState:
         node_name = replica.node.name
         util = self.get_node_resource_utilization(node_name).get_average_resource_utilization(replica, start, end,
                                                                                               time_step)
+        for resource in self.resources:
+            if util.get_resource(resource, start, end, time_step) is None:
+                util.put_resource(resource, 0)
         return util
 
     def get_average_node_resource_utilization(self, node_name: str, start: float, end: float) -> Optional[
