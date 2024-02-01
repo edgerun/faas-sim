@@ -23,12 +23,13 @@ class ResourceUtilization:
     __add: Dict[int, float]
     __remove: Dict[int, float]
 
-    def __init__(self, env: Environment):
+    def __init__(self, env: Environment, resources: List[str] = None):
         self.idx = 0
         self.env = env
         self.__resources = defaultdict(dict)
         self.__add = {}
         self.__remove = {}
+        self.resources = resources if resources else []
         self.lock = ReadWriteLock()
 
     def put_resource(self, resource: str, value: float) -> int:
@@ -44,7 +45,7 @@ class ResourceUtilization:
         self.__remove[key] = self.env.now
 
     def list_resources(self) -> List[str]:
-        return list(self.__resources.keys())
+        return list(self.resources)
 
     def copy(self) -> 'ResourceUtilization':
         with self.lock.lock.gen_rlock():
@@ -139,7 +140,7 @@ class NodeResourceUtilization:
         name = replica.replica_id
         util = self.__resources.get(name)
         if util is None:
-            self.__resources[name] = ResourceUtilization(self.env)
+            self.__resources[name] = ResourceUtilization(self.env, self.resources)
             self.__replicas[name] = replica
             return self.__resources[name]
         else:
@@ -150,7 +151,7 @@ class NodeResourceUtilization:
         name = replica.replica_id
         util = self.__resources.get(name)
         if util is None:
-            self.__resources[name] = ResourceUtilization(self.env)
+            self.__resources[name] = ResourceUtilization(self.env,  self.resources)
             self.__replicas[name] = replica
             return None
         else:
