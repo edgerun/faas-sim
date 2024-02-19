@@ -10,7 +10,7 @@ from faas.system import FunctionNode
 from sim.faassim import Simulation
 
 
-def save_nodes(folder: str, sim: Simulation):
+def extract_nodes(sim: Simulation):
     service: NodeService[FunctionNode] = sim.env.context.node_service
     data = defaultdict(list)
     keys = ['name', 'arch', 'cpus', 'ram', 'netspeed', 'labels', 'allocatable', 'cluster', 'state']
@@ -19,8 +19,7 @@ def save_nodes(folder: str, sim: Simulation):
             data[k].append(node.__dict__[k])
 
     df = pd.DataFrame(data=data)
-    file_name = f'{folder}/nodes.csv'
-    df.to_csv(file_name, index=False)
+    return df
 
 
 def save_results(root_folder: str, dfs: Dict[str, pd.DataFrame], sim: Simulation):
@@ -33,7 +32,6 @@ def save_results(root_folder: str, dfs: Dict[str, pd.DataFrame], sim: Simulation
         file_name = f'{path}/{name}.csv'
         df.to_csv(file_name)
 
-    save_nodes(path, sim)
     return path
 
 
@@ -56,5 +54,6 @@ def extract_dfs(sim):
         'network_df': sim.env.metrics.extract_dataframe('network'),
         'node_utilization_df': sim.env.metrics.extract_dataframe('node_utilization'),
         'function_utilization_df': sim.env.metrics.extract_dataframe('function_utilization'),
-        'fets_df': sim.env.metrics.extract_dataframe('fets')
+        'fets_df': sim.env.metrics.extract_dataframe('fets'),
+        'nodes': extract_nodes(sim)
     }
