@@ -44,6 +44,8 @@ class Simulation:
                     type(self.benchmark).__name__, len(self.topology.nodes))
 
         env = self.env
+        start_ts = SimulatedClock(env).now()
+
         now_strftime = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         uuid.uuid4()
         exp_id = f'{now_strftime}-{str(uuid.uuid4())[:4]}'
@@ -72,9 +74,8 @@ class Simulation:
         p = env.process(self.benchmark.run(env))
 
         logger.info('executing simulation')
-        start_ts = time.time()
         env.run(until=p)
-        end_ts = time.time()
+        end_ts = SimulatedClock(env).now()
         env.metrics.log('experiment',
                         {'EXP_ID': exp_id, 'START': start_ts, 'END': end_ts, 'CREATED': then, 'STATUS': 'FINISHED',
                          'metadata': self.benchmark.metadata})
