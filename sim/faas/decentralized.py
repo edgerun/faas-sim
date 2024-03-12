@@ -324,18 +324,19 @@ class DecentralizedFaasSystem(FaasSystem):
         env.metrics.log_teardown(replica)
 
         node = replica.node.skippy_node
+        if replica.state == FunctionReplicaState.RUNNING:
+            yield from replica.simulator.teardown(env, replica)
 
-        yield from replica.simulator.teardown(env, replica)
+            self.env.cluster.remove_pod_from_node(replica.pod, node)
 
-        self.env.cluster.remove_pod_from_node(replica.pod, node)
+            # set the state to DELETE
+            self.replica_service.delete_function_replica(replica.replica_id)
 
-        # set the state to DELETE
-        self.replica_service.delete_function_replica(replica.replica_id)
+            env.metrics.log('allocation', {
+                'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
+                'mem': 1 - (node.allocatable.memory / node.capacity.memory)
+            }, node=node.name)
         env.metrics.log_delete(replica)
-        env.metrics.log('allocation', {
-            'cpu': 1 - (node.allocatable.cpu_millis / node.capacity.cpu_millis),
-            'mem': 1 - (node.allocatable.memory / node.capacity.memory)
-        }, node=node.name)
 
     def suspend(self, function_name: str):
         deployment = self.deployment_service.get_by_name(function_name)
