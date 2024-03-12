@@ -88,7 +88,8 @@ class BenchmarkBase(Benchmark):
     def wait(self, env, ps):
         yield env.timeout(env.now + self.duration)
         for p in ps:
-            p.interrupt('stop')
+            if p.is_alive:
+                p.interrupt('stop')
 
 
 class DegradationBenchmarkBase(BenchmarkBase):

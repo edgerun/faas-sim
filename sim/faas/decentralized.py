@@ -83,21 +83,28 @@ class DecentralizedFaasSystem(FaasSystem):
         logger.info('deploying function %s with scale_min=%d', fd.name, fd.scaling_config.scale_min)
         yield from self.scale_up(fd.name, fd.scaling_config.scale_min)
 
-    def deploy_replica(self, fd: SimFunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer]):
+    def deploy_replica(self, fd: SimFunctionDeployment, fn: FunctionContainer, services: List[FunctionContainer], labels):
         """
         Creates and deploys a SimFunctionReplica for the given FunctionContainer.
         In case no node supports the given FunctionContainer, the services list dictates which FunctionContainer to try next.
         In case no FunctionContainer can be hosted, the scheduling process terminates and logs the failed attempt
         """
         replica = self.create_replica(fd, fn)
+        replica._labels.update(labels)
         self.replica_service.add_function_replica(replica)
         self.env.metrics.log_function_replica(replica)
         self.env.metrics.log_queue_schedule(replica)
         if self.env.local_schedulers is None:
             yield self.scheduler_queue.put((replica, services))
         else:
-            queue = self.env.local_schedulers.get(replica.labels.get('schedulerName'))
-            yield queue.put((replica, services))
+            scheduler_name = replica.labels.get('schedulerName')
+            if scheduler_name == 'global-scheduler':
+                self.env.global_scheduler[1].put((replica, fd.get_services()))
+            else:
+                queue = self.env.local_schedulers.get(scheduler_name)
+                if queue is None:
+                    raise ValueError(f'replica: {replica} has unknown schedulerName label, was: {replica.labels.get("schedulerName")}')
+                yield queue.put((replica, services))
 
     def invoke(self, request: FunctionRequest):
         logger.debug('invoking function %s', request.name)
@@ -175,7 +182,7 @@ class DecentralizedFaasSystem(FaasSystem):
                 else:
                     scheduler_queue = self.env.local_schedulers.get(scheduler_name)
                     if scheduler_queue is None:
-                        pass
+                        raise ValueError(f'No scheduler {scheduler_name}')
                     else:
                         yield scheduler_queue[1].put((replica, fd.get_services()))
         self.env.metrics.log_scaling(fd.name, len(replicas))
@@ -223,9 +230,13 @@ class DecentralizedFaasSystem(FaasSystem):
             yield self.env.timeout(duration)
 
             replica.container.labels[zone_label] = cluster
-            replica.labels[zone_label] = cluster
+            replica._labels[zone_label] = cluster
             replica.pod.spec.labels[zone_label] = cluster
-            self.env.local_schedulers[local_scheduler][1].put((replica, services))
+            if local_scheduler == '':
+                self.replica_service.delete_function_replica(replica.replica_id)
+                logger.error('No local scheduler found')
+            else:
+                self.env.local_schedulers[local_scheduler][1].put((replica, services))
 
     def schedule_loop(self, env, queue, scheduler: LocalScheduler):
         while True:
@@ -247,7 +258,7 @@ class DecentralizedFaasSystem(FaasSystem):
                 if len(services) > 0:
                     logger.warning('retry scheduling pod %s', pod.name)
                     yield from self.deploy_replica(replica.function, replica.function.deployment_ranking.get_first(),
-                                                   replica.function.deployment_ranking.containers)
+                                                   replica.function.deployment_ranking.containers, {'schedulerName': 'global-scheduler', 'origin_zone': scheduler.cluster})
                 else:
                     logger.error('pod %s cannot be scheduled', pod.name)
 

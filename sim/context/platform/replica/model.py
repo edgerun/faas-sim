@@ -25,3 +25,6 @@ class SimFunctionReplica(FunctionReplica):
     @property
     def image(self):
         return self.container.image
+
+    def __str__(self):
+        return f'{self.pod.name} {self.function.name} {self.state.value}'

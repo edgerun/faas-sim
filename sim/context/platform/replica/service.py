@@ -36,8 +36,8 @@ class SimFunctionReplicaService(FunctionReplicaService[SimFunctionReplica]):
     def get_function_replica_by_id(self, replica_id: str) -> Optional[SimFunctionReplica]:
         return self.replica_service.get_function_replica_by_id(replica_id)
 
-    def get_function_replicas_on_node(self, node_name: str) -> List[SimFunctionReplica]:
-        return self.replica_service.get_function_replicas_on_node(node_name)
+    def get_function_replicas_on_node(self, node_name: str, state: Optional[FunctionReplicaState] = FunctionReplicaState.RUNNING) -> List[SimFunctionReplica]:
+        return self.replica_service.get_function_replicas_on_node(node_name, state)
 
     def shutdown_function_replica(self, replica_id: str):
         self.replica_service.shutdown_function_replica(replica_id)
