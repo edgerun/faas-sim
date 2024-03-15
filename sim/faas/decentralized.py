@@ -234,7 +234,9 @@ class DecentralizedFaasSystem(FaasSystem):
             replica.pod.spec.labels[zone_label] = cluster
             if local_scheduler == '':
                 self.replica_service.delete_function_replica(replica.replica_id)
-                logger.error('No local scheduler found')
+                logger.info(f'Now: {self.env.now}')
+                origin_zone = replica.labels.get('origin_zone')
+                logger.error(f'No local scheduler found, {origin_zone}')
             else:
                 self.env.local_schedulers[local_scheduler][1].put((replica, services))
 
