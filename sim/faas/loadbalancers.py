@@ -299,7 +299,7 @@ class DefaultWRRProvider(WRRProvider):
 
     def _calculate_gcd(self) -> int:
         weights = self.weights.values()
-        max_gcd = min(weights)
+        max_gcd = int(min(weights))
         gcd = 1
         for i in range(max_gcd, 0, -1):
             valid = True

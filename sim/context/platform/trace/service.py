@@ -203,7 +203,8 @@ class SimTraceService(TraceService):
                             # this is the last invocation from load balancer to actual replica
                             last_response = request
                             last_sent = request.sent
-
+                    if max_response is None:
+                        continue
                     representation = ResponseRepresentation(
                         ts=max_response.ts,
                         function=last_response.function,
