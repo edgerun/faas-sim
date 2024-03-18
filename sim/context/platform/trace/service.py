@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class SimTraceService(TraceService):
-
     """
     This implementation keeps a dict, whereas the key is the request id, and the list is all traces with this id
     then, if someone quueries for a function, get all request_ids associated with this function/function-image
@@ -23,7 +22,7 @@ class SimTraceService(TraceService):
     to that, what the callee asked for
     """
 
-    def __init__(self,now: Callable[[],float], window_size: int, node_service: NodeService,
+    def __init__(self, now: Callable[[], float], window_size: int, node_service: NodeService,
                  parser: Callable[[FunctionResponse], Optional[ResponseRepresentation]]):
         self.now = now
         self.window_size = window_size
@@ -43,7 +42,7 @@ class SimTraceService(TraceService):
     def _purge(self, till_ts: float):
         for node, point_window in self.requests_per_node.items():
             with self.locks[node].lock.gen_wlock():
-                purged  = point_window.purge(till_ts)
+                purged = point_window.purge(till_ts)
                 for purge in purged:
                     purge_id = purge.val.request_id
                     try:
@@ -85,7 +84,8 @@ class SimTraceService(TraceService):
         with self.request_by_id_lock.lock.gen_wlock():
             self.requests_by_id[response.request_id].append(self.parser(response))
 
-    def _get_request_ids_for_nodes(self, nodes: List[SimFunctionNode], start: float, end: float, response_status:int=None) -> List[int]:
+    def _get_request_ids_for_nodes(self, nodes: List[SimFunctionNode], start: float, end: float,
+                                   response_status: int = None) -> List[int]:
         requests = defaultdict(list)
 
         for node in nodes:
@@ -97,6 +97,8 @@ class SimTraceService(TraceService):
                 for req in node_requests.value():
                     for key, value in req.get_value().__dict__.items():
                         requests[key].append(value)
+        if len(requests) == 0:
+            return []
         df = pd.DataFrame(data=requests).sort_values(by='ts')
         df.index = pd.DatetimeIndex(pd.to_datetime(df['ts'], unit='s'))
 
@@ -108,7 +110,8 @@ class SimTraceService(TraceService):
         return df['request_id'].unique().tolist()
 
     def _get_request_ids(self, start: float, end: float, zone: str = None,
-                                response_status: int = None, function_name: str=None, function_image:str=None) -> List[int]:
+                         response_status: int = None, function_name: str = None, function_image: str = None) -> List[
+        int]:
         if zone is not None:
             nodes = self.node_service.find_nodes_in_zone(zone)
         else:
@@ -132,7 +135,8 @@ class SimTraceService(TraceService):
 
     get_values_function_cache = {}
 
-    def get_values_for_function(self, function: str, start: float, end: float, access: Callable[[ResponseRepresentation], List[float]],
+    def get_values_for_function(self, function: str, start: float, end: float,
+                                access: Callable[[ResponseRepresentation], List[float]],
                                 zone: str = None, response_status: int = None):
         request_ids = self._get_request_ids(start, end, zone, response_status, function)
         with self.request_by_id_lock.lock.gen_rlock():
@@ -237,10 +241,9 @@ class SimTraceService(TraceService):
                                 response_status: int = None) -> Optional[pd.DataFrame]:
         self.purge()
 
-        request_ids = self._get_request_ids(start,end,zone,response_status, function_name=function_name)
+        request_ids = self._get_request_ids(start, end, zone, response_status, function_name=function_name)
         request_df = self._get_requests(request_ids)
         return request_df
-
 
     def get_traces_for_function_image(self, function: str, function_image: str, start: float, end: float,
                                       zone: str = None,
@@ -256,64 +259,64 @@ class SimTraceService(TraceService):
                                         response_status: int = None):
         request_ids = self._get_request_ids(start, end, zone, response_status, function)
         with self.request_by_id_lock.lock.gen_rlock():
-                request_data = []
+            request_data = []
 
-                for request_id in request_ids:
-                    if self.request_cache.get(request_id) is not None:
-                        representation = self.request_cache[request_id]
-                        request_data.append(access(representation))
+            for request_id in request_ids:
+                if self.request_cache.get(request_id) is not None:
+                    representation = self.request_cache[request_id]
+                    request_data.append(access(representation))
+                else:
+                    requests = self.requests_by_id[request_id]
+                    max_rtt = 0
+                    max_response = None
+                    last_sent = 0
+                    last_response = None
+                    if len(requests) == 1:
+                        response = requests[0]
+                        representation = ResponseRepresentation(
+                            ts=response.ts,
+                            function=response.function,
+                            function_image=response.function_image,
+                            replica_id=response.replica_id,
+                            node=response.node,
+                            rtt=response.rtt,
+                            done=response.done,
+                            sent=response.sent,
+                            origin_zone=response.origin_zone,
+                            dest_zone=response.dest_zone,
+                            client=response.client,
+                            status=response.status,
+                            request_id=request_id
+                        )
                     else:
-                        requests = self.requests_by_id[request_id]
-                        max_rtt = 0
-                        max_response = None
-                        last_sent = 0
-                        last_response = None
-                        if len(requests) == 1:
-                            response = requests[0]
-                            representation = ResponseRepresentation(
-                                ts=response.ts,
-                                function=response.function,
-                                function_image=response.function_image,
-                                replica_id=response.replica_id,
-                                node=response.node,
-                                rtt=response.rtt,
-                                done=response.done,
-                                sent=response.sent,
-                                origin_zone=response.origin_zone,
-                                dest_zone=response.dest_zone,
-                                client=response.client,
-                                status=response.status,
-                                request_id=request_id
-                            )
-                        else:
 
-                            for request in requests:
-                                if request.rtt > max_rtt:
-                                    # this is the invocation of the client to load balancer
-                                    max_rtt = request.rtt
-                                    max_response = request
-                                if request.sent > last_sent:
-                                    # this is the last invocation from load balancer to actual replica
-                                    last_response = request
-                                    last_sent = request.sent
+                        for request in requests:
+                            if request.rtt > max_rtt:
+                                # this is the invocation of the client to load balancer
+                                max_rtt = request.rtt
+                                max_response = request
+                            if request.sent > last_sent:
+                                # this is the last invocation from load balancer to actual replica
+                                last_response = request
+                                last_sent = request.sent
 
-                            representation = ResponseRepresentation(
-                                ts=max_response.ts,
-                                function=last_response.function,
-                                function_image=last_response.function_image,
-                                replica_id=last_response.replica_id,
-                                node=last_response.node,
-                                rtt=max_response.rtt,
-                                done=max_response.done,
-                                sent=max_response.sent,
-                                origin_zone=max_response.origin_zone,
-                                dest_zone=last_response.dest_zone,
-                                client=max_response.client,
-                                status=max_response.status,
-                                request_id=request_id
-                            )
-                        if representation.sent >= start and representation.sent <= end:
-                            request_data.append(access(representation))
-                            self.request_cache[request_id] = representation
+                        representation = ResponseRepresentation(
+                            ts=max_response.ts,
+                            function=last_response.function,
+                            function_image=last_response.function_image,
+                            replica_id=last_response.replica_id,
+                            node=last_response.node,
+                            rtt=max_response.rtt,
+                            done=max_response.done,
+                            sent=max_response.sent,
+                            origin_zone=max_response.origin_zone,
+                            dest_zone=last_response.dest_zone,
+                            client=max_response.client,
+                            status=max_response.status,
+                            request_id=request_id
+                        )
+                    if representation.sent >= start and representation.sent <= end:
+                        request_data.append(access(representation))
+                        self.request_cache[request_id] = representation
 
-                return request_data
+            return request_data
