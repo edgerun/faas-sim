@@ -79,7 +79,7 @@ class ForwardingClientSimulator(FunctionSimulator):
                         body=container.fn.name
                     )
                     yield env.timeout(ia)
-                    yield from env.faas.invoke(request)
+                    env.process(env.faas.invoke(request))
             else:
                 for _ in range(max_requests):
                     ia = next(ia_generator)
@@ -91,7 +91,7 @@ class ForwardingClientSimulator(FunctionSimulator):
                         body=container.fn.name
                     )
                     yield env.timeout(ia)
-                    yield from env.faas.invoke(request)
+                    env.process(env.faas.invoke(request))
         except simpy.Interrupt:
             pass
         except StopIteration:
