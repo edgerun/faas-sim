@@ -164,6 +164,7 @@ class DecentralizedFaasSystem(FaasSystem):
         removed = self.replica_service.scale_down(fn_name, remove)
         for removed_replica in removed:
             yield from self._remove_replica(removed_replica)
+        self.env.metrics.log_scaling(fn_name, -len(removed))
         return removed
 
     def scale_up(self, fn_name: str, add: Union[int, List[SimFunctionReplica]]):
