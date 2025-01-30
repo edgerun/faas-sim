@@ -261,7 +261,7 @@ class DecentralizedFaasSystem(FaasSystem):
                 if len(services) > 0:
                     logger.warning('retry scheduling pod %s', pod.name)
                     yield from self.deploy_replica(replica.function, replica.function.deployment_ranking.get_first(),
-                                                   replica.function.deployment_ranking.containers, {'schedulerName': 'global-scheduler', 'origin_zone': scheduler.cluster})
+                                                   replica.function.deployment_ranking.containers, {'schedulerName': 'global-scheduler', 'origin_zone': scheduler.zone})
                 else:
                     logger.error('pod %s cannot be scheduled', pod.name)
 
